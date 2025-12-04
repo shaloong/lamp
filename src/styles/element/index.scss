@@ -1,0 +1,21 @@
+@forward 'element-plus/theme-chalk/src/common/var.scss' with (
+  $color-white: #F2F2F2,
+  $color-primary: #007AFF,
+  $text: (
+    'color-primary': #007AFF,
+  ),
+  $font-size: (
+    'base': 13px,
+  ),
+  $menu: (
+    'hover-bg-color': rgba(#8E8E93, 0.1),
+    'item-height': 50px,
+    'horizontal-height': 40px,
+    'horizontal-sub-item-height': 27px,
+    'item-font-size': 13px,
+    'item-hover-fill': rgba(#8E8E93, 0.1),
+    'base-level-padding': 10px,
+    'level-padding': 20px,
+    'icon-width': 20px,
+  ),
+);

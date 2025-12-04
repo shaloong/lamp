@@ -1,0 +1,9 @@
+export default {
+    menu: {
+        file: '文件',
+        edit: '编辑',
+        view: '视图',
+        window: '窗口',
+        help: '帮助'
+    }
+}
