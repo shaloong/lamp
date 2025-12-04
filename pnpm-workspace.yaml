@@ -1,6 +1,0 @@
-onlyBuiltDependencies:
-  - '@parcel/watcher'
-  - electron
-  - esbuild
-  - node-sass
-  - vue-demi
