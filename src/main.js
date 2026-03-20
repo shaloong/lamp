@@ -1,5 +1,6 @@
 import { createApp } from 'vue'
 import './styles/style.scss'
+import './preload'  // Tauri preload
 import App from './App.vue'
 import {createI18n} from "vue-i18n"
 

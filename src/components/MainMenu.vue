@@ -189,12 +189,13 @@ export default {
 .el-menu-item,
 .el-sub-menu,
 .window-btn {
+  background-color: transparent;
   -webkit-app-region: no-drag;
 }
 
 .el-sub-menu__title {
   color: $lamp-color-neutral-dark !important;
-  border-bottom-color: rgba(0, 0, 0, 0) !important;
+  border-bottom-color: transparent !important;
 }
 
 .el-menu-item {
