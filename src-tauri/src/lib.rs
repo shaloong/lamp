@@ -469,6 +469,34 @@ async fn is_file_in_directory(file_path: String, dir_path: String) -> Result<boo
     }
 }
 
+// ==================== 插件操作 ====================
+
+/// 读取文本文件内容（供 PluginLoader 使用）
+#[tauri::command]
+async fn read_text_file(file_path: String) -> Result<String, String> {
+    fs::read_to_string(&file_path).map_err(|e| e.to_string())
+}
+
+/// 获取应用数据目录（用于用户插件存储）
+#[tauri::command]
+fn get_app_data_dir(app: AppHandle) -> Result<String, String> {
+    app.path()
+        .app_data_dir()
+        .map(|p| p.to_string_lossy().to_string())
+        .map_err(|e| e.to_string())
+}
+
+/// 获取用户插件目录 (~/.lamp/plugins/ 或等效路径)
+#[tauri::command]
+fn get_user_plugins_dir(app: AppHandle) -> Result<String, String> {
+    let mut dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?;
+    dir.push("plugins");
+    Ok(dir.to_string_lossy().to_string())
+}
+
 // ==================== 应用入口 ====================
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -504,6 +532,10 @@ pub fn run() {
             is_file_in_directory,
             start_watching,
             stop_watching,
+            // 插件
+            read_text_file,
+            get_app_data_dir,
+            get_user_plugins_dir,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

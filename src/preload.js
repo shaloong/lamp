@@ -164,6 +164,16 @@ function initElectronAPI() {
         callback(event.payload);
       });
     },
+
+    // ==================== 插件操作 ====================
+    // 读取文本文件（供插件加载器使用）
+    readTextFile: (filePath) => invoke('read_text_file', { filePath }),
+
+    // 获取应用数据目录
+    getAppDataDir: () => invoke('get_app_data_dir'),
+
+    // 获取用户插件目录
+    getUserPluginsDir: () => invoke('get_user_plugins_dir'),
   };
   
   console.log('API initialized for Tauri');

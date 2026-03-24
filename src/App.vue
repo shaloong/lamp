@@ -1,11 +1,27 @@
 <template>
   <div class="app">
     <div class="app-menu">
-      <main-menu :file-open="fileOpen" :file-save="fileSave" :file-save-as="saveFileAs" :edit-undo="menuEditUndo"
-        :edit-redo="menuEditRedo" :edit-cut="menuEditCut" :edit-copy="menuEditCopy" :edit-paste="menuEditPaste"
-        :edit-select-all="menuEditSelectAll" :edit-delete="menuEditDelete" :view-full-screen="viewFullScreen"
-        :min-window="minWindow" :max-window="maxWindow" :close-window="closeWindow" :open-settings="openSettingsDialog"
-        :open-workspace="openWorkspace" :close-workspace="closeWorkspace" />
+      <main-menu
+        @openFile="openFile"
+        @saveFile="fileSave"
+        @saveFileAs="saveFileAs"
+        @editUndo="menuEditUndo"
+        @editRedo="menuEditRedo"
+        @editCut="menuEditCut"
+        @editCopy="menuEditCopy"
+        @editPaste="menuEditPaste"
+        @editSelectAll="menuEditSelectAll"
+        @editDelete="menuEditDelete"
+        @viewFullScreen="viewFullScreen"
+        @minWindow="minWindow"
+        @maxWindow="maxWindow"
+        @closeWindow="closeWindow"
+        @openSettings="openSettingsDialog"
+        @openPlugins="openPluginsDialog"
+        @openWorkspace="openWorkspace"
+        @closeWorkspace="closeWorkspace"
+        @newFile="newFile"
+      />
     </div>
     <div class="app-content">
       <div class="toolbar">
@@ -135,7 +151,35 @@
           </div>
         </template>
       </el-dialog>
+
+      <el-dialog class="lamp-dialog" v-model="dialogPlugins" title="插件管理" width="600" center>
+        <div class="plugins-list">
+          <div v-if="pluginHost.pluginCount === 0" class="plugins-empty">
+            暂无已加载插件
+          </div>
+          <div v-for="plugin in pluginHost.loadedManifests" :key="plugin.id" class="plugin-item">
+            <div class="plugin-info">
+              <div class="plugin-name">{{ plugin.name }}</div>
+              <div class="plugin-meta">
+                <span class="plugin-id">{{ plugin.id }}</span>
+                <span class="plugin-version">v{{ plugin.version }}</span>
+                <span v-if="plugin.description" class="plugin-desc">{{ plugin.description }}</span>
+              </div>
+            </div>
+            <div class="plugin-actions">
+              <el-tag v-if="plugin.disableable === false" size="small" type="warning">核心</el-tag>
+              <el-tag v-else size="small" type="success">已启用</el-tag>
+            </div>
+          </div>
+        </div>
+        <template #footer>
+          <div class="dialog-footer">
+            <button class="lamp-btn-inconspicuous" @click="dialogPlugins = false">关闭</button>
+          </div>
+        </template>
+      </el-dialog>
     </div>
+    <CommandPalette v-model="dialogCommandPalette" />
   </div>
 </template>
 
@@ -147,6 +191,8 @@ import { v4 as uuidv4 } from 'uuid';
 import editor from "@/components/Editor.vue";
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useFileStore } from '@/stores/files'
+import { pluginHost } from './plugins/index'
+import CommandPalette from './components/CommandPalette.vue'
 
 // 获取父目录
 function getParentDirectory(url) {
@@ -171,7 +217,8 @@ export default {
     }
   },
   components: {
-    Editor
+    Editor,
+    CommandPalette,
   },
   data() {
     return {
@@ -193,7 +240,10 @@ export default {
       dialogConfirmCloseTab: false,
       indexCloseTab: -1, // 删除的索引号，-1表示没有传递
       dialogAiSettings: false,
+      dialogPlugins: false,
+      dialogCommandPalette: false,
       settingsSubmitting: false,
+      pluginHost,
       aiSettings: {
         baseURL: '',
         apiKey: '',
@@ -217,6 +267,15 @@ export default {
   },
 
   methods: {
+    openFile(status, path, data) {
+      // Main process opens file dialog and sends back the result via IPC
+      if (status === 1 && path) {
+        const title = path.split('\\').pop();
+        const [fp, fileContent] = this.format2html(path, data);
+        this.tabs.push({ title, filePath: fp, content: fileContent, id: uuidv4() });
+      }
+    },
+
     fileSave(index) {
       // 如果 index 是事件对象或无效值，使用 this.activeTab
       const tabIndex = (typeof index === 'number') ? index : this.activeTab;
@@ -272,6 +331,16 @@ export default {
 
     openSettingsDialog() {
       this.dialogAiSettings = true;
+    },
+
+    openPluginsDialog() {
+      this.dialogPlugins = true;
+    },
+
+    newFile() {
+      // 新建一个空标签页
+      this.tabs.push({ title: '新 Lamp 文本', filePath: '', content: '', id: uuidv4() });
+      this.activeTab = this.tabs.length - 1;
     },
 
     async loadAiSettings() {
@@ -618,6 +687,10 @@ export default {
 
     // 监听通道，接收主进程发送的内容
     initIpcRenderers() {
+      // 打开文件：监听主进程，被触发后接收文件路径和内容
+      window.electronAPI.openFile((status, path, data) => {
+        this.openFile(status, path, data);
+      });
       // 保存文件：监听主进程，被触发后将路径和内容发送给主进程执行保存操作；若文件路径为空则另存为
       window.electronAPI.saveFile(() => {
         if (this.activeTab !== null && this.tabs[this.activeTab].filePath) {
@@ -716,6 +789,13 @@ export default {
     this.initFileWatcher();
     window.addEventListener('resize', this.handleResize);
     this.loadAiSettings();
+    // Ctrl+Shift+P 打开命令面板
+    window.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'P') {
+        e.preventDefault();
+        this.dialogCommandPalette = true;
+      }
+    });
   },
 
   mounted() {
@@ -738,6 +818,10 @@ export default {
 
 .app-menu {
   grid-row: 1;
+}
+
+.app-content {
+  grid-row: 2;
 }
 
 .app-content {
@@ -816,7 +900,7 @@ export default {
 
 .editor {
   grid-column: 3 / 4;
-  height: calc(100vh - 42px);
+  height: 100%;
   margin-right: 5px;
   background-color: $lamp-color-neutral-light;
   display: grid;

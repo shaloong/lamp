@@ -1,0 +1,13 @@
+{
+  "id": "lamp.ai-actions",
+  "name": "AI 写作助手",
+  "nameEn": "AI Writing Assistant",
+  "version": "1.0.0",
+  "main": "index.js",
+  "description": "提供润色、扩写、续写、概述等 AI 写作辅助功能",
+  "descriptionEn": "AI-powered writing assistance: polish, expand, continue, and summarize text",
+  "author": "Shaloong",
+  "builtin": true,
+  "capabilities": ["ai:chat", "editor:write", "event:subscribe"],
+  "contributes": {}
+}

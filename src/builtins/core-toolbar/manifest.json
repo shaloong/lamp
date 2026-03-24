@@ -1,0 +1,13 @@
+{
+  "id": "lamp.core-toolbar",
+  "name": "核心工具栏",
+  "nameEn": "Core Editor Toolbar",
+  "version": "1.0.0",
+  "main": "index.js",
+  "description": "提供编辑器核心格式工具栏按钮：粗体、斜体、标题等",
+  "descriptionEn": "Core editor toolbar: bold, italic, headings, lists, etc.",
+  "author": "Shaloong",
+  "builtin": true,
+  "disableable": false,
+  "capabilities": ["editor:write", "editor:format"]
+}

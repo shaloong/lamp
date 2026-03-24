@@ -1,214 +1,36 @@
-<script setup>
-import { ArrowDown } from '@element-plus/icons-vue'
-</script>
-
 <template>
   <div class="editor-area">
     <div class="toolbar-area" v-if="editor">
-      <button @click="editor.chain().focus().toggleBold().run()"
-        :disabled="!editor.can().chain().focus().toggleBold().run()" :class="{ 'is-active': editor.isActive('bold') }">
-        <svg class="icon" aria-hidden="true">
-          <use xlink:href="#icon-bold"></use>
-        </svg>
-      </button>
-      <button @click="editor.chain().focus().toggleItalic().run()"
-        :disabled="!editor.can().chain().focus().toggleItalic().run()"
-        :class="{ 'is-active': editor.isActive('italic') }">
-        <svg class="icon" aria-hidden="true">
-          <use xlink:href="#icon-italic"></use>
-        </svg>
-      </button>
-      <button @click="editor.chain().focus().toggleStrike().run()"
-        :disabled="!editor.can().chain().focus().toggleStrike().run()"
-        :class="{ 'is-active': editor.isActive('strike') }">
-        <svg class="icon" aria-hidden="true">
-          <use xlink:href="#icon-strike"></use>
-        </svg>
-      </button>
-      <el-dropdown>
-        <span class="el-dropdown-link" @mouseenter="editor.commands.focus();">
-          <svg class="icon" v-show="editor.isActive({ textAlign: 'left' })" aria-hidden="true">
-            <use xlink:href="#icon-left-alignment"></use>
+      <!-- 核心工具栏：通过插件系统渲染（lamp.core-toolbar） -->
+      <template v-for="item in pluginHost.contributions.sortedEditorToolbar" :key="item.id">
+        <!-- 下拉菜单类型 -->
+        <ToolbarDropdown
+          v-if="item.type === 'dropdown' && item.children"
+          :label="item.label"
+          :children="item.children"
+          :editor="editor"
+          :is-disabled="item.isDisabled ? item.isDisabled(editor) : false"
+        />
+        <!-- 普通按钮类型 -->
+        <button
+          v-else
+          @click="invokeAction(item.pluginId, item.action)"
+          :class="{ 'is-active': item.isActive ? item.isActive(editor) : false }"
+          :disabled="item.isDisabled ? item.isDisabled(editor) : false"
+          :title="item.label + (item.keybinding ? ' (' + item.keybinding + ')' : '')"
+        >
+          <svg v-if="item.icon" class="icon" aria-hidden="true">
+            <use :xlink:href="item.icon"></use>
           </svg>
-          <a v-show="editor.isActive({ textAlign: 'left' })">&nbsp;&nbsp;居左对齐</a>
-          <svg class="icon" v-show="editor.isActive({ textAlign: 'center' })" aria-hidden="true">
-            <use xlink:href="#icon-center-alignment"></use>
-          </svg>
-          <a v-show="editor.isActive({ textAlign: 'center' })">&nbsp;&nbsp;居中对齐</a>
-          <svg class="icon" v-show="editor.isActive({ textAlign: 'right' })" aria-hidden="true">
-            <use xlink:href="#icon-right-alignment"></use>
-          </svg>
-          <a v-show="editor.isActive({ textAlign: 'right' })">&nbsp;&nbsp;居右对齐</a>
-          <svg class="icon" v-show="editor.isActive({ textAlign: 'justify' })" aria-hidden="true">
-            <use xlink:href="#icon-justify-alignment"></use>
-          </svg>
-          <a v-show="editor.isActive({ textAlign: 'justify' })">&nbsp;&nbsp;两端对齐</a>
-          <el-icon class="el-icon--right">
-            <arrow-down />
-          </el-icon>
-        </span>
-        <template #dropdown>
-          <el-dropdown-menu>
-            <el-dropdown-item @click="editor.chain().focus().setTextAlign('left').run()">
-              <svg class="icon" aria-hidden="true">
-                <use xlink:href="#icon-left-alignment"></use>
-              </svg>
-              &nbsp;&nbsp;居左对齐
-            </el-dropdown-item>
-            <el-dropdown-item @click="editor.chain().focus().setTextAlign('center').run()">
-              <svg class="icon" aria-hidden="true">
-                <use xlink:href="#icon-center-alignment"></use>
-              </svg>
-              &nbsp;&nbsp;居中对齐
-            </el-dropdown-item>
-            <el-dropdown-item @click="editor.chain().focus().setTextAlign('right').run()">
-              <svg class="icon" aria-hidden="true">
-                <use xlink:href="#icon-left-alignment"></use>
-              </svg>
-              &nbsp;&nbsp;居右对齐
-            </el-dropdown-item>
-            <el-dropdown-item @click="editor.chain().focus().setTextAlign('justify').run()">
-              <svg class="icon" aria-hidden="true">
-                <use xlink:href="#icon-justify-alignment"></use>
-              </svg>
-              &nbsp;&nbsp;两端对齐
-            </el-dropdown-item>
-          </el-dropdown-menu>
-        </template>
-      </el-dropdown>
-      <!--
-      <button @click="editor.chain().focus().toggleCode().run()" :disabled="!editor.can().chain().focus().toggleCode().run()" :class="{ 'is-active': editor.isActive('code') }">
-        code
-      </button>
-      -->
-
-      <el-dropdown>
-        <span class="el-dropdown-link" @mouseenter="editor.commands.focus();">
-          <svg class="icon" v-show="editor.isActive('paragraph')" aria-hidden="true">
-            <use xlink:href="#icon-para"></use>
-          </svg>
-          <a v-show="editor.isActive('paragraph')">&nbsp;&nbsp;段落文本</a>
-          <svg class="icon" v-show="editor.isActive('heading', { level: 1 })" aria-hidden="true">
-            <use xlink:href="#icon-h1"></use>
-          </svg>
-          <a v-show="editor.isActive('heading', { level: 1 })">&nbsp;&nbsp;一级标题</a>
-          <svg class="icon" v-show="editor.isActive('heading', { level: 2 })" aria-hidden="true">
-            <use xlink:href="#icon-h2"></use>
-          </svg>
-          <a v-show="editor.isActive('heading', { level: 2 })">&nbsp;&nbsp;二级标题</a>
-          <svg class="icon" v-show="editor.isActive('heading', { level: 3 })" aria-hidden="true">
-            <use xlink:href="#icon-h3"></use>
-          </svg>
-          <a v-show="editor.isActive('heading', { level: 3 })">&nbsp;&nbsp;三级标题</a>
-          <svg class="icon" v-show="editor.isActive('heading', { level: 4 })" aria-hidden="true">
-            <use xlink:href="#icon-h4"></use>
-          </svg>
-          <a v-show="editor.isActive('heading', { level: 4 })">&nbsp;&nbsp;四级标题</a>
-          <svg class="icon" v-show="editor.isActive('heading', { level: 5 })" aria-hidden="true">
-            <use xlink:href="#icon-h5"></use>
-          </svg>
-          <a v-show="editor.isActive('heading', { level: 5 })">&nbsp;&nbsp;五级标题</a>
-          <svg class="icon" v-show="editor.isActive('heading', { level: 6 })" aria-hidden="true">
-            <use xlink:href="#icon-h6"></use>
-          </svg>
-          <a v-show="editor.isActive('heading', { level: 6 })">&nbsp;&nbsp;六级标题</a>
-          <el-icon class="el-icon--right">
-            <arrow-down />
-          </el-icon>
-        </span>
-        <template #dropdown>
-          <el-dropdown-menu>
-            <el-dropdown-item @click="editor.chain().focus().setParagraph().run()">
-              <svg class="icon" aria-hidden="true">
-                <use xlink:href="#icon-para"></use>
-              </svg>
-              &nbsp;&nbsp;段落文本
-            </el-dropdown-item>
-            <el-dropdown-item @click="editor.chain().focus().toggleHeading({ level: 1 }).run()">
-              <svg class="icon" aria-hidden="true">
-                <use xlink:href="#icon-h1"></use>
-              </svg>
-              &nbsp;&nbsp;一级标题
-            </el-dropdown-item>
-            <el-dropdown-item @click="editor.chain().focus().toggleHeading({ level: 2 }).run()">
-              <svg class="icon" aria-hidden="true">
-                <use xlink:href="#icon-h2"></use>
-              </svg>
-              &nbsp;&nbsp;二级标题
-            </el-dropdown-item>
-            <el-dropdown-item @click="editor.chain().focus().toggleHeading({ level: 3 }).run()">
-              <svg class="icon" aria-hidden="true">
-                <use xlink:href="#icon-h3"></use>
-              </svg>
-              &nbsp;&nbsp;三级标题
-            </el-dropdown-item>
-            <el-dropdown-item @click="editor.chain().focus().toggleHeading({ level: 4 }).run()">
-              <svg class="icon" aria-hidden="true">
-                <use xlink:href="#icon-h4"></use>
-              </svg>
-              &nbsp;&nbsp;四级标题
-            </el-dropdown-item>
-            <el-dropdown-item @click="editor.chain().focus().toggleHeading({ level: 5 }).run()">
-              <svg class="icon" aria-hidden="true">
-                <use xlink:href="#icon-h5"></use>
-              </svg>
-              &nbsp;&nbsp;五级标题
-            </el-dropdown-item>
-            <el-dropdown-item @click="editor.chain().focus().toggleHeading({ level: 6 }).run()">
-              <svg class="icon" aria-hidden="true">
-                <use xlink:href="#icon-h6"></use>
-              </svg>
-              &nbsp;&nbsp;六级标题
-            </el-dropdown-item>
-          </el-dropdown-menu>
-        </template>
-      </el-dropdown>
-      <button @click="editor.chain().focus().toggleBulletList().run()"
-        :class="{ 'is-active': editor.isActive('bulletList') }">
-        <svg class="icon" aria-hidden="true">
-          <use xlink:href="#icon-ul"></use>
-        </svg>
-      </button>
-      <button @click="editor.chain().focus().toggleOrderedList().run()"
-        :class="{ 'is-active': editor.isActive('orderedList') }">
-        <svg class="icon" aria-hidden="true">
-          <use xlink:href="#icon-ol"></use>
-        </svg>
-      </button>
-      <!--
-      <button @click="editor.chain().focus().toggleCodeBlock().run()" :class="{ 'is-active': editor.isActive('codeBlock') }">
-        code block
-      </button>
-      <button @click="editor.chain().focus().toggleBlockquote().run()" :class="{ 'is-active': editor.isActive('blockquote') }">
-        blockquote
-      </button>
-      -->
-      <button @click="editor.chain().focus().setHorizontalRule().run()">
-        <svg class="icon" aria-hidden="true">
-          <use xlink:href="#icon-split"></use>
-        </svg>
-      </button>
-      <button @click="editor.chain().focus().unsetAllMarks().run()">
-        <svg class="icon" aria-hidden="true">
-          <use xlink:href="#icon-eraser"></use>
-        </svg>
-      </button>
-      <button @click="editor.chain().focus().undo().run()" :disabled="!editor.can().chain().focus().undo().run()">
-        <svg class="icon" aria-hidden="true">
-          <use xlink:href="#icon-undo"></use>
-        </svg>
-      </button>
-      <button @click="editor.chain().focus().redo().run()" :disabled="!editor.can().chain().focus().redo().run()">
-        <svg class="icon" aria-hidden="true">
-          <use xlink:href="#icon-redo"></use>
-        </svg>
-      </button>
+          <span v-else class="btn-label">{{ item.label }}</span>
+        </button>
+      </template>
     </div>
-    <menu class="menu-select">
-      <li><button @click="selectionPolish">润色</button></li>
-      <li><button @click="selectionExpand">扩写</button></li>
-      <li><button @click="selectionContinuation">续写</button></li>
-      <li><button @click="selectionSummarize">概述</button></li>
+    <!-- 气泡菜单（来自插件系统，无内容时不显示） -->
+    <menu class="menu-select" v-if="pluginHost.contributions.sortedBubbleMenu.length > 0">
+      <li v-for="item in pluginHost.contributions.sortedBubbleMenu" :key="item.id">
+        <button @click="invokeAction(item.pluginId, item.action)">{{ item.label }}</button>
+      </li>
     </menu>
     <editor-content :editor="editor" class="content-area" />
     <div class="character-count" v-if="editor">
@@ -225,10 +47,13 @@ import Focus from '@tiptap/extension-focus'
 import { Editor, EditorContent } from '@tiptap/vue-3'
 import BubbleMenu from "@tiptap/extension-bubble-menu"
 import TextAlign from "@tiptap/extension-text-align"
+import { pluginHost } from '../plugins/index'
+import ToolbarDropdown from './ToolbarDropdown.vue'
 
 export default {
   components: {
     EditorContent,
+    ToolbarDropdown,
   },
 
   props: {
@@ -243,30 +68,17 @@ export default {
       const text = this.editor.getText();
       return text.length;
     },
-    async selectionPolish() {
-      const selection = this.editor.state.selection
-      const selectedText = this.editor.state.doc.textBetween(selection.from, selection.to)
-      const result = await window.electronAPI.ai("请用自然优美的语言，打磨以下段落的措辞，以改善其逻辑流程，消除任何印刷错误，并以中文作答。请务必保持文章的原意。直接提供修改后的内容，永远不要加任何提示。", selectedText)
-      this.editor.commands.insertContent(result)
-    },
-    async selectionExpand() {
-      const selection = this.editor.state.selection
-      const selectedText = this.editor.state.doc.textBetween(selection.from, selection.to)
-      const result = await window.electronAPI.ai("请扩写下列文字，保持逻辑的同时丰富内容。直接提供修改后的内容，永远不要加任何提示。", selectedText)
-      this.editor.commands.insertContent(result)
-    },
-    async selectionSummarize() {
-      const selection = this.editor.state.selection
-      const selectedText = this.editor.state.doc.textBetween(selection.from, selection.to)
-      const result = await window.electronAPI.ai("请缩写以下的内容并尽量保持文章的原意。直接提供修改后的内容，永远不要加任何提示。", selectedText)
-      this.editor.commands.insertContent(result)
-    },
-    async selectionContinuation() {
-      const selection = this.editor.state.selection
-      const selectedText = this.editor.state.doc.textBetween(selection.from, selection.to)
-      const result = await window.electronAPI.ai("请以下列内容为开头，根据原文行文风格与逻辑，续写文字内容。直接提供修改后的内容，永远不要加任何提示。", selectedText)
-
-      this.editor.chain().focus('end').insertContent(result).run()
+    // pluginHost.contributions 中的 action 以 editor 为参数
+    invokeAction(pluginId, action) {
+      if (!this.editor) return
+      try {
+        const result = action(this.editor)
+        if (result instanceof Promise) {
+          result.catch(err => console.error(`[Editor] Plugin action failed (${pluginId}):`, err))
+        }
+      } catch (err) {
+        console.error(`[Editor] Plugin action error (${pluginId}):`, err)
+      }
     },
   },
 
@@ -275,6 +87,7 @@ export default {
   data() {
     return {
       editor: null,
+      pluginHost,
     }
   },
 
@@ -363,9 +176,11 @@ export default {
         // this.$emit('update:modelValue', this.editor.getJSON())
       },
     })
+    pluginHost.setEditorInstance(this.editor)
   },
 
   beforeUnmount() {
+    pluginHost.setEditorInstance(null)
     this.editor.destroy()
   },
 }
