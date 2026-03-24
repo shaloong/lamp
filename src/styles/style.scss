@@ -45,16 +45,16 @@ h1 {
 
 button {
   border-radius: 8px;
-  border: 1px solid transparent;
+  border: none;
   padding: 0.2em 0.2em;
   font-size: 1em;
   font-weight: 500;
   font-family: inherit;
   background-color: #1a1a1a;
   cursor: pointer;
-  transition: border-color 0.25s;
+  transition: background-color 0.25s;
   &:hover {
-    border-color: $lamp-color-primary;
+    background-color: rgba($lamp-color-neutral-dark, 0.1);
   }
   &:focus,
   &:focus-visible {

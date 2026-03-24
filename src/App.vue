@@ -4,8 +4,8 @@
       <main-menu :file-open="fileOpen" :file-save="fileSave" :file-save-as="saveFileAs" :edit-undo="menuEditUndo"
         :edit-redo="menuEditRedo" :edit-cut="menuEditCut" :edit-copy="menuEditCopy" :edit-paste="menuEditPaste"
         :edit-select-all="menuEditSelectAll" :edit-delete="menuEditDelete" :view-full-screen="viewFullScreen"
-        :min-window="minWindow" :max-window="maxWindow" :close-window="closeWindow"
-        :open-settings="openSettingsDialog" />
+        :min-window="minWindow" :max-window="maxWindow" :close-window="closeWindow" :open-settings="openSettingsDialog"
+        :open-workspace="openWorkspace" :close-workspace="closeWorkspace" />
     </div>
     <div class="app-content">
       <div class="toolbar">
@@ -24,13 +24,50 @@
       <div class="tool-view" v-show="tool1Active || tool2Active">
         <!-- 工具1操作视图 -->
         <div v-show="tool1Active" class="tool1" :class="{ active: tool1Active }" style="flex-grow: 1;">
-          <!-- 树状结构显示文件夹内容 -->
-          <div v-if="folderContent !== ''">
-            <el-tree-v2 :data="folderContent" :props="treeProps" :height=toolHeight style="background-color: #F2F2F2"
-              @node-click="handleNodeClick" />
+          <!-- 工作区模式：显示文件资源管理器 -->
+          <div v-if="workspaceStore.isOpen" class="file-explorer">
+            <div class="workspace-header">
+              <span class="workspace-name" :title="workspaceStore.rootPath">
+                <svg class="workspace-icon" aria-hidden="true">
+                  <use xlink:href="#icon-folder"></use>
+                </svg>
+                {{ workspaceStore.name }}
+              </span>
+            </div>
+            <!-- 树状结构显示文件夹内容 -->
+            <div v-if="folderContent !== ''" class="folder-tree">
+              <el-tree-v2 ref="treeV2Ref" :data="folderContent" :props="treeProps" :height="toolViewHeight"
+                :expanded-keys="expandedKeys" style="background-color: #F2F2F2" @node-click="handleNodeClick" />
+            </div>
+            <!-- 临时文件区域 -->
+            <div v-if="tempFiles.length > 0" class="temp-files-section">
+              <div class="section-header" @click="tempSectionExpanded = !tempSectionExpanded">
+                <svg class="section-icon" :class="{ collapsed: !tempSectionExpanded }" aria-hidden="true">
+                  <use xlink:href="#icon-right"></use>
+                </svg>
+                <span>临时打开</span>
+                <span class="file-count">({{ tempFiles.length }})</span>
+              </div>
+              <div v-show="tempSectionExpanded" class="temp-files-list">
+                <div v-for="file in tempFiles" :key="file.path" class="temp-file-item" @click="openTempFile(file)">
+                  <svg class="file-icon" aria-hidden="true">
+                    <use xlink:href="#icon-file"></use>
+                  </svg>
+                  <span class="file-name" :title="file.path">{{ file.name }}</span>
+                </div>
+              </div>
+            </div>
           </div>
-          <div v-else>
-            <!-- 当前文件夹为空 -->
+          <!-- 无工作区模式：显示引导 -->
+          <div v-else class="no-workspace">
+            <div class="no-workspace-content">
+              <p class="empty-text">当前未打开任何工作区</p>
+              <div class="action-buttons">
+                <el-button type="primary" size="small" @click="openWorkspace" class="lamp-btn-primary">
+                  打开工作区
+                </el-button>
+              </div>
+            </div>
           </div>
         </div>
         <!-- 工具2操作视图 -->
@@ -108,6 +145,8 @@ import Editor from './components/Editor.vue'
 import { marked } from "marked";
 import { v4 as uuidv4 } from 'uuid';
 import editor from "@/components/Editor.vue";
+import { useWorkspaceStore } from '@/stores/workspace'
+import { useFileStore } from '@/stores/files'
 
 // 获取父目录
 function getParentDirectory(url) {
@@ -150,6 +189,7 @@ export default {
         children: 'children',
       },
       toolHeight: window.innerHeight,
+      toolViewHeight: 400,
       dialogConfirmCloseTab: false,
       indexCloseTab: -1, // 删除的索引号，-1表示没有传递
       dialogAiSettings: false,
@@ -159,31 +199,24 @@ export default {
         apiKey: '',
         model: '',
       },
+      // 工作区相关
+      tempFiles: [],
+      tempSectionExpanded: true,
+      expandedKeys: [],
+      treeRefreshKey: 0,
     };
   },
 
+  setup() {
+    const workspaceStore = useWorkspaceStore()
+    const fileStore = useFileStore()
+    return {
+      workspaceStore,
+      fileStore
+    }
+  },
+
   methods: {
-    // 主菜单栏操作
-    async fileOpen() {
-      const result = await window.electronAPI.menuFileOpen();
-      if (result && result[0] === 0) {
-        // 打开文件成功
-        const path = result[1];
-        const data = result[2];
-        var fileName = path.split('\\').pop(); // 截取文件名
-        const result_format = this.format2html(path, data); // 格式转换
-        if (result_format[0] === '') {
-          // 不支持直接保存的文件修改后缀名
-          fileName = fileName.split('.').slice(0, -1).join('.') + '.lamp'
-        }
-        if ((result_format[0] !== '') && (this.tabs.some(tab => tab.filePath === result_format[0]))) {
-          this.switchTab(this.tabs.findIndex(tab => tab.filePath === result_format[0]))
-        } else {
-          this.tabs.push({ title: fileName, filePath: result_format[0], content: result_format[1] || '', id: uuidv4() }); // 创建标签页
-          this.switchTab(this.tabs.length - 1); // 切换标签页
-        }
-      }
-    },
     fileSave(index) {
       // 如果 index 是事件对象或无效值，使用 this.activeTab
       const tabIndex = (typeof index === 'number') ? index : this.activeTab;
@@ -272,6 +305,70 @@ export default {
     // 工具1
     toggleTool1() {
       this.tool1Active = !this.tool1Active;
+      if (this.tool1Active) {
+        this.updateToolViewHeight();
+      }
+    },
+
+    // 更新工具视图高度
+    updateToolViewHeight() {
+      this.$nextTick(() => {
+        const toolView = document.querySelector('.tool-view');
+        if (toolView) {
+          this.toolViewHeight = toolView.clientHeight - 50; // 减去header高度
+        }
+      });
+    },
+
+    // 打开工作区（选择文件夹）
+    async openWorkspace() {
+      try {
+        const result = await window.electronAPI.openWorkspace()
+        if (result) {
+          this.workspaceStore.setWorkspace({
+            workspacePath: '',  // 不需要配置文件
+            rootPath: result.rootPath,
+            name: result.name,
+            settings: {}
+          })
+          // 加载工作区根目录内容
+          if (result.rootPath) {
+            this.showDirection(result.rootPath)
+            // 开始监视文件夹
+            await window.electronAPI.startWatching(result.rootPath)
+          }
+          // 清空临时文件
+          this.tempFiles = []
+        }
+      } catch (error) {
+        console.error('打开工作区失败:', error)
+      }
+    },
+
+    // 关闭工作区
+    async closeWorkspace() {
+      // 停止监视
+      await window.electronAPI.stopWatching()
+      this.workspaceStore.clearWorkspace()
+      this.fileStore.clearAll()
+      this.folderContent = ''
+      this.tempFiles = []
+    },
+
+    // 初始化文件变化监听
+    initFileWatcher() {
+      window.electronAPI.onFileChange((event) => {
+        console.log('文件变化:', event)
+        // 有变化时自动刷新文件树（使用 refresh 模式保留展开状态）
+        if (this.workspaceStore.isOpen && this.workspaceStore.rootPath) {
+          this.showDirection(this.workspaceStore.rootPath, 'refresh')
+        }
+      })
+    },
+
+    // 打开临时文件
+    async openTempFile(file) {
+      await this.openSpecificFile(file.path)
     },
 
     // 转换为树结构
@@ -291,7 +388,8 @@ export default {
     },
 
     // 展示目录结构
-    showDirection(path) {
+    // mode: 'normal' | 'refresh'  - refresh 模式会保留展开状态
+    showDirection(path, mode = 'normal') {
       // 防御性检查
       if (!this.tabs || this.tabs.length === 0 || !this.tabs[this.activeTab]) {
         this.folderContent = "";
@@ -303,9 +401,22 @@ export default {
         path = getParentDirectory(this.tabs[this.activeTab].filePath);
       }
 
+      // 保存当前展开的文件夹路径（相对于工作区根目录）
+      let expandedRelativePaths = [];
+      if (mode === 'refresh' && this.folderContent && this.workspaceStore.rootPath) {
+        expandedRelativePaths = this.collectExpandedRelativePaths(this.folderContent, this.workspaceStore.rootPath);
+      }
+
       if (path !== "") {
         window.electronAPI.getFolderContent(path).then(result => {
           this.folderContent = this.convertToTree(result);
+
+          // 恢复展开状态
+          if (mode === 'refresh' && expandedRelativePaths.length > 0) {
+            this.$nextTick(() => {
+              this.restoreExpandedByRelativePaths(this.folderContent, expandedRelativePaths, this.workspaceStore.rootPath);
+            });
+          }
         }).catch(error => {
           // 处理错误
           console.error(error);
@@ -314,6 +425,59 @@ export default {
       } else {
         this.folderContent = "";
       }
+    },
+
+    // 收集展开的文件夹相对路径
+    collectExpandedRelativePaths(tree, rootPath) {
+      const paths = [];
+      const collect = (nodes) => {
+        for (const node of nodes) {
+          if (node.isDirectory && this.fileStore.isExpanded(node.path)) {
+            // 转换为相对路径
+            const relativePath = this.getRelativePath(node.path, rootPath);
+            paths.push(relativePath);
+          }
+          if (node.children) {
+            collect(node.children);
+          }
+        }
+      };
+      collect(tree || []);
+      return paths;
+    },
+
+    // 获取相对路径
+    getRelativePath(fullPath, rootPath) {
+      const normalizedFull = fullPath.replace(/\\/g, '/');
+      const normalizedRoot = rootPath.replace(/\\/g, '/');
+      if (normalizedFull.toLowerCase().startsWith(normalizedRoot.toLowerCase())) {
+        return normalizedFull.substring(normalizedRoot.length).replace(/^\//, '');
+      }
+      return normalizedFull;
+    },
+
+    // 根据相对路径恢复展开状态
+    restoreExpandedByRelativePaths(tree, relativePaths, rootPath) {
+      if (!tree || !relativePaths) return;
+
+      const newExpandedKeys = [];
+      const restore = (nodes) => {
+        for (const node of nodes) {
+          const relativePath = this.getRelativePath(node.path, rootPath);
+          if (relativePaths.includes(relativePath)) {
+            newExpandedKeys.push(node.path);
+          }
+          if (node.children) {
+            restore(node.children);
+          }
+        }
+      };
+      restore(tree);
+
+      // 更新展开状态
+      this.expandedKeys = newExpandedKeys;
+      // 同步到 fileStore
+      this.fileStore.expandedFolders = new Set(newExpandedKeys);
     },
 
     // 工具2
@@ -514,13 +678,42 @@ export default {
     },
 
     handleNodeClick(data, node) {
-      this.openSpecificFile(node.key);
+      const filePath = node.key;
+
+      // 如果是目录，切换展开状态
+      if (data.isDirectory) {
+        if (this.expandedKeys.includes(filePath)) {
+          // 折叠
+          this.expandedKeys = this.expandedKeys.filter(k => k !== filePath);
+        } else {
+          // 展开
+          this.expandedKeys = [...this.expandedKeys, filePath];
+        }
+        // 同步到 fileStore
+        this.fileStore.expandedFolders = new Set(this.expandedKeys);
+        return;
+      }
+
+      // 检查文件是否在工作区内
+      if (this.workspaceStore.isOpen) {
+        const isInWorkspace = this.fileStore.isFileInWorkspace(filePath, this.workspaceStore.rootPath);
+        if (!isInWorkspace) {
+          // 添加到临时文件
+          const fileName = filePath.split('\\').pop() || filePath.split('/').pop();
+          const exists = this.tempFiles.some(f => f.path === filePath);
+          if (!exists) {
+            this.tempFiles.push({ name: fileName, path: filePath });
+          }
+        }
+      }
+      this.openSpecificFile(filePath);
     },
 
   },
 
   created() {
     this.initIpcRenderers();
+    this.initFileWatcher();
     window.addEventListener('resize', this.handleResize);
     this.loadAiSettings();
   },
@@ -550,7 +743,7 @@ export default {
 .app-content {
   grid-row: 2;
   position: relative;
-  margin-top: 40px;
+  margin-top: 38px;
   overflow: hidden;
   /* 保证内容溢出时不会影响父元素布局 */
   display: grid;
@@ -562,7 +755,8 @@ export default {
   width: 42px;
   /* 工具栏的固定宽度 */
   flex-shrink: 0;
-  background-color: $lamp-color-neutral-light;
+  background-color: rgba($lamp-color-neutral-grey, 0.1);
+  border-right: 1px solid rgba($lamp-color-neutral-dark, 0.1);
 }
 
 .toggle-button {
@@ -574,6 +768,7 @@ export default {
   width: 32px;
   height: 32px;
   overflow: hidden;
+  background-color: transparent;
 
   /* 确保SVG不会超出按钮 */
   .icon {
@@ -611,6 +806,7 @@ export default {
   display: flex;
   /* 设置为 flex 布局 */
   flex-direction: column;
+  background-color: rgba($lamp-color-neutral-grey, 0.1);
 }
 
 .tool1 {
@@ -642,14 +838,20 @@ export default {
 .editor-tab {
   height: 22px;
   position: relative;
-  margin: 2px 0 0 0;
-  padding: 3px 10px 4px 14px;
+  margin: 0 0 0 0;
+  padding: 6px 10px 4px 14px;
   cursor: pointer;
   font-size: 12px;
   color: $lamp-color-neutral-grey;
+  display: flex;
+  align-items: center;
 
   .close-button {
+    margin-left: 4px;
     visibility: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 }
 
@@ -658,30 +860,155 @@ export default {
   border: 0 0 3px 0 $lamp-color-primary;
 
   .close-button {
+    margin-left: 4px;
     visibility: visible;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 }
 
 .active-indicator {
   position: absolute;
-  bottom: 0;
+  top: 0;
   left: 0;
   width: 100%;
-  height: 4px;
-  /* 或者根据需要设置合适的高度 */
+  height: 3px;
   background-color: $lamp-color-primary;
-  /* 设置合适的颜色 */
   border-radius: 4px;
-  /* 圆角边框 */
   transition: height 0.3s ease;
-  /* 添加过渡效果 */
 }
 
 .editor-tab:hover {
-  color: $lamp-color-primary;
+  background-color: rgba($lamp-color-neutral-grey, 0.1);
 
   .close-button {
     visibility: visible;
   }
+}
+
+// 工作区样式
+.file-explorer {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.workspace-header {
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba($lamp-color-neutral-grey, 0.15);
+  background-color: rgba($lamp-color-neutral-grey, 0.05);
+}
+
+.workspace-name {
+  display: flex;
+  align-items: center;
+  font-size: 13px;
+  font-weight: 500;
+  color: $lamp-color-neutral-dark;
+
+  .workspace-icon {
+    width: 16px;
+    height: 16px;
+    margin-right: 6px;
+    color: $lamp-color-primary;
+  }
+}
+
+.folder-tree {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.temp-files-section {
+  border-top: 1px solid rgba($lamp-color-neutral-grey, 0.15);
+  background-color: rgba($lamp-color-neutral-grey, 0.03);
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: $lamp-color-neutral-grey;
+  cursor: pointer;
+
+  &:hover {
+    background-color: rgba($lamp-color-neutral-grey, 0.08);
+  }
+
+  .section-icon {
+    width: 10px;
+    height: 10px;
+    margin-right: 4px;
+    transition: transform 0.15s ease;
+
+    &.collapsed {
+      transform: rotate(0deg);
+    }
+
+    &:not(.collapsed) {
+      transform: rotate(90deg);
+    }
+  }
+
+  .file-count {
+    margin-left: 4px;
+    opacity: 0.7;
+  }
+}
+
+.temp-files-list {
+  padding: 4px 0;
+}
+
+.temp-file-item {
+  display: flex;
+  align-items: center;
+  padding: 4px 12px 4px 24px;
+  font-size: 13px;
+  cursor: pointer;
+
+  &:hover {
+    background-color: rgba($lamp-color-neutral-grey, 0.1);
+  }
+
+  .file-icon {
+    width: 14px;
+    height: 14px;
+    margin-right: 6px;
+    color: $lamp-color-neutral-grey;
+  }
+
+  .file-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: $lamp-color-neutral-dark;
+  }
+}
+
+.no-workspace {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 0 20px 0 20px;
+}
+
+.no-workspace-content {
+  text-align: center;
+}
+
+.empty-text {
+  font-size: 14px;
+  color: $lamp-color-neutral-grey;
+  margin-bottom: 20px;
 }
 </style>

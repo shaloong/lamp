@@ -1,8 +1,10 @@
+use notify::event::{CreateKind, ModifyKind, RemoveKind};
+use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 // ==================== 配置管理 ====================
 
@@ -21,6 +23,119 @@ pub struct AppConfig {
 }
 
 pub struct ConfigState(pub Mutex<AppConfig>);
+
+// ==================== 文件监视 ====================
+
+// 文件变化事件
+#[derive(Clone, Serialize)]
+pub struct FileChangeEvent {
+    pub event_type: String, // "create", "modify", "remove"
+    pub path: String,
+}
+
+// 文件监视器状态
+pub struct WatcherState {
+    watcher: Mutex<Option<RecommendedWatcher>>,
+    watch_path: Mutex<Option<String>>,
+}
+
+impl Default for WatcherState {
+    fn default() -> Self {
+        Self {
+            watcher: Mutex::new(None),
+            watch_path: Mutex::new(None),
+        }
+    }
+}
+
+// 开始监视文件夹
+#[tauri::command]
+async fn start_watching(
+    app: AppHandle,
+    state: State<'_, WatcherState>,
+    folder_path: String,
+) -> Result<(), String> {
+    // 停止现有的监视
+    {
+        let mut watcher = state.watcher.lock().map_err(|e| e.to_string())?;
+        *watcher = None;
+    }
+    {
+        let mut watch_path = state.watch_path.lock().map_err(|e| e.to_string())?;
+        *watch_path = None;
+    }
+
+    let app_handle = app.clone();
+
+    // 创建新的监视器
+    let mut watcher = RecommendedWatcher::new(
+        move |res: Result<notify::Event, notify::Error>| {
+            if let Ok(event) = res {
+                let event_type = match event.kind {
+                    // 文件/文件夹创建
+                    notify::EventKind::Create(CreateKind::File) => "create",
+                    notify::EventKind::Create(CreateKind::Folder) => "create",
+                    notify::EventKind::Create(CreateKind::Any) => "create",
+                    // 文件修改
+                    notify::EventKind::Modify(ModifyKind::Data(_)) => "modify",
+                    notify::EventKind::Modify(ModifyKind::Name(_)) => "modify",
+                    notify::EventKind::Modify(ModifyKind::Any) => "modify",
+                    // 文件/文件夹删除
+                    notify::EventKind::Remove(RemoveKind::File) => "remove",
+                    notify::EventKind::Remove(RemoveKind::Folder) => "remove",
+                    notify::EventKind::Remove(RemoveKind::Any) => "remove",
+                    // 其他变化（如重命名、移动）
+                    notify::EventKind::Other => "change",
+                    _ => return,
+                };
+
+                for path in event.paths {
+                    let change_event = FileChangeEvent {
+                        event_type: event_type.to_string(),
+                        path: path.to_string_lossy().to_string(),
+                    };
+                    let _ = app_handle.emit("file-change", change_event);
+                }
+            }
+        },
+        Config::default(),
+    )
+    .map_err(|e| e.to_string())?;
+
+    // 开始监视指定文件夹
+    watcher
+        .watch(
+            PathBuf::from(&folder_path).as_path(),
+            RecursiveMode::Recursive,
+        )
+        .map_err(|e| e.to_string())?;
+
+    // 保存监视器状态
+    {
+        let mut w = state.watcher.lock().map_err(|e| e.to_string())?;
+        *w = Some(watcher);
+    }
+    {
+        let mut wp = state.watch_path.lock().map_err(|e| e.to_string())?;
+        *wp = Some(folder_path);
+    }
+
+    log::info!("Started watching folder");
+    Ok(())
+}
+
+// 停止监视
+#[tauri::command]
+async fn stop_watching(state: State<'_, WatcherState>) -> Result<(), String> {
+    let mut watcher = state.watcher.lock().map_err(|e| e.to_string())?;
+    *watcher = None;
+
+    let mut watch_path = state.watch_path.lock().map_err(|e| e.to_string())?;
+    *watch_path = None;
+
+    log::info!("Stopped watching folder");
+    Ok(())
+}
 
 fn get_config_path() -> PathBuf {
     let mut path = std::env::current_exe().unwrap_or_default();
@@ -332,6 +447,28 @@ fn is_maximized(app: AppHandle) -> Result<bool, String> {
     }
 }
 
+// ==================== 工作区操作 ====================
+
+// 检查文件是否在工作区内
+#[tauri::command]
+async fn is_file_in_directory(file_path: String, dir_path: String) -> Result<bool, String> {
+    let file = PathBuf::from(&file_path);
+    let dir = PathBuf::from(&dir_path);
+
+    // 尝试规范化路径后比较
+    match (file.canonicalize(), dir.canonicalize()) {
+        (Ok(file_canonical), Ok(dir_canonical)) => Ok(file_canonical.starts_with(dir_canonical)),
+        _ => {
+            // 如果无法规范化，直接比较前缀
+            let normalized_file = file_path.replace('\\', "/");
+            let normalized_dir = dir_path.replace('\\', "/");
+            Ok(normalized_file
+                .to_lowercase()
+                .starts_with(&normalized_dir.to_lowercase()))
+        }
+    }
+}
+
 // ==================== 应用入口 ====================
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -345,6 +482,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .manage(ConfigState(Mutex::new(config)))
+        .manage(WatcherState::default())
         .invoke_handler(tauri::generate_handler![
             // AI
             ai_chat,
@@ -362,6 +500,10 @@ pub fn run() {
             close_window,
             toggle_fullscreen,
             is_maximized,
+            // 工作区
+            is_file_in_directory,
+            start_watching,
+            stop_watching,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

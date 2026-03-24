@@ -1,19 +1,29 @@
 <script setup>
 import '@/assets/iconfont.js'
+import { useWorkspaceStore } from '@/stores/workspace'
+
+const workspaceStore = useWorkspaceStore()
 </script>
 
 <template>
-  <el-menu class="main-menu" popper-class="popper" mode="horizontal" :ellipsis="false" background-color="#F2F2F2"
-    :unique-opened="true" :collapse-transition="false" :show-timeout=50 :hide-timeout=50>
+  <el-menu class="main-menu" popper-class="popper" mode="horizontal" background-color="#F2F2F2" :unique-opened="true"
+    :collapse-transition="false" :show-timeout=50 :hide-timeout=50 menu-trigger="hover">
     <img style="margin: 0 10px 0 15px; width: 18px;" src="/src/assets/lamp-icon.svg" alt="Lamp Logo" />
     <el-sub-menu index="file">
       <template #title>文件</template>
       <el-menu-item>新建</el-menu-item>
       <el-menu-item @click="fileOpen">
-        <div class="menu-item__title">打开</div>
+        <div class="menu-item__title">打开文件</div>
         <div class="flex-grow" />
         <div class="menu-item__shortcut">Ctrl+O</div>
       </el-menu-item>
+      <el-menu-item @click="openWorkspace" v-if="!workspaceStore.isOpen">
+        <div class="menu-item__title">打开工作区</div>
+      </el-menu-item>
+      <el-menu-item @click="closeWorkspace" v-if="workspaceStore.isOpen">
+        <div class="menu-item__title">关闭工作区</div>
+      </el-menu-item>
+      <el-divider />
       <el-menu-item @click="fileSave">
         <div class="menu-item__title">保存</div>
         <div class="flex-grow" />
@@ -89,7 +99,7 @@ import '@/assets/iconfont.js'
         <use xlink:href="#icon-maximize1"></use>
       </svg>
     </button>
-    <button class="window-btn" @click.stop="closeWindow();">
+    <button class="window-close-btn" @click.stop="closeWindow();">
       <svg class="window-icon" aria-hidden="true">
         <use xlink:href="#icon-close"></use>
       </svg>
@@ -160,6 +170,16 @@ export default {
       type: Function,
       required: true
     },
+    openWorkspace: {
+      type: Function,
+      required: false,
+      default: () => { }
+    },
+    closeWorkspace: {
+      type: Function,
+      required: false,
+      default: () => { }
+    },
   },
 
 }
@@ -184,6 +204,7 @@ export default {
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
+  border-bottom: 1px solid rgba($lamp-color-neutral-grey, 0.2) !important;
 }
 
 .el-menu-item,
@@ -226,6 +247,22 @@ export default {
 .window-btn:hover {
   border: 0;
   background-color: rgba($lamp-color-neutral-grey, 0.1);
+}
+
+.window-close-btn {
+  border: 0;
+  border-radius: 0;
+  width: 40px;
+  background-color: transparent;
+}
+
+.window-close-btn:hover {
+  border: 0;
+  background-color: #E81123;
+
+  & .window-icon {
+    fill: #fff;
+  }
 }
 
 .window-icon {

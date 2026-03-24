@@ -383,15 +383,22 @@ export default {
     color: $lamp-color-neutral-dark;
     font-size: 12px;
     padding: 1px 0 0 0;
+
+    &:hover {
+      color: $lamp-color-neutral-dark;
+    }
   }
 
   cursor: pointer;
   color: $lamp-color-neutral-dark;
   display: flex;
   align-items: center;
-  padding: 6px 8px;
-  border-radius: 4px;
-  margin: 1px 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+
+  &:hover {
+    background-color: rgba($lamp-color-neutral-grey, 0.2);
+  }
 }
 
 .el-dropdown-menu {
@@ -399,6 +406,22 @@ export default {
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
+
+  .el-dropdown-menu__item {
+    display: flex;
+    align-items: center;
+    padding: 6px 10px;
+
+    .icon {
+      margin-right: 6px;
+      color: $lamp-color-neutral-dark;
+    }
+
+    &:hover {
+      background-color: rgba($lamp-color-neutral-grey, 0.2);
+      color: $lamp-color-neutral-dark;
+    }
+  }
 }
 
 :focus-visible {
@@ -491,7 +514,8 @@ div {
         cursor: pointer;
 
         &.is-active {
-          border: 1px solid $lamp-color-primary;
+          background-color: rgba($lamp-color-primary, 0.2);
+          color: $lamp-color-primary;
         }
       }
     }
@@ -527,23 +551,46 @@ div {
 
 menu {
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   list-style: none;
-  padding: 2px 5px;
-  border-radius: 3px;
+  padding: 4px 6px;
+  border-radius: 8px;
   box-shadow: 2px 4px 6px 2px rgba($lamp-color-neutral-grey, 0.15);
   background-color: $lamp-color-neutral-light;
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
+  gap: 4px;
+}
+
+.menu-select {
+  position: absolute;
+  z-index: 1000;
+  border: 1px solid rgba($lamp-color-neutral-grey, 0.2);
+
+  .button {
+    padding: 4px 8px;
+    font-size: 8px !important;
+    color: $lamp-color-neutral-dark;
+    background-color: transparent;
+    border: none;
+    cursor: pointer;
+
+    &:hover {
+      background-color: rgba($lamp-color-neutral-grey, 0.2);
+      color: $lamp-color-neutral-dark;
+    }
+  }
 }
 
 .character-count {
   grid-row: 3;
+  padding-left: 12px;
   height: 20px;
   font-size: 12px;
   text-align: left;
   color: $lamp-color-neutral-grey;
+  user-select: none;
 }
 </style>
