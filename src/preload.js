@@ -106,6 +106,16 @@ function initElectronAPI() {
       model: settings.model,
     }),
 
+    // ==================== 通用设置 ====================
+    getGeneralSettings: () => invoke('get_general_settings'),
+    saveGeneralSettings: (settings) => invoke('save_general_settings', {
+      language: settings.language,
+      autoSave: settings.autoSave,
+      autoSaveInterval: settings.autoSaveInterval,
+      restoreOnStart: settings.restoreOnStart,
+      openLastWorkspace: settings.openLastWorkspace,
+    }),
+
     // ==================== 事件监听 ====================
     // 打开文件事件监听
     openFile: (callback) => {

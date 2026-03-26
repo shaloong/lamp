@@ -3,18 +3,71 @@
 // Contributes: editorToolbar items for basic text formatting
 // ============================================================
 
-import type { PluginContext, PluginContributions } from '../../plugins/types';
+import type { PluginContributions } from '../../plugins/types';
+
+/** Locale messages exported for host registration — keyed by locale id */
+export const messages = {
+  'zh-CN': {
+    bold: '粗体',
+    italic: '斜体',
+    strike: '删除线',
+    align: '对齐',
+    alignLeft: '居左对齐',
+    alignCenter: '居中对齐',
+    alignRight: '居右对齐',
+    alignJustify: '两端对齐',
+    heading: '标题',
+    paragraph: '段落文本',
+    heading1: '一级标题',
+    heading2: '二级标题',
+    heading3: '三级标题',
+    heading4: '四级标题',
+    heading5: '五级标题',
+    heading6: '六级标题',
+    bulletList: '无序列表',
+    orderedList: '有序列表',
+    horizontalRule: '分割线',
+    clearFormat: '清除格式',
+    undo: '撤销',
+    redo: '重做',
+  },
+  'en-US': {
+    bold: 'Bold',
+    italic: 'Italic',
+    strike: 'Strikethrough',
+    align: 'Align',
+    alignLeft: 'Align Left',
+    alignCenter: 'Align Center',
+    alignRight: 'Align Right',
+    alignJustify: 'Justify',
+    heading: 'Heading',
+    paragraph: 'Paragraph',
+    heading1: 'Heading 1',
+    heading2: 'Heading 2',
+    heading3: 'Heading 3',
+    heading4: 'Heading 4',
+    heading5: 'Heading 5',
+    heading6: 'Heading 6',
+    bulletList: 'Bullet List',
+    orderedList: 'Numbered List',
+    horizontalRule: 'Divider',
+    clearFormat: 'Clear Format',
+    undo: 'Undo',
+    redo: 'Redo',
+  },
+};
 
 export const manifest = {
   id: 'lamp.core-toolbar',
-  name: '核心工具栏',
-  version: '1.1.0',
+  name: 'plugins.lamp-core-toolbar',
+  version: '1.0.0',
   builtin: true,
 };
 
 // Helper: build an action that calls editor.chain().focus().<command>(...args).run()
-function cmd(command: string, ...args: unknown[]) {
-  return (editor: { chain: () => { focus: () => { [key: string]: (...a: unknown[]) => { run: () => void } } } }) => {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function cmd(command: string, ...args: any[]): (editor: any) => void {
+  return (editor) => {
     if (!editor) return;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (editor.chain().focus() as any)[command](...args).run();
@@ -24,226 +77,218 @@ function cmd(command: string, ...args: unknown[]) {
 export default {
   manifest,
 
-  onLoad(_ctx: PluginContext): PluginContributions {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onLoad(_ctx: any): PluginContributions {
     return {
       editorToolbar: [
-        // ════════════════════════════════════════
-        // 格式组  priority 100–80
-        // ════════════════════════════════════════
         {
           id: 'bold',
-          label: '粗体',
+          label: 'editor.bold',
           icon: '#icon-bold',
           type: 'button',
           group: 'format',
           priority: 100,
           action: cmd('toggleBold'),
-          isActive: (editor) => editor.isActive('bold'),
-          isDisabled: (editor) => editor ? !editor.can().chain().focus().toggleBold().run() : true,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          isActive: (editor: any) => editor.isActive('bold'),
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          isDisabled: (editor: any) => editor ? !editor.can().chain().focus().toggleBold().run() : true,
         },
         {
           id: 'italic',
-          label: '斜体',
+          label: 'editor.italic',
           icon: '#icon-italic',
           type: 'button',
           group: 'format',
           priority: 90,
           action: cmd('toggleItalic'),
-          isActive: (editor) => editor.isActive('italic'),
-          isDisabled: (editor) => editor ? !editor.can().chain().focus().toggleItalic().run() : true,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          isActive: (editor: any) => editor.isActive('italic'),
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          isDisabled: (editor: any) => editor ? !editor.can().chain().focus().toggleItalic().run() : true,
         },
         {
           id: 'strike',
-          label: '删除线',
+          label: 'editor.strike',
           icon: '#icon-strike',
           type: 'button',
           group: 'format',
           priority: 80,
           action: cmd('toggleStrike'),
-          isActive: (editor) => editor.isActive('strike'),
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          isActive: (editor: any) => editor.isActive('strike'),
         },
-
-        // ════════════════════════════════════════
-        // 对齐组  priority 78  (下拉菜单)
-        // ════════════════════════════════════════
         {
           id: 'textAlign',
-          label: '对齐',
+          label: 'editor.align',
           type: 'dropdown',
           group: 'align',
           priority: 78,
-          // Default: set left alignment when clicking the trigger
           action: cmd('setTextAlign', 'left'),
           isDisabled: () => false,
           children: [
             {
               id: 'alignLeft',
-              label: '居左对齐',
+              label: 'editor.alignLeft',
               icon: '#icon-left-alignment',
               action: cmd('setTextAlign', 'left'),
-              isActive: (editor) => editor.isActive({ textAlign: 'left' }),
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              isActive: (editor: any) => editor.isActive({ textAlign: 'left' }),
             },
             {
               id: 'alignCenter',
-              label: '居中对齐',
+              label: 'editor.alignCenter',
               icon: '#icon-center-alignment',
               action: cmd('setTextAlign', 'center'),
-              isActive: (editor) => editor.isActive({ textAlign: 'center' }),
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              isActive: (editor: any) => editor.isActive({ textAlign: 'center' }),
             },
             {
               id: 'alignRight',
-              label: '居右对齐',
+              label: 'editor.alignRight',
               icon: '#icon-right-alignment',
               action: cmd('setTextAlign', 'right'),
-              isActive: (editor) => editor.isActive({ textAlign: 'right' }),
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              isActive: (editor: any) => editor.isActive({ textAlign: 'right' }),
             },
             {
               id: 'alignJustify',
-              label: '两端对齐',
+              label: 'editor.alignJustify',
               icon: '#icon-justify-alignment',
               action: cmd('setTextAlign', 'justify'),
-              isActive: (editor) => editor.isActive({ textAlign: 'justify' }),
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              isActive: (editor: any) => editor.isActive({ textAlign: 'justify' }),
             },
           ],
         },
-
-        // ════════════════════════════════════════
-        // 段落/标题组  priority 76  (下拉菜单)
-        // ════════════════════════════════════════
         {
           id: 'heading',
-          label: '标题',
+          label: 'editor.heading',
           type: 'dropdown',
           group: 'heading',
           priority: 76,
-          // Default: switch to paragraph when clicking the trigger
           action: cmd('setParagraph'),
           isDisabled: () => false,
           children: [
             {
               id: 'paragraph',
-              label: '段落文本',
+              label: 'editor.paragraph',
               icon: '#icon-para',
               action: cmd('setParagraph'),
-              isActive: (editor) => editor.isActive('paragraph'),
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              isActive: (editor: any) => editor.isActive('paragraph'),
             },
             {
               id: 'heading1',
-              label: '一级标题',
+              label: 'editor.heading1',
               icon: '#icon-h1',
               action: cmd('toggleHeading', { level: 1 }),
-              isActive: (editor) => editor.isActive('heading', { level: 1 }),
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              isActive: (editor: any) => editor.isActive('heading', { level: 1 }),
             },
             {
               id: 'heading2',
-              label: '二级标题',
+              label: 'editor.heading2',
               icon: '#icon-h2',
               action: cmd('toggleHeading', { level: 2 }),
-              isActive: (editor) => editor.isActive('heading', { level: 2 }),
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              isActive: (editor: any) => editor.isActive('heading', { level: 2 }),
             },
             {
               id: 'heading3',
-              label: '三级标题',
+              label: 'editor.heading3',
               icon: '#icon-h3',
               action: cmd('toggleHeading', { level: 3 }),
-              isActive: (editor) => editor.isActive('heading', { level: 3 }),
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              isActive: (editor: any) => editor.isActive('heading', { level: 3 }),
             },
             {
               id: 'heading4',
-              label: '四级标题',
+              label: 'editor.heading4',
               icon: '#icon-h4',
               action: cmd('toggleHeading', { level: 4 }),
-              isActive: (editor) => editor.isActive('heading', { level: 4 }),
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              isActive: (editor: any) => editor.isActive('heading', { level: 4 }),
             },
             {
               id: 'heading5',
-              label: '五级标题',
+              label: 'editor.heading5',
               icon: '#icon-h5',
               action: cmd('toggleHeading', { level: 5 }),
-              isActive: (editor) => editor.isActive('heading', { level: 5 }),
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              isActive: (editor: any) => editor.isActive('heading', { level: 5 }),
             },
             {
               id: 'heading6',
-              label: '六级标题',
+              label: 'editor.heading6',
               icon: '#icon-h6',
               action: cmd('toggleHeading', { level: 6 }),
-              isActive: (editor) => editor.isActive('heading', { level: 6 }),
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              isActive: (editor: any) => editor.isActive('heading', { level: 6 }),
             },
           ],
         },
-
-        // ════════════════════════════════════════
-        // 列表组  priority 60–50
-        // ════════════════════════════════════════
         {
           id: 'bulletList',
-          label: '无序列表',
+          label: 'editor.bulletList',
           icon: '#icon-ul',
           type: 'button',
           group: 'list',
           priority: 60,
           action: cmd('toggleBulletList'),
-          isActive: (editor) => editor.isActive('bulletList'),
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          isActive: (editor: any) => editor.isActive('bulletList'),
         },
         {
           id: 'orderedList',
-          label: '有序列表',
+          label: 'editor.orderedList',
           icon: '#icon-ol',
           type: 'button',
           group: 'list',
           priority: 50,
           action: cmd('toggleOrderedList'),
-          isActive: (editor) => editor.isActive('orderedList'),
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          isActive: (editor: any) => editor.isActive('orderedList'),
         },
-
-        // ════════════════════════════════════════
-        // 插入组  priority 40
-        // ════════════════════════════════════════
         {
           id: 'horizontalRule',
-          label: '分割线',
+          label: 'editor.horizontalRule',
           icon: '#icon-split',
           type: 'button',
           group: 'insert',
           priority: 40,
           action: cmd('setHorizontalRule'),
         },
-
-        // ════════════════════════════════════════
-        // 清除格式  priority 30
-        // ════════════════════════════════════════
         {
           id: 'clearFormat',
-          label: '清除格式',
+          label: 'editor.clearFormat',
           icon: '#icon-eraser',
           type: 'button',
           group: 'clear',
           priority: 30,
           action: cmd('unsetAllMarks'),
         },
-
-        // ════════════════════════════════════════
-        // 历史组  priority 20–10
-        // ════════════════════════════════════════
         {
           id: 'undo',
-          label: '撤销',
+          label: 'editor.undo',
           icon: '#icon-undo',
           type: 'button',
           group: 'history',
           priority: 20,
           action: cmd('undo'),
-          isDisabled: (editor) => editor ? !editor.can().chain().focus().undo().run() : true,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          isDisabled: (editor: any) => editor ? !editor.can().chain().focus().undo().run() : true,
         },
         {
           id: 'redo',
-          label: '重做',
+          label: 'editor.redo',
           icon: '#icon-redo',
           type: 'button',
           group: 'history',
           priority: 10,
           action: cmd('redo'),
-          isDisabled: (editor) => editor ? !editor.can().chain().focus().redo().run() : true,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          isDisabled: (editor: any) => editor ? !editor.can().chain().focus().redo().run() : true,
         },
       ],
     };

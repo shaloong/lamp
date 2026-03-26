@@ -1,6 +1,9 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { pluginHost } from '../plugins/index'
+
+const { t } = useI18n()
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -88,13 +91,13 @@ onBeforeUnmount(() => {
             ref="inputRef"
             v-model="searchQuery"
             class="palette-input"
-            placeholder="输入命令或搜索..."
+            :placeholder="t('commandPalette.placeholder')"
             @input="selectedIndex = 0"
           />
         </div>
         <div class="palette-list">
           <div v-if="filteredCommands.length === 0" class="palette-empty">
-            没有找到匹配的命令
+            {{ t('commandPalette.noResults') }}
           </div>
           <div
             v-for="(cmd, idx) in filteredCommands"
@@ -112,11 +115,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <div class="palette-footer">
-          <span class="palette-hint">
-            <kbd>↑↓</kbd> 导航 &nbsp;
-            <kbd>Enter</kbd> 执行 &nbsp;
-            <kbd>Esc</kbd> 关闭
-          </span>
+          <span class="palette-hint" v-html="t('commandPalette.hint')" />
         </div>
       </div>
     </div>

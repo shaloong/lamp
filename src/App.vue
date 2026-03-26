@@ -46,7 +46,7 @@
                 <svg class="section-icon" :class="{ collapsed: !tempSectionExpanded }" aria-hidden="true">
                   <use xlink:href="#icon-right"></use>
                 </svg>
-                <span>临时打开</span>
+                <span>{{ $t('app.tempFiles') }}</span>
                 <span class="file-count">({{ tempFiles.length }})</span>
               </div>
               <div v-show="tempSectionExpanded" class="temp-files-list">
@@ -62,10 +62,10 @@
           <!-- 无工作区模式：显示引导 -->
           <div v-else class="no-workspace">
             <div class="no-workspace-content">
-              <p class="empty-text">当前未打开任何工作区</p>
+              <p class="empty-text">{{ $t('app.noWorkspace') }}</p>
               <div class="action-buttons">
                 <el-button type="primary" size="small" @click="openWorkspace" class="lamp-btn-primary">
-                  打开工作区
+                  {{ $t('app.openWorkspace') }}
                 </el-button>
               </div>
             </div>
@@ -98,53 +98,29 @@
       </div>
     </div>
     <div class="mask">
-      <el-dialog v-model="dialogConfirmCloseTab" title="提示" width="500" center
+      <el-dialog v-model="dialogConfirmCloseTab" :title="$t('app.unsavedTitle')" width="500" center
         :before-close="(done) => { indexCloseTab = -1; done(); }">
-        <span>您正在关闭的文件尚未保存，是否需要保存？</span>
+        <span>{{ $t('app.unsavedMessage') }}</span>
         <template #footer>
           <div class="dialog-footer">
             <button class="lamp-btn-warning" @click="handleNotSave">
-              不保存并关闭
+              {{ $t('app.dontSaveAndClose') }}
             </button>
             <button class="lamp-btn-primary" @click="handleSave">
-              保存并关闭
+              {{ $t('app.saveAndClose') }}
             </button>
           </div>
         </template>
       </el-dialog>
 
-      <el-dialog v-model="dialogAiSettings" title="AI 设置" width="520" center>
-        <el-form label-width="120px">
-          <el-form-item label="Base URL">
-            <el-input v-model="aiSettings.baseURL" placeholder="https://api.deepseek.com" />
-          </el-form-item>
-          <el-form-item label="Model">
-            <el-input v-model="aiSettings.model" placeholder="deepseek-chat" />
-          </el-form-item>
-          <el-form-item label="API Key">
-            <el-input v-model="aiSettings.apiKey" type="password" show-password placeholder="Secret Key" />
-          </el-form-item>
-        </el-form>
-        <template #footer>
-          <div class="dialog-footer">
-            <button class="lamp-btn-inconspicuous" @click="dialogAiSettings = false">
-              取消
-            </button>
-            <button class="lamp-btn-primary" :disabled="settingsSubmitting" @click="saveAiSettings">
-              {{ settingsSubmitting ? '保存中...' : '保存' }}
-            </button>
-          </div>
-        </template>
-      </el-dialog>
-
-      <el-dialog v-model="dialogPlugins" title="插件管理" width="600" center>
+      <el-dialog v-model="dialogPlugins" :title="$t('app.pluginsTitle')" width="600" center>
         <div class="plugins-list">
           <div v-if="pluginHost.pluginCount === 0" class="plugins-empty">
-            暂无已加载插件
+            {{ $t('app.noPlugins') }}
           </div>
           <div v-for="plugin in pluginHost.loadedManifests" :key="plugin.id" class="plugin-item">
             <div class="plugin-info">
-              <div class="plugin-name">{{ plugin.name }}</div>
+              <div class="plugin-name">{{ resolvePluginName(plugin.name) }}</div>
               <div class="plugin-meta">
                 <span class="plugin-id">{{ plugin.id }}</span>
                 <span class="plugin-version">v{{ plugin.version }}</span>
@@ -152,19 +128,20 @@
               </div>
             </div>
             <div class="plugin-actions">
-              <el-tag v-if="plugin.disableable === false" size="small" type="warning">核心</el-tag>
-              <el-tag v-else size="small" type="success">已启用</el-tag>
+              <el-tag v-if="plugin.disableable === false" size="small" type="warning">{{ $t('app.core') }}</el-tag>
+              <el-tag v-else size="small" type="success">{{ $t('app.enabled') }}</el-tag>
             </div>
           </div>
         </div>
         <template #footer>
           <div class="dialog-footer">
-            <button class="lamp-btn-inconspicuous" @click="dialogPlugins = false">关闭</button>
+            <button class="lamp-btn-inconspicuous" @click="dialogPlugins = false">{{ $t('common.close') }}</button>
           </div>
         </template>
       </el-dialog>
     </div>
     <CommandPalette v-model="dialogCommandPalette" />
+    <SettingsDialog v-model="dialogSettings" />
   </div>
 </template>
 
@@ -178,6 +155,8 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { useFileStore } from '@/stores/files'
 import { pluginHost } from './plugins/index'
 import CommandPalette from './components/CommandPalette.vue'
+import SettingsDialog from './components/SettingsDialog.vue'
+import { i18n } from './i18n.js'
 
 // 获取父目录
 function getParentDirectory(url) {
@@ -204,15 +183,13 @@ export default {
   components: {
     Editor,
     CommandPalette,
+    SettingsDialog,
   },
   data() {
     return {
       tool1Active: false, // 工具1是否激活
       tool2Active: false, // 工具2是否激活
-      tabs: [
-        { title: '新 Lamp 文本', filePath: '', content: '', id: uuidv4() },
-        // 其他标签页数据
-      ],
+      tabs: [],
       activeTab: 0,
       folderContent: "",
       treeProps: {
@@ -224,16 +201,10 @@ export default {
       toolViewHeight: 400,
       dialogConfirmCloseTab: false,
       indexCloseTab: -1, // 删除的索引号，-1表示没有传递
-      dialogAiSettings: false,
       dialogPlugins: false,
+      dialogSettings: false,
       dialogCommandPalette: false,
-      settingsSubmitting: false,
       pluginHost,
-      aiSettings: {
-        baseURL: '',
-        apiKey: '',
-        model: '',
-      },
       // 工作区相关
       tempFiles: [],
       tempSectionExpanded: true,
@@ -252,6 +223,13 @@ export default {
   },
 
   methods: {
+    /**
+     * Resolve a plugin manifest name that may be either a plain string or an i18n key.
+     */
+    resolvePluginName(name) {
+      return name && name.includes('.') ? i18n.global.t(name) : name;
+    },
+
     openFile(status, path, data) {
       // Main process opens file dialog and sends back the result via IPC
       if (status === 1 && path) {
@@ -315,7 +293,7 @@ export default {
     },
 
     openSettingsDialog() {
-      this.dialogAiSettings = true;
+      this.dialogSettings = true;
     },
 
     openPluginsDialog() {
@@ -324,35 +302,19 @@ export default {
 
     newFile() {
       // 新建一个空标签页
-      this.tabs.push({ title: '新 Lamp 文本', filePath: '', content: '', id: uuidv4() });
+      this.tabs.push({ title: i18n.global.t('app.newLampText'), filePath: '', content: '', id: uuidv4() });
       this.activeTab = this.tabs.length - 1;
     },
 
-    async loadAiSettings() {
+    async loadGeneralSettings() {
       try {
-        const settings = await window.electronAPI.getAiSettings();
-        this.aiSettings = {
-          ...this.aiSettings,
-          ...settings,
-        };
+        const settings = await window.electronAPI.getGeneralSettings();
+        // 同步语言到 i18n
+        if (settings.language) {
+          i18n.global.locale = settings.language;
+        }
       } catch (error) {
-        console.error('Failed to load AI settings', error);
-      }
-    },
-
-    async saveAiSettings() {
-      if (this.settingsSubmitting) {
-        return;
-      }
-      this.settingsSubmitting = true;
-      try {
-        const payload = JSON.parse(JSON.stringify(this.aiSettings)); // IPC 之前剥离 Vue 代理 
-        await window.electronAPI.saveAiSettings(payload);
-        this.dialogAiSettings = false;
-      } catch (error) {
-        console.error('Failed to save AI settings', error);
-      } finally {
-        this.settingsSubmitting = false;
+        console.error('Failed to load general settings', error);
       }
     },
 
@@ -577,7 +539,7 @@ export default {
         }
       } else {
         // 如果当前标签页数量为1，则先添加一个新的标签页，并将 activeTab 设置为0
-        this.tabs.push({ title: '新 Lamp 文本', filePath: '', content: '', id: uuidv4() });
+        this.tabs.push({ title: i18n.global.t('app.newLampText'), filePath: '', content: '', id: uuidv4() });
         this.activeTab = 0;
       }
       // 删除指定索引的标签页
@@ -770,10 +732,14 @@ export default {
   },
 
   created() {
-    this.initIpcRenderers();
-    this.initFileWatcher();
-    window.addEventListener('resize', this.handleResize);
-    this.loadAiSettings();
+    // 等待语言加载完成后再初始化 tab，确保标题语言正确
+    ;(async () => {
+      await this.loadGeneralSettings()
+      this.tabs.push({ title: i18n.global.t('app.newLampText'), filePath: '', content: '', id: uuidv4() })
+    })()
+    this.initIpcRenderers()
+    this.initFileWatcher()
+    window.addEventListener('resize', this.handleResize)
     // Ctrl+Shift+P 打开命令面板
     window.addEventListener('keydown', (e) => {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'P') {

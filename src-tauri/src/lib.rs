@@ -15,10 +15,40 @@ pub struct OpenAIConfig {
     pub model: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GeneralSettings {
+    pub language: String,
+    #[serde(rename = "autoSave", default)]
+    pub auto_save: bool,
+    #[serde(rename = "autoSaveInterval", default = "default_auto_save_interval")]
+    pub auto_save_interval: u32,
+    #[serde(rename = "restoreOnStart", default)]
+    pub restore_on_start: bool,
+    #[serde(rename = "openLastWorkspace", default)]
+    pub open_last_workspace: bool,
+}
+
+fn default_auto_save_interval() -> u32 {
+    30
+}
+
+impl Default for GeneralSettings {
+    fn default() -> Self {
+        Self {
+            language: "en-US".to_string(),
+            auto_save: true,
+            auto_save_interval: 30,
+            restore_on_start: true,
+            open_last_workspace: false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AppConfig {
-    pub language: String,
-    #[serde(rename = "openAI")]
+    #[serde(default)]
+    pub general: GeneralSettings,
+    #[serde(rename = "openAI", default)]
     pub open_ai: OpenAIConfig,
 }
 
@@ -158,7 +188,7 @@ fn load_config() -> AppConfig {
     }
     // 默认配置
     AppConfig {
-        language: "en".to_string(),
+        general: GeneralSettings::default(),
         open_ai: OpenAIConfig {
             base_url: "https://api.deepseek.com".to_string(),
             api_key: String::new(),
@@ -294,6 +324,33 @@ fn save_ai_settings(
         } else {
             model.trim().to_string()
         },
+    };
+    save_config(&config)?;
+    Ok(true)
+}
+
+#[tauri::command]
+fn get_general_settings(config_state: State<'_, ConfigState>) -> Result<GeneralSettings, String> {
+    let config = config_state.0.lock().map_err(|e| e.to_string())?;
+    Ok(config.general.clone())
+}
+
+#[tauri::command]
+fn save_general_settings(
+    config_state: State<'_, ConfigState>,
+    language: String,
+    auto_save: bool,
+    auto_save_interval: u32,
+    restore_on_start: bool,
+    open_last_workspace: bool,
+) -> Result<bool, String> {
+    let mut config = config_state.0.lock().map_err(|e| e.to_string())?;
+    config.general = GeneralSettings {
+        language: language.trim().to_string(),
+        auto_save,
+        auto_save_interval,
+        restore_on_start,
+        open_last_workspace,
     };
     save_config(&config)?;
     Ok(true)
@@ -516,6 +573,9 @@ pub fn run() {
             ai_chat,
             get_ai_settings,
             save_ai_settings,
+            // 通用设置
+            get_general_settings,
+            save_general_settings,
             // 文件操作
             get_folder_content,
             open_specific_file,

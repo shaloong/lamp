@@ -4,17 +4,17 @@
       <!-- 核心工具栏：通过插件系统渲染（lamp.core-toolbar） -->
       <template v-for="item in pluginHost.contributions.sortedEditorToolbar" :key="item.id">
         <!-- 下拉菜单类型 -->
-        <ToolbarDropdown v-if="item.type === 'dropdown' && item.children" :label="item.label" :children="item.children"
+        <ToolbarDropdown v-if="item.type === 'dropdown' && item.children" :label="resolveLabel(item.label)" :children="item.children"
           :editor="editor" :is-disabled="item.isDisabled ? item.isDisabled(editor) : false" />
         <!-- 普通按钮类型 -->
         <button v-else @click="invokeAction(item.pluginId, item.action)"
           :class="{ 'is-active': item.isActive ? item.isActive(editor) : false }"
           :disabled="item.isDisabled ? item.isDisabled(editor) : false"
-          :title="item.label + (item.keybinding ? ' (' + item.keybinding + ')' : '')">
+          :title="resolveLabel(item.label) + (item.keybinding ? ' (' + item.keybinding + ')' : '')">
           <svg v-if="item.icon" class="icon" aria-hidden="true">
             <use :xlink:href="item.icon"></use>
           </svg>
-          <span v-else class="btn-label">{{ item.label }}</span>
+          <span v-else class="btn-label">{{ resolveLabel(item.label) }}</span>
         </button>
       </template>
     </div>
@@ -26,7 +26,7 @@
             <svg v-if="item.icon" class="icon" aria-hidden="true">
               <use :xlink:href="item.icon"></use>
             </svg>
-            <span class="label">{{ item.label }}</span>
+            <span class="label">{{ resolveLabel(item.label) }}</span>
           </button>
         </li>
       </menu>
@@ -48,7 +48,7 @@
                 stroke-dasharray="31.4 31.4" stroke-dashoffset="0" />
             </svg>
           </div>
-          <span class="ai-loading-label">{{ pluginHost.aiState.actionLabel }}</span>
+          <span class="ai-loading-label">{{ resolveLabel(pluginHost.aiState.actionLabel) }}</span>
           <span class="ai-loading-hint">请稍候...</span>
         </div>
         <!-- Error state -->
@@ -77,6 +77,7 @@ import { Editor, EditorContent } from '@tiptap/vue-3'
 import { BubbleMenu } from '@tiptap/vue-3/menus'
 import TextAlign from "@tiptap/extension-text-align"
 import { pluginHost } from '../plugins/index'
+import { i18n } from '../i18n'
 import { AISuggestExtension } from '../builtins/ai-actions/ext/AISuggestExtension'
 import ToolbarDropdown from './ToolbarDropdown.vue'
 import AISuggestToolbar from './AISuggestToolbar.vue'
@@ -103,6 +104,14 @@ export default {
     },
     dismissAiError() {
       pluginHost.aiState.error = null;
+    },
+    /**
+     * Resolve a label that may be either a plain string or an i18n key.
+     * Keys containing a dot (e.g. "ai.polish", "editor.bold") are resolved via t();
+     * plain strings are returned as-is.
+     */
+    resolveLabel(label) {
+      return label && label.includes('.') ? i18n.global.t(label) : label;
     },
     // pluginHost.contributions 中的 action 以 editor 为参数
     invokeAction(pluginId, action) {

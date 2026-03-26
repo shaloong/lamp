@@ -11,6 +11,7 @@ export default defineConfig({
     vue(),
     AutoImport({
       resolvers: [ElementPlusResolver()],
+      imports: ['vue-i18n'],
     }),
     Components({
       resolvers: [

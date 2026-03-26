@@ -9,6 +9,30 @@ import type { Editor } from '@tiptap/core';
 import { pluginHost } from '../../plugins/index';
 import type { AISuggestion, PluginContributions } from '../../plugins/types';
 
+/** Locale messages exported for host registration — keyed by locale id */
+export const messages = {
+  'zh-CN': {
+    polish: '润色',
+    polishing: '润色中...',
+    expand: '扩写',
+    expanding: '扩写中...',
+    continue: '续写',
+    continuing: '续写中...',
+    summarize: '概述',
+    summarizing: '概述中...',
+  },
+  'en-US': {
+    polish: 'Polish',
+    polishing: 'Polishing...',
+    expand: 'Expand',
+    expanding: 'Expanding...',
+    continue: 'Continue',
+    continuing: 'Continuing...',
+    summarize: 'Summarize',
+    summarizing: 'Summarizing...',
+  },
+};
+
 /** Prompts for each AI action */
 const PROMPTS = {
   polish: '你是一位专业的中文写作润色专家。请对用户提供的文本进行润色，使其更加流畅、准确、优美。保持原文的风格和含义，但用词更加精炼。直接返回润色后的文本，不要添加任何解释。',
@@ -42,7 +66,7 @@ async function aiSuggest(
 
 export const manifest = {
   id: 'lamp.ai-actions',
-  name: 'AI 写作助手',
+  name: 'plugins.lamp-ai-actions',
   version: '1.0.0',
   builtin: true,
   disableable: true,
@@ -57,7 +81,7 @@ export default {
     // because during onLoad the plugin has not yet been added to _loaded.
     const makeAction = (
       id: keyof typeof PROMPTS,
-      actionLabel: string,
+      loadingLabelKey: string,
       getInput: (editor: Editor) => { text: string; from: number; to: number },
       insertMode: 'replace' | 'append',
     ) => {
@@ -65,8 +89,8 @@ export default {
         const ctx = pluginHost.getContext('lamp.ai-actions');
         const { text, from, to } = getInput(editor);
         if (!text.trim()) return;
-        await aiSuggest(ctx, actionLabel, async () => ({
-          actionLabel,
+        await aiSuggest(ctx, loadingLabelKey, async () => ({
+          actionLabel: loadingLabelKey,
           content: await ctx!.ai.chat(PROMPTS[id], text),
           insertMode,
           from,
@@ -76,8 +100,8 @@ export default {
     };
 
     // ── Bubble menu items ─────────────────────────────────────────
-    // requireSelection: true → 润色 / 扩写 / 概述 — 替换所选内容
-    // requireSelection: false → 续写 — 在所选内容之后追加
+    // requireSelection: true → Polish / Expand / Summarize — replace selection
+    // requireSelection: false → Continue — append after selection
     const bubbleFrom = (editor: Editor) => ({
       text: getSelection(editor),
       from: editor.state.selection.from,
@@ -88,65 +112,63 @@ export default {
       bubbleMenu: [
         {
           id: 'polish',
-          label: '润色',
+          label: 'ai.polish',
           icon: '#icon-mobang',
           priority: 80,
           requireSelection: true,
-          action: makeAction('polish', '润色中', bubbleFrom, 'replace'),
+          action: makeAction('polish', 'ai.polishing', bubbleFrom, 'replace'),
         },
         {
           id: 'expand',
-          label: '扩写',
+          label: 'ai.expand',
           icon: '#icon-wenben-kuoxie',
           priority: 70,
           requireSelection: true,
-          action: makeAction('expand', '扩写中', bubbleFrom, 'replace'),
+          action: makeAction('expand', 'ai.expanding', bubbleFrom, 'replace'),
         },
         {
           id: 'continue',
-          label: '续写',
+          label: 'ai.continue',
           icon: '#icon-xuxie',
           priority: 60,
           requireSelection: false,
-          action: makeAction('continue', '续写中', bubbleFrom, 'append'),
+          action: makeAction('continue', 'ai.continuing', bubbleFrom, 'append'),
         },
         {
           id: 'summarize',
-          label: '概述',
+          label: 'ai.summarize',
           icon: '#icon-wenben-suoxie',
           priority: 50,
           requireSelection: true,
-          action: makeAction('summarize', '概述中', bubbleFrom, 'replace'),
+          action: makeAction('summarize', 'ai.summarizing', bubbleFrom, 'replace'),
         },
       ],
 
       // ── Menu bar items ──────────────────────────────────────────
-      // 润色 / 扩写 / 概述 → 替换所选内容
-      // 续写 → 追加到全文末尾（因为菜单没有上下文 selection）
       menuItems: [
         {
           id: 'polish',
           where: 'edit',
-          label: '润色',
+          label: 'ai.polish',
           icon: '#icon-mobang',
           priority: 60,
-          action: makeAction('polish', '润色中', bubbleFrom, 'replace'),
+          action: makeAction('polish', 'ai.polishing', bubbleFrom, 'replace'),
         },
         {
           id: 'expand',
           where: 'edit',
-          label: '扩写',
+          label: 'ai.expand',
           icon: '#icon-wenben-kuoxie',
           priority: 59,
-          action: makeAction('expand', '扩写中', bubbleFrom, 'replace'),
+          action: makeAction('expand', 'ai.expanding', bubbleFrom, 'replace'),
         },
         {
           id: 'continue',
           where: 'edit',
-          label: '续写',
+          label: 'ai.continue',
           icon: '#icon-xuxie',
           priority: 58,
-          action: makeAction('continue', '续写中', (editor: Editor) => ({
+          action: makeAction('continue', 'ai.continuing', (editor: Editor) => ({
             text: editor.getText(),
             from: editor.state.selection.from,
             to: editor.state.selection.to,
@@ -155,10 +177,10 @@ export default {
         {
           id: 'summarize',
           where: 'edit',
-          label: '概述',
+          label: 'ai.summarize',
           icon: '#icon-wenben-suoxie',
           priority: 57,
-          action: makeAction('summarize', '概述中', bubbleFrom, 'replace'),
+          action: makeAction('summarize', 'ai.summarizing', bubbleFrom, 'replace'),
         },
       ],
     };

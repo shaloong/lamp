@@ -85,6 +85,83 @@ class StorageService {
   }
 }
 
+// ─── I18n Service ─────────────────────────────────────────────
+
+/**
+ * Centralized i18n message registration for plugins.
+ * Built-in messages are collected before app.use(i18n).
+ * Dynamic (workspace/user) plugins register via ctx.i18n.setLocaleMessages().
+ */
+class I18nService {
+  /**
+   * Built-in messages collected before Vue mounts.
+   * Structure: { 'zh-CN': { 'plugins.lamp-ai-actions': { polish: '润色' } }, ... }
+   */
+  private builtinMessages: Record<string, Record<string, Record<string, unknown>>> = {};
+
+  /**
+   * Merge built-in messages into i18n before app.use(i18n).
+   * Called from main.js before mounting the Vue app.
+   */
+  mergeBuiltinMessagesInto(i18nInstance: ReturnType<typeof import('vue-i18n')['createI18n']>): void {
+    for (const [locale, namespaceMap] of Object.entries(this.builtinMessages)) {
+      if (!i18nInstance.global.messages[locale]) {
+        i18nInstance.global.messages[locale] = {};
+      }
+      for (const [pluginNs, messages] of Object.entries(namespaceMap)) {
+        i18nInstance.global.messages[locale][pluginNs] = {
+          ...(i18nInstance.global.messages[locale][pluginNs] as Record<string, unknown> || {}),
+          ...messages,
+        };
+      }
+    }
+  }
+
+  /**
+   * Collect built-in messages (called from builtins/index.ts before Vue mounts).
+   * @param pluginId e.g. 'lamp.ai-actions'
+   * @param locale e.g. 'zh-CN'
+   * @param messages e.g. { polish: '润色' }
+   */
+  addBuiltinMessages(pluginId: string, locale: string, messages: Record<string, unknown>): void {
+    const ns = this._pluginNamespace(pluginId);
+    if (!this.builtinMessages[locale]) {
+      this.builtinMessages[locale] = {};
+    }
+    if (!this.builtinMessages[locale][ns]) {
+      this.builtinMessages[locale][ns] = {};
+    }
+    this.builtinMessages[locale][ns] = {
+      ...this.builtinMessages[locale][ns],
+      ...messages,
+    };
+  }
+
+  /**
+   * Register messages for a dynamic plugin (called from ctx.i18n.setLocaleMessages).
+   */
+  setLocaleMessages(pluginId: string, locale: string, messages: Record<string, unknown>): void {
+    const { i18n } = window.__lamp_app__ ?? {};
+    if (!i18n) {
+      console.warn(`[I18nService] Cannot register messages for plugin "${pluginId}" — app not mounted yet.`);
+      return;
+    }
+    const ns = this._pluginNamespace(pluginId);
+    if (!i18n.global.messages[locale]) {
+      i18n.global.messages[locale] = {};
+    }
+    i18n.global.messages[locale][ns] = {
+      ...(i18n.global.messages[locale][ns] as Record<string, unknown> || {}),
+      ...messages,
+    };
+  }
+
+  /** Convert plugin id 'lamp.ai-actions' → 'plugins.lamp-ai-actions' */
+  private _pluginNamespace(pluginId: string): string {
+    return 'plugins.' + pluginId.replace(/\./g, '-');
+  }
+}
+
 // ─── Command Service ────────────────────────────────────────
 
 class CommandService {
@@ -168,6 +245,9 @@ export class PluginHost {
 
   /** Command service for plugins */
   readonly commandService = new CommandService();
+
+  /** I18n service — for built-in messages collected before Vue mounts */
+  readonly i18nService = new I18nService();
 
   /** All loaded plugin descriptors (read-only) */
   get plugins() { return readonly(this._loaded); }
@@ -304,6 +384,7 @@ export class PluginHost {
       storageService: this.storageService,
       commandService: this.commandService,
       aiState: this.aiState,
+      i18nService: this.i18nService,
     });
 
     const module = await this._loader.loadModule(manifest, basePath);
@@ -358,6 +439,7 @@ export class PluginHost {
       storageService: this.storageService,
       commandService: this.commandService,
       aiState: this.aiState,
+      i18nService: this.i18nService,
     });
 
     // Activate dependencies first
@@ -507,6 +589,7 @@ export class PluginHost {
       storageService: this.storageService,
       commandService: this.commandService,
       aiState: this.aiState,
+      i18nService: this.i18nService,
     });
 
     const plugin = this._builtinModules.get(manifest.id) as LampPlugin | undefined;

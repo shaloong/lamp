@@ -202,7 +202,10 @@ export interface StatusBarItem {
 
 export interface AIActionContribution {
   id: string;
-  label: string; // e.g. "润色"
+  /** i18n key for the label, e.g. "ai.polish". Resolved at render time. */
+  label: string;
+  /** i18n key for the in-progress label shown while loading, e.g. "ai.polishing" */
+  loadingLabel?: string;
   description?: string;
   icon?: string;
   /** The AI prompt template. `{selection}` is replaced with the selected text. */
@@ -251,6 +254,7 @@ export interface LampHostAPI {
   commands: LampCommandsAPI;
   storage: LampStorageAPI;
   event: LampEventAPI;
+  i18n: LampI18nAPI;
 }
 
 export interface LampEditorAPI {
@@ -394,6 +398,21 @@ export interface LampEventAPI {
   emit<T = unknown>(event: string, data?: T): void;
 }
 
+/** Locale messages contributed by a plugin — keyed by locale id, e.g. "zh-CN" or "en-US" */
+export interface PluginLocaleMessages {
+  [locale: string]: Record<string, unknown>;
+}
+
+export interface LampI18nAPI {
+  /**
+   * Register or merge locale messages for this plugin.
+   * The messages are merged under the plugin's namespace: `plugins.<id-with-dashes>.<key>`.
+   * Example: calling setLocaleMessages('zh-CN', { polish: '润色' }) for plugin 'lamp.ai-actions'
+   * makes it accessible as `t('plugins.lamp-ai-actions.polish')`.
+   */
+  setLocaleMessages(locale: string, messages: Record<string, unknown>): void;
+}
+
 // ─── Standard Host Events ───────────────────────────────────
 
 export type HostEvent =
@@ -439,6 +458,7 @@ export class PluginContext {
   commands: LampCommandsAPI;
   storage: LampStorageAPI;
   event: LampEventAPI;
+  i18n: LampI18nAPI;
 
   constructor(
     manifest: LampPluginManifest,
@@ -451,6 +471,9 @@ export class PluginContext {
       storageService: unknown;
       commandService: unknown;
       aiState: { isLoading: boolean; actionLabel: string };
+      i18nService: {
+        setLocaleMessages(pluginId: string, locale: string, messages: Record<string, unknown>): void;
+      };
     }
   ) {
     this.id = manifest.id;
@@ -462,6 +485,7 @@ export class PluginContext {
     this.commands  = this._buildCommandsAPI();
     this.storage   = this._buildStorageAPI();
     this.event     = this._buildEventAPI();
+    this.i18n      = this._buildI18nAPI();
   }
 
   private _buildEditorAPI(): LampEditorAPI {
@@ -631,6 +655,15 @@ export class PluginContext {
       once:   <T>(event, handler) => eb.once<T>(event, handler),
       off:    (event, handler)    => eb.off(event, handler),
       emit:   <T>(event, data)    => eb.emit<T>(event, data),
+    };
+  }
+
+  private _buildI18nAPI(): LampI18nAPI {
+    const pid = this.id;
+    return {
+      setLocaleMessages: (locale, messages) => {
+        this.host.i18nService.setLocaleMessages(pid, locale, messages);
+      },
     };
   }
 }
