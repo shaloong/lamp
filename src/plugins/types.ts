@@ -301,6 +301,20 @@ export interface AISettings {
   model: string;
 }
 
+/** Represents an AI-generated suggestion awaiting user confirmation */
+export interface AISuggestion {
+  /** Human-readable label of the action, e.g. "润色" */
+  actionLabel: string;
+  /** The AI-generated content to be applied */
+  content: string;
+  /** Whether to replace the original selection (polish/expand/summarize) or append after it (continue) */
+  insertMode: 'replace' | 'append';
+  /** Start position of the original selection in the document */
+  from: number;
+  /** End position of the original selection in the document */
+  to: number;
+}
+
 export interface LampAIAPI {
   chat(systemPrompt: string, userMessage: string): Promise<string>;
   getSettings(): Promise<AISettings>;
@@ -315,11 +329,19 @@ export interface LampAIAPI {
   setError(message: string): void;
   /** Clear any error state (e.g. before starting a new action) */
   clearError(): void;
+  /**
+   * Show an AI result as a suggestion overlay — the result is NOT applied yet.
+   * The editor state (selection, cursor) is preserved until the user accepts or dismisses.
+   */
+  showSuggestion(suggestion: AISuggestion): void;
+  /** Clear any active suggestion */
+  clearSuggestion(): void;
   /** Current loading state — reactive, consumed by the UI */
   readonly loadingState: {
     readonly isLoading: boolean;
     readonly actionLabel: string;
     readonly error: string | null;
+    readonly suggestion: AISuggestion | null;
   };
 }
 
@@ -508,6 +530,7 @@ export class PluginContext {
         aiState.isLoading = true;
         aiState.actionLabel = actionLabel;
         aiState.error = null;
+        aiState.suggestion = null;
       },
       stopLoading: () => {
         aiState.isLoading = false;
@@ -518,14 +541,24 @@ export class PluginContext {
         aiState.isLoading = false;
         aiState.actionLabel = '';
         aiState.error = message;
+        aiState.suggestion = null;
       },
       clearError: () => {
         aiState.error = null;
+      },
+      showSuggestion: (suggestion) => {
+        aiState.isLoading = false;
+        aiState.actionLabel = '';
+        aiState.suggestion = suggestion;
+      },
+      clearSuggestion: () => {
+        aiState.suggestion = null;
       },
       loadingState: {
         get isLoading() { return aiState.isLoading; },
         get actionLabel() { return aiState.actionLabel; },
         get error() { return aiState.error; },
+        get suggestion() { return aiState.suggestion; },
       },
     };
   }

@@ -150,7 +150,12 @@ export class PluginHost {
   private readonly _loader = new PluginLoader();
 
   /** AI operation loading/error state — shared across all AI actions */
-  readonly aiState = reactive({ isLoading: false, actionLabel: '', error: '' as string | null });
+  readonly aiState = reactive({
+    isLoading: false,
+    actionLabel: '',
+    error: '' as string | null,
+    suggestion: null as AISuggestion | null,
+  });
 
   /** Event bus — available immediately after construction */
   readonly events = new EventBus();

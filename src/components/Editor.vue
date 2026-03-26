@@ -36,6 +36,26 @@
     <div class="character-count" v-if="editor">
       {{ getCharacterCount() }} 个字符
     </div>
+    <!-- AI Suggestion Preview Overlay -->
+    <Transition name="ai-loading">
+      <div class="ai-loading-overlay" v-if="pluginHost.aiState.suggestion">
+        <div class="ai-loading-card ai-suggestion-card">
+          <div class="ai-suggestion-header">
+            <svg class="ai-suggestion-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+            </svg>
+            <span class="ai-suggestion-title">{{ pluginHost.aiState.suggestion?.actionLabel }}结果</span>
+          </div>
+          <div class="ai-suggestion-preview">
+            {{ pluginHost.aiState.suggestion?.content }}
+          </div>
+          <div class="ai-suggestion-actions">
+            <button class="ai-suggestion-reject" @click="dismissSuggestion">放弃</button>
+            <button class="ai-suggestion-accept" @click="acceptSuggestion">应用</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
     <!-- AI Loading / Error Overlay -->
     <Transition name="ai-loading">
       <div class="ai-loading-overlay" v-if="pluginHost.aiState.isLoading || pluginHost.aiState.error">
@@ -97,6 +117,37 @@ export default {
     },
     dismissAiError() {
       pluginHost.aiState.error = null;
+    },
+    /** Apply the current AI suggestion to the editor */
+    acceptSuggestion() {
+      const suggestion = pluginHost.aiState.suggestion;
+      if (!suggestion || !this.editor) {
+        pluginHost.aiState.suggestion = null;
+        return;
+      }
+      const { content, insertMode, from, to } = suggestion;
+      if (insertMode === 'replace') {
+        this.editor
+          .chain()
+          .focus()
+          .deleteRange({ from, to })
+          .insertContentAt(from, content)
+          .setTextSelection(from + content.length)
+          .run();
+      } else {
+        // append — insert at the end of the original selection, no deletion
+        this.editor
+          .chain()
+          .focus()
+          .insertContentAt(to, content)
+          .setTextSelection(to + content.length)
+          .run();
+      }
+      pluginHost.aiState.suggestion = null;
+    },
+    /** Discard the current AI suggestion without applying */
+    dismissSuggestion() {
+      pluginHost.aiState.suggestion = null;
     },
     // pluginHost.contributions 中的 action 以 editor 为参数
     invokeAction(pluginId, action) {
@@ -539,6 +590,91 @@ menu {
 
   &:hover {
     background: var(--lamp-color-neutral-dark);
+  }
+}
+
+/* ── AI Suggestion Card ──────────────────────────────────────── */
+
+.ai-suggestion-card {
+  width: 480px;
+  max-width: calc(100vw - 48px);
+  gap: 12px;
+  align-items: stretch;
+  padding: 20px 24px;
+  border-color: rgba(0, 110, 255, 0.2);
+}
+
+.ai-suggestion-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ai-suggestion-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--lamp-color-primary);
+  flex-shrink: 0;
+}
+
+.ai-suggestion-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--lamp-color-primary);
+  letter-spacing: 0.02em;
+}
+
+.ai-suggestion-preview {
+  font-size: 13.5px;
+  line-height: 1.7;
+  color: var(--lamp-color-neutral-dark);
+  background: rgba(0, 110, 255, 0.04);
+  border: 1px solid rgba(0, 110, 255, 0.1);
+  border-radius: 8px;
+  padding: 12px 14px;
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+
+  /* Custom scrollbar */
+  &::-webkit-scrollbar { width: 4px; }
+  &::-webkit-scrollbar-thumb { background: var(--lamp-grey-40); border-radius: 4px; }
+}
+
+.ai-suggestion-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.ai-suggestion-reject,
+.ai-suggestion-accept {
+  padding: 7px 20px;
+  font-size: 13px;
+  font-weight: 500;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease, opacity 0.15s ease;
+}
+
+.ai-suggestion-reject {
+  color: var(--lamp-color-neutral-dark);
+  background: var(--lamp-grey-15);
+
+  &:hover {
+    background: var(--lamp-grey-20);
+  }
+}
+
+.ai-suggestion-accept {
+  color: var(--lamp-color-neutral-light);
+  background: var(--lamp-color-primary);
+
+  &:hover {
+    background: var(--lamp-btn-primary-hover);
   }
 }
 
