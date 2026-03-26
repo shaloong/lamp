@@ -18,12 +18,19 @@
         </button>
       </template>
     </div>
-    <!-- 气泡菜单（来自插件系统，无内容时不显示） -->
-    <menu class="menu-select" v-if="pluginHost.contributions.sortedBubbleMenu.length > 0">
-      <li v-for="item in pluginHost.contributions.sortedBubbleMenu" :key="item.id">
-        <button @click="invokeAction(item.pluginId, item.action)">{{ item.label }}</button>
-      </li>
-    </menu>
+    <!-- BubbleMenu (来自插件系统，通过 TipTap Vue 组件自动定位) -->
+    <BubbleMenu v-if="editor && pluginHost.contributions.sortedBubbleMenu.length > 0" :editor="editor" :should-show="({ state }) => !state.selection.empty">
+      <menu class="menu-select">
+        <li v-for="item in pluginHost.contributions.sortedBubbleMenu" :key="item.id">
+          <button class="button" @click="invokeAction(item.pluginId, item.action)">
+            <svg v-if="item.icon" class="icon" aria-hidden="true">
+              <use :xlink:href="item.icon"></use>
+            </svg>
+            <span class="label">{{ item.label }}</span>
+          </button>
+        </li>
+      </menu>
+    </BubbleMenu>
     <editor-content :editor="editor" class="content-area" />
     <div class="character-count" v-if="editor">
       {{ getCharacterCount() }} 个字符
@@ -67,7 +74,7 @@ import Typography from '@tiptap/extension-typography'
 import Highlight from '@tiptap/extension-highlight'
 import Focus from '@tiptap/extension-focus'
 import { Editor, EditorContent } from '@tiptap/vue-3'
-import BubbleMenu from "@tiptap/extension-bubble-menu"
+import { BubbleMenu } from '@tiptap/vue-3/menus'
 import TextAlign from "@tiptap/extension-text-align"
 import { pluginHost } from '../plugins/index'
 import { AISuggestExtension } from '../builtins/ai-actions/ext/AISuggestExtension'
@@ -79,6 +86,7 @@ export default {
     EditorContent,
     ToolbarDropdown,
     AISuggestToolbar,
+    BubbleMenu,
   },
 
   props: {
@@ -155,11 +163,6 @@ export default {
         TextAlign.configure({
           types: ['heading', 'paragraph'],
           defaultAlignment: 'left',
-        }),
-        BubbleMenu.configure({
-          pluginKey: 'selectMenu',
-          element: document.querySelector('.menu-select'),
-          shouldShow: ({ from, to }) => from !== to,
         }),
         AISuggestExtension,
       ],
@@ -355,7 +358,7 @@ div {
   }
 }
 
-menu {
+.menu-select {
   display: flex;
   flex-direction: column;
   list-style: none;
@@ -368,20 +371,29 @@ menu {
   -ms-user-select: none;
   user-select: none;
   gap: 4px;
-}
-
-.menu-select {
-  position: absolute;
-  z-index: 1000;
   border: 1px solid var(--lamp-grey-20);
 
   .button {
+    display: flex;
+    align-items: center;
+    gap: 4px;
     padding: 4px 8px;
-    font-size: 8px !important;
+    font-size: 14px;
     color: var(--lamp-color-neutral-dark);
     background-color: transparent;
     border: none;
     cursor: pointer;
+
+    .icon {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+      color: var(--lamp-color-neutral-dark);
+    }
+
+    .label {
+      white-space: nowrap;
+    }
 
     &:hover {
       background-color: var(--lamp-grey-20);

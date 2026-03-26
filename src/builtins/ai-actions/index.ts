@@ -24,13 +24,6 @@ function getSelection(editor: Editor): string {
     : editor.state.doc.textBetween(editor.state.selection.from, editor.state.selection.to, ' ');
 }
 
-/**
- * Wraps an async AI action with loading UX:
- * 1. Shows a loading indicator while the AI request is in flight.
- * 2. On success: stores the suggestion in aiState (Editor.vue drives the TipTap extension).
- * 3. On error: shows an error state.
- * The actual content insertion is deferred until the user accepts the suggestion.
- */
 async function aiSuggest(
   ctx: ReturnType<typeof pluginHost.getContext>,
   actionLabel: string,
@@ -58,7 +51,7 @@ export const manifest = {
 export default {
   manifest,
 
-  onLoad(_ctx): PluginContributions {
+  onLoad(_ctx: any): PluginContributions {
     // ── Shared action factory ──────────────────────────────────────
     // NOTE: getContext is called at action-execution time (not definition time),
     // because during onLoad the plugin has not yet been added to _loaded.
@@ -96,7 +89,7 @@ export default {
         {
           id: 'polish',
           label: '润色',
-          icon: '#icon-edit',
+          icon: '#icon-mobang',
           priority: 80,
           requireSelection: true,
           action: makeAction('polish', '润色中', bubbleFrom, 'replace'),
@@ -104,7 +97,7 @@ export default {
         {
           id: 'expand',
           label: '扩写',
-          icon: '#icon-expand',
+          icon: '#icon-wenben-kuoxie',
           priority: 70,
           requireSelection: true,
           action: makeAction('expand', '扩写中', bubbleFrom, 'replace'),
@@ -112,7 +105,7 @@ export default {
         {
           id: 'continue',
           label: '续写',
-          icon: '#icon-continue',
+          icon: '#icon-xuxie',
           priority: 60,
           requireSelection: false,
           action: makeAction('continue', '续写中', bubbleFrom, 'append'),
@@ -120,7 +113,7 @@ export default {
         {
           id: 'summarize',
           label: '概述',
-          icon: '#icon-summary',
+          icon: '#icon-wenben-suoxie',
           priority: 50,
           requireSelection: true,
           action: makeAction('summarize', '概述中', bubbleFrom, 'replace'),
@@ -135,7 +128,7 @@ export default {
           id: 'polish',
           where: 'edit',
           label: '润色',
-          icon: '#icon-edit',
+          icon: '#icon-mobang',
           priority: 60,
           action: makeAction('polish', '润色中', bubbleFrom, 'replace'),
         },
@@ -143,7 +136,7 @@ export default {
           id: 'expand',
           where: 'edit',
           label: '扩写',
-          icon: '#icon-expand',
+          icon: '#icon-wenben-kuoxie',
           priority: 59,
           action: makeAction('expand', '扩写中', bubbleFrom, 'replace'),
         },
@@ -151,7 +144,7 @@ export default {
           id: 'continue',
           where: 'edit',
           label: '续写',
-          icon: '#icon-continue',
+          icon: '#icon-xuxie',
           priority: 58,
           action: makeAction('continue', '续写中', (editor: Editor) => ({
             text: editor.getText(),
@@ -163,7 +156,7 @@ export default {
           id: 'summarize',
           where: 'edit',
           label: '概述',
-          icon: '#icon-summary',
+          icon: '#icon-wenben-suoxie',
           priority: 57,
           action: makeAction('summarize', '概述中', bubbleFrom, 'replace'),
         },
