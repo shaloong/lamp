@@ -45,5 +45,10 @@ export default defineConfig({
   // 清除 Vite 缓存时排除 Tauri
   optimizeDeps: {
     exclude: ['@tauri-apps/api'],
+    include: [
+      '@tiptap/core',
+      '@tiptap/pm/state',
+      '@tiptap/pm/view',
+    ],
   }
 })

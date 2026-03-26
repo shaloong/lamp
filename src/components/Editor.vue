@@ -4,21 +4,13 @@
       <!-- 核心工具栏：通过插件系统渲染（lamp.core-toolbar） -->
       <template v-for="item in pluginHost.contributions.sortedEditorToolbar" :key="item.id">
         <!-- 下拉菜单类型 -->
-        <ToolbarDropdown
-          v-if="item.type === 'dropdown' && item.children"
-          :label="item.label"
-          :children="item.children"
-          :editor="editor"
-          :is-disabled="item.isDisabled ? item.isDisabled(editor) : false"
-        />
+        <ToolbarDropdown v-if="item.type === 'dropdown' && item.children" :label="item.label" :children="item.children"
+          :editor="editor" :is-disabled="item.isDisabled ? item.isDisabled(editor) : false" />
         <!-- 普通按钮类型 -->
-        <button
-          v-else
-          @click="invokeAction(item.pluginId, item.action)"
+        <button v-else @click="invokeAction(item.pluginId, item.action)"
           :class="{ 'is-active': item.isActive ? item.isActive(editor) : false }"
           :disabled="item.isDisabled ? item.isDisabled(editor) : false"
-          :title="item.label + (item.keybinding ? ' (' + item.keybinding + ')' : '')"
-        >
+          :title="item.label + (item.keybinding ? ' (' + item.keybinding + ')' : '')">
           <svg v-if="item.icon" class="icon" aria-hidden="true">
             <use :xlink:href="item.icon"></use>
           </svg>
@@ -36,26 +28,8 @@
     <div class="character-count" v-if="editor">
       {{ getCharacterCount() }} 个字符
     </div>
-    <!-- AI Suggestion Preview Overlay -->
-    <Transition name="ai-loading">
-      <div class="ai-loading-overlay" v-if="pluginHost.aiState.suggestion">
-        <div class="ai-loading-card ai-suggestion-card">
-          <div class="ai-suggestion-header">
-            <svg class="ai-suggestion-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
-            </svg>
-            <span class="ai-suggestion-title">{{ pluginHost.aiState.suggestion?.actionLabel }}结果</span>
-          </div>
-          <div class="ai-suggestion-preview">
-            {{ pluginHost.aiState.suggestion?.content }}
-          </div>
-          <div class="ai-suggestion-actions">
-            <button class="ai-suggestion-reject" @click="dismissSuggestion">放弃</button>
-            <button class="ai-suggestion-accept" @click="acceptSuggestion">应用</button>
-          </div>
-        </div>
-      </div>
-    </Transition>
+    <!-- AI Inline Suggestion Toolbar (rendered via Teleport) -->
+    <AISuggestToolbar :editor="editor" />
     <!-- AI Loading / Error Overlay -->
     <Transition name="ai-loading">
       <div class="ai-loading-overlay" v-if="pluginHost.aiState.isLoading || pluginHost.aiState.error">
@@ -63,7 +37,8 @@
         <div class="ai-loading-card" v-if="pluginHost.aiState.isLoading">
           <div class="ai-loading-spinner">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="31.4 31.4" stroke-dashoffset="0"/>
+              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"
+                stroke-dasharray="31.4 31.4" stroke-dashoffset="0" />
             </svg>
           </div>
           <span class="ai-loading-label">{{ pluginHost.aiState.actionLabel }}</span>
@@ -73,8 +48,8 @@
         <div class="ai-loading-card ai-error-card" v-else-if="pluginHost.aiState.error">
           <div class="ai-error-icon">
             <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
-              <path d="M12 7v5M12 16.5v.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2" />
+              <path d="M12 7v5M12 16.5v.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
             </svg>
           </div>
           <span class="ai-error-title">AI 操作失败</span>
@@ -95,12 +70,15 @@ import { Editor, EditorContent } from '@tiptap/vue-3'
 import BubbleMenu from "@tiptap/extension-bubble-menu"
 import TextAlign from "@tiptap/extension-text-align"
 import { pluginHost } from '../plugins/index'
+import { AISuggestExtension } from '../builtins/ai-actions/ext/AISuggestExtension'
 import ToolbarDropdown from './ToolbarDropdown.vue'
+import AISuggestToolbar from './AISuggestToolbar.vue'
 
 export default {
   components: {
     EditorContent,
     ToolbarDropdown,
+    AISuggestToolbar,
   },
 
   props: {
@@ -117,37 +95,6 @@ export default {
     },
     dismissAiError() {
       pluginHost.aiState.error = null;
-    },
-    /** Apply the current AI suggestion to the editor */
-    acceptSuggestion() {
-      const suggestion = pluginHost.aiState.suggestion;
-      if (!suggestion || !this.editor) {
-        pluginHost.aiState.suggestion = null;
-        return;
-      }
-      const { content, insertMode, from, to } = suggestion;
-      if (insertMode === 'replace') {
-        this.editor
-          .chain()
-          .focus()
-          .deleteRange({ from, to })
-          .insertContentAt(from, content)
-          .setTextSelection(from + content.length)
-          .run();
-      } else {
-        // append — insert at the end of the original selection, no deletion
-        this.editor
-          .chain()
-          .focus()
-          .insertContentAt(to, content)
-          .setTextSelection(to + content.length)
-          .run();
-      }
-      pluginHost.aiState.suggestion = null;
-    },
-    /** Discard the current AI suggestion without applying */
-    dismissSuggestion() {
-      pluginHost.aiState.suggestion = null;
     },
     // pluginHost.contributions 中的 action 以 editor 为参数
     invokeAction(pluginId, action) {
@@ -176,17 +123,17 @@ export default {
 
   watch: {
     modelValue(value) {
-      // HTML
       const isSame = this.editor.getHTML() === value
-
-      // JSON
-      // const isSame = JSON.stringify(this.editor.getJSON()) === JSON.stringify(value)
-
-      if (isSame) {
-        return
-      }
-
+      if (isSame) return
       this.editor.commands.setContent(value, false)
+    },
+    // Bridge: pluginHost.aiState.suggestion → TipTap decoration
+    'pluginHost.aiState.suggestion': {
+      handler(s) {
+        if (!this.editor) return;
+        this.editor.commands.setAISuggestion(s);
+      },
+      deep: true,
     },
   },
 
@@ -212,51 +159,14 @@ export default {
         BubbleMenu.configure({
           pluginKey: 'selectMenu',
           element: document.querySelector('.menu-select'),
-          shouldShow: ({ editor, view, state, oldState, from, to }) => {
-            // 只有当有选中内容时才显示菜单
-            return from !== to;
-          },
+          shouldShow: ({ from, to }) => from !== to,
         }),
-        // BubbleMenu.configure({
-        //   pluginKey: 'slashMenu',
-        //   element: document.querySelector('.menu-slash'),
-        //   shouldShow: ({ editor, view, state, oldState, from, to }) => {
-        //     const { doc, selection } = state;
-        //     const { $cursor } = selection;
-        //
-        //     // Check if the selection is a cursor and the text at the cursor position is a slash
-        //     if ($cursor) {
-        //       const posBeforeCursor = $cursor.pos - 1;
-        //       const charBeforeCursor = doc.textBetween(posBeforeCursor, posBeforeCursor + 1);
-        //       if (charBeforeCursor === '/') {
-        //         // If there is no old state or the old state is undefined
-        //         if (!oldState) {
-        //           return true; // Show the menu
-        //         }
-        //
-        //         // If the document has changed since the last update
-        //         if (!oldState.doc.eq(doc)) {
-        //           // Check if a new slash has been inserted
-        //           const oldCharBeforeCursor = oldState.doc.textBetween(posBeforeCursor, posBeforeCursor + 1);
-        //           if (charBeforeCursor !== oldCharBeforeCursor) {
-        //             return true; // Show the menu
-        //           }
-        //         }
-        //       }
-        //     }
-        //
-        //     return false; // Hide the menu
-        //   },
-        // }),
+        AISuggestExtension,
       ],
       content: this.modelValue,
       autofocus: true,
       onUpdate: () => {
-        // HTML
         this.$emit('update:modelValue', this.editor.getHTML())
-
-        // JSON
-        // this.$emit('update:modelValue', this.editor.getJSON())
       },
     })
     pluginHost.setEditorInstance(this.editor)
@@ -270,7 +180,6 @@ export default {
 </script>
 
 <style lang="scss">
-
 .el-dropdown-link {
   .icon {
     color: var(--lamp-color-neutral-dark);
@@ -491,6 +400,28 @@ menu {
   user-select: none;
 }
 
+/* ── AI Inline Ghost Text ────────────────────────────────────── */
+
+.ai-suggest-inline {
+  pointer-events: none !important;
+  color: var(--lamp-color-primary) !important;
+  font-style: italic !important;
+  background: rgba(0, 110, 255, 0.08) !important;
+  border-bottom: 2.5px dotted var(--lamp-color-primary) !important;
+  border-radius: 2px !important;
+  cursor: text !important;
+  padding: 1px 2px !important;
+}
+
+/* ── AI To-Be-Replaced Original Text ──────────────────────────── */
+
+.ai-suggest-replace {
+  text-decoration: line-through !important;
+  background: var(--el-color-danger-light-8) !important;
+  color: var(--el-color-danger) !important;
+  border-radius: 2px !important;
+}
+
 /* ── AI Loading Overlay ─────────────────────────────────────── */
 
 .ai-loading-overlay {
@@ -593,94 +524,14 @@ menu {
   }
 }
 
-/* ── AI Suggestion Card ──────────────────────────────────────── */
-
-.ai-suggestion-card {
-  width: 480px;
-  max-width: calc(100vw - 48px);
-  gap: 12px;
-  align-items: stretch;
-  padding: 20px 24px;
-  border-color: rgba(0, 110, 255, 0.2);
-}
-
-.ai-suggestion-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.ai-suggestion-icon {
-  width: 18px;
-  height: 18px;
-  color: var(--lamp-color-primary);
-  flex-shrink: 0;
-}
-
-.ai-suggestion-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--lamp-color-primary);
-  letter-spacing: 0.02em;
-}
-
-.ai-suggestion-preview {
-  font-size: 13.5px;
-  line-height: 1.7;
-  color: var(--lamp-color-neutral-dark);
-  background: rgba(0, 110, 255, 0.04);
-  border: 1px solid rgba(0, 110, 255, 0.1);
-  border-radius: 8px;
-  padding: 12px 14px;
-  max-height: 200px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  word-break: break-word;
-
-  /* Custom scrollbar */
-  &::-webkit-scrollbar { width: 4px; }
-  &::-webkit-scrollbar-thumb { background: var(--lamp-grey-40); border-radius: 4px; }
-}
-
-.ai-suggestion-actions {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-  margin-top: 4px;
-}
-
-.ai-suggestion-reject,
-.ai-suggestion-accept {
-  padding: 7px 20px;
-  font-size: 13px;
-  font-weight: 500;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.15s ease, opacity 0.15s ease;
-}
-
-.ai-suggestion-reject {
-  color: var(--lamp-color-neutral-dark);
-  background: var(--lamp-grey-15);
-
-  &:hover {
-    background: var(--lamp-grey-20);
-  }
-}
-
-.ai-suggestion-accept {
-  color: var(--lamp-color-neutral-light);
-  background: var(--lamp-color-primary);
-
-  &:hover {
-    background: var(--lamp-btn-primary-hover);
-  }
-}
-
 @keyframes ai-spin {
-  from { transform: rotate(0deg); }
-  to   { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Transition */
@@ -688,6 +539,7 @@ menu {
 .ai-loading-leave-active {
   transition: opacity 0.2s ease;
 }
+
 .ai-loading-enter-from,
 .ai-loading-leave-to {
   opacity: 0;

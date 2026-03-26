@@ -25,9 +25,9 @@ function getSelection(editor: Editor): string {
 }
 
 /**
- * Wraps an async AI action with loading + suggestion UX:
- * 1. Shows a loading overlay while the AI request is in flight.
- * 2. On success: shows a suggestion preview (not yet applied).
+ * Wraps an async AI action with loading UX:
+ * 1. Shows a loading indicator while the AI request is in flight.
+ * 2. On success: stores the suggestion in aiState (Editor.vue drives the TipTap extension).
  * 3. On error: shows an error state.
  * The actual content insertion is deferred until the user accepts the suggestion.
  */
@@ -40,6 +40,7 @@ async function aiSuggest(
   ctx.ai.startLoading(actionLabel);
   try {
     const suggestion = await fn();
+    // Store in aiState; Editor.vue watches this and calls editor.setAISuggestion()
     ctx.ai.showSuggestion(suggestion);
   } catch (err) {
     ctx.ai.setError(err instanceof Error ? err.message : String(err));
