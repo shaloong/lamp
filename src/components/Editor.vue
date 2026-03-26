@@ -36,6 +36,33 @@
     <div class="character-count" v-if="editor">
       {{ getCharacterCount() }} 个字符
     </div>
+    <!-- AI Loading / Error Overlay -->
+    <Transition name="ai-loading">
+      <div class="ai-loading-overlay" v-if="pluginHost.aiState.isLoading || pluginHost.aiState.error">
+        <!-- Loading state -->
+        <div class="ai-loading-card" v-if="pluginHost.aiState.isLoading">
+          <div class="ai-loading-spinner">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="31.4 31.4" stroke-dashoffset="0"/>
+            </svg>
+          </div>
+          <span class="ai-loading-label">{{ pluginHost.aiState.actionLabel }}</span>
+          <span class="ai-loading-hint">请稍候...</span>
+        </div>
+        <!-- Error state -->
+        <div class="ai-loading-card ai-error-card" v-else-if="pluginHost.aiState.error">
+          <div class="ai-error-icon">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+              <path d="M12 7v5M12 16.5v.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <span class="ai-error-title">AI 操作失败</span>
+          <span class="ai-error-message">{{ pluginHost.aiState.error }}</span>
+          <button class="ai-error-dismiss" @click="dismissAiError">知道了</button>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -68,16 +95,21 @@ export default {
       const text = this.editor.getText();
       return text.length;
     },
+    dismissAiError() {
+      pluginHost.aiState.error = null;
+    },
     // pluginHost.contributions 中的 action 以 editor 为参数
     invokeAction(pluginId, action) {
-      if (!this.editor) return
+      if (!this.editor) return;
       try {
-        const result = action(this.editor)
+        const result = action(this.editor);
         if (result instanceof Promise) {
-          result.catch(err => console.error(`[Editor] Plugin action failed (${pluginId}):`, err))
+          result.catch(err => {
+            pluginHost.aiState.error = err instanceof Error ? err.message : String(err);
+          });
         }
       } catch (err) {
-        console.error(`[Editor] Plugin action error (${pluginId}):`, err)
+        pluginHost.aiState.error = err instanceof Error ? err.message : String(err);
       }
     },
   },
@@ -406,5 +438,122 @@ menu {
   text-align: left;
   color: var(--lamp-color-neutral-grey);
   user-select: none;
+}
+
+/* ── AI Loading Overlay ─────────────────────────────────────── */
+
+.ai-loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+}
+
+.ai-loading-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 28px 40px;
+  background: var(--lamp-color-neutral-light);
+  border: 1px solid var(--lamp-grey-20);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+  min-width: 140px;
+}
+
+.ai-loading-spinner {
+  width: 36px;
+  height: 36px;
+  color: var(--lamp-color-primary);
+
+  svg {
+    width: 100%;
+    height: 100%;
+    animation: ai-spin 0.85s linear infinite;
+  }
+}
+
+.ai-loading-label {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--lamp-color-neutral-dark);
+  letter-spacing: 0.02em;
+}
+
+.ai-loading-hint {
+  font-size: 12px;
+  color: var(--lamp-color-neutral-grey);
+}
+
+/* ── AI Error Card ───────────────────────────────────────────── */
+
+.ai-error-card {
+  gap: 8px;
+  border-color: rgba(239, 68, 68, 0.25);
+}
+
+.ai-error-icon {
+  width: 36px;
+  height: 36px;
+  color: #ef4444;
+
+  svg {
+    width: 100%;
+    height: 100%;
+  }
+}
+
+.ai-error-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #ef4444;
+  margin-top: 2px;
+}
+
+.ai-error-message {
+  font-size: 12px;
+  color: var(--lamp-color-neutral-grey);
+  text-align: center;
+  max-width: 260px;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
+.ai-error-dismiss {
+  margin-top: 8px;
+  padding: 6px 20px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--lamp-color-neutral-light);
+  background: var(--lamp-color-neutral-grey);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+
+  &:hover {
+    background: var(--lamp-color-neutral-dark);
+  }
+}
+
+@keyframes ai-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Transition */
+.ai-loading-enter-active,
+.ai-loading-leave-active {
+  transition: opacity 0.2s ease;
+}
+.ai-loading-enter-from,
+.ai-loading-leave-to {
+  opacity: 0;
 }
 </style>

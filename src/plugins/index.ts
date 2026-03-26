@@ -149,6 +149,9 @@ export class PluginHost {
   private _workspace = reactive({ isOpen: false, rootPath: '', name: '' });
   private readonly _loader = new PluginLoader();
 
+  /** AI operation loading/error state — shared across all AI actions */
+  readonly aiState = reactive({ isLoading: false, actionLabel: '', error: '' as string | null });
+
   /** Event bus — available immediately after construction */
   readonly events = new EventBus();
 
@@ -295,6 +298,7 @@ export class PluginHost {
       workspace: this._workspace,
       storageService: this.storageService,
       commandService: this.commandService,
+      aiState: this.aiState,
     });
 
     const module = await this._loader.loadModule(manifest, basePath);
@@ -348,6 +352,7 @@ export class PluginHost {
       workspace: this._workspace,
       storageService: this.storageService,
       commandService: this.commandService,
+      aiState: this.aiState,
     });
 
     // Activate dependencies first
@@ -496,6 +501,7 @@ export class PluginHost {
       workspace: this._workspace,
       storageService: this.storageService,
       commandService: this.commandService,
+      aiState: this.aiState,
     });
 
     const plugin = this._builtinModules.get(manifest.id) as LampPlugin | undefined;
