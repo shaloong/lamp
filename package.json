@@ -44,6 +44,7 @@
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0",
     "@vitejs/plugin-vue": "^6.0.2",
+    "oxlint": "^1.57.0",
     "sass": "^1.94.2",
     "sass-loader": "^16.0.6",
     "unplugin-auto-import": "^20.3.0",
