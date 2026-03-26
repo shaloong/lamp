@@ -98,7 +98,7 @@
       </div>
     </div>
     <div class="mask">
-      <el-dialog class="lamp-dialog" v-model="dialogConfirmCloseTab" title="提示" width="500" center
+      <el-dialog v-model="dialogConfirmCloseTab" title="提示" width="500" center
         :before-close="(done) => { indexCloseTab = -1; done(); }">
         <span>您正在关闭的文件尚未保存，是否需要保存？</span>
         <template #footer>
@@ -113,7 +113,7 @@
         </template>
       </el-dialog>
 
-      <el-dialog class="lamp-dialog" v-model="dialogAiSettings" title="AI 设置" width="520" center>
+      <el-dialog v-model="dialogAiSettings" title="AI 设置" width="520" center>
         <el-form label-width="120px">
           <el-form-item label="Base URL">
             <el-input v-model="aiSettings.baseURL" placeholder="https://api.deepseek.com" />
@@ -137,7 +137,7 @@
         </template>
       </el-dialog>
 
-      <el-dialog class="lamp-dialog" v-model="dialogPlugins" title="插件管理" width="600" center>
+      <el-dialog v-model="dialogPlugins" title="插件管理" width="600" center>
         <div class="plugins-list">
           <div v-if="pluginHost.pluginCount === 0" class="plugins-empty">
             暂无已加载插件
