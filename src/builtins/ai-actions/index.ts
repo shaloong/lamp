@@ -7,7 +7,7 @@
 
 import type { Editor } from '@tiptap/core';
 import { pluginHost } from '../../plugins/index';
-import type { AISuggestion } from '../../plugins/types';
+import type { AISuggestion, PluginContributions } from '../../plugins/types';
 
 /** Prompts for each AI action */
 const PROMPTS = {
