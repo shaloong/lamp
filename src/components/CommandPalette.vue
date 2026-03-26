@@ -124,7 +124,6 @@ onBeforeUnmount(() => {
 </template>
 
 <style lang="scss" scoped>
-@use "/src/styles/style" as *;
 
 .command-palette-overlay {
   position: fixed;
@@ -139,7 +138,7 @@ onBeforeUnmount(() => {
 .command-palette {
   width: 560px;
   max-height: 400px;
-  background-color: $lamp-color-neutral-light;
+  background-color: var(--lamp-color-neutral-light);
   border-radius: 8px;
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
   display: flex;
@@ -149,21 +148,21 @@ onBeforeUnmount(() => {
 
 .palette-header {
   padding: 12px;
-  border-bottom: 1px solid rgba($lamp-color-neutral-grey, 0.15);
+  border-bottom: 1px solid var(--lamp-grey-15);
 }
 
 .palette-input {
   width: 100%;
-  border: 1px solid rgba($lamp-color-neutral-grey, 0.2);
+  border: 1px solid var(--lamp-grey-20);
   border-radius: 4px;
   padding: 8px 12px;
   font-size: 14px;
   outline: none;
-  color: $lamp-color-neutral-dark;
-  background-color: rgba($lamp-color-neutral-grey, 0.05);
+  color: var(--lamp-color-neutral-dark);
+  background-color: var(--lamp-grey-05);
 
-  &:focus { border-color: $lamp-color-primary; }
-  &::placeholder { color: rgba($lamp-color-neutral-grey, 0.7); }
+  &:focus { border-color: var(--lamp-color-primary); }
+  &::placeholder { color: var(--lamp-grey-70); }
 }
 
 .palette-list {
@@ -174,7 +173,7 @@ onBeforeUnmount(() => {
 
 .palette-empty {
   padding: 16px;
-  color: $lamp-color-neutral-grey;
+  color: var(--lamp-color-neutral-grey);
   font-size: 13px;
   text-align: center;
 }
@@ -188,20 +187,20 @@ onBeforeUnmount(() => {
   margin: 0 6px;
 
   &:hover,
-  &.is-selected { background-color: rgba($lamp-color-primary, 0.1); }
-  &.is-selected { background-color: rgba($lamp-color-primary, 0.15); }
+  &.is-selected { background-color: var(--lamp-primary-10); }
+  &.is-selected { background-color: var(--lamp-primary-15); }
 }
 
 .palette-item-label {
   flex: 1;
   font-size: 13px;
-  color: $lamp-color-neutral-dark;
+  color: var(--lamp-color-neutral-dark);
 }
 
 .palette-item-keybinding {
   font-size: 11px;
-  color: $lamp-color-neutral-grey;
-  background-color: rgba($lamp-color-neutral-grey, 0.1);
+  color: var(--lamp-color-neutral-grey);
+  background-color: var(--lamp-grey-10);
   padding: 2px 6px;
   border-radius: 3px;
   margin-right: 8px;
@@ -209,20 +208,20 @@ onBeforeUnmount(() => {
 
 .palette-item-id {
   font-size: 10px;
-  color: rgba($lamp-color-neutral-grey, 0.6);
+  color: var(--lamp-grey-60);
 }
 
 .palette-footer {
   padding: 6px 14px;
-  border-top: 1px solid rgba($lamp-color-neutral-grey, 0.1);
+  border-top: 1px solid var(--lamp-grey-10);
 }
 
 .palette-hint {
   font-size: 11px;
-  color: rgba($lamp-color-neutral-grey, 0.7);
+  color: var(--lamp-grey-70);
 
   kbd {
-    background-color: rgba($lamp-color-neutral-grey, 0.1);
+    background-color: var(--lamp-grey-10);
     border-radius: 3px;
     padding: 1px 4px;
     font-family: monospace;

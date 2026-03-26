@@ -1,13 +1,8 @@
 <template>
   <div class="toolbar-dropdown">
     <!-- 触发按钮：显示当前激活项的图标 + 下拉箭头 -->
-    <button
-      class="trigger"
-      :class="{ 'is-active': hasActiveChild }"
-      :disabled="isDisabled"
-      :title="label"
-      @click="toggle"
-    >
+    <button class="trigger" :class="{ 'is-active': hasActiveChild }" :disabled="isDisabled" :title="label"
+      @click="toggle">
       <!-- 有激活子项时显示其图标；无激活时显示默认 label -->
       <svg v-if="activeChild?.icon" class="icon" aria-hidden="true">
         <use :xlink:href="activeChild.icon"></use>
@@ -19,13 +14,8 @@
 
     <!-- 下拉菜单 -->
     <div v-if="isOpen" class="dropdown-menu">
-      <button
-        v-for="child in children"
-        :key="child.id"
-        class="dropdown-item"
-        :class="{ 'is-active': child.isActive ? child.isActive(editor) : false }"
-        @click="selectChild(child)"
-      >
+      <button v-for="child in children" :key="child.id" class="dropdown-item"
+        :class="{ 'is-active': child.isActive ? child.isActive(editor) : false }" @click="selectChild(child)">
         <svg v-if="child.icon" class="icon" aria-hidden="true">
           <use :xlink:href="child.icon"></use>
         </svg>
@@ -113,8 +103,6 @@ export default {
 </script>
 
 <style lang="scss" scoped>
-@use "/src/styles/style" as *;
-
 .toolbar-dropdown {
   position: relative;
   display: inline-flex;
@@ -151,13 +139,8 @@ export default {
       flex-shrink: 0;
     }
 
-    // 保持黑色，图标颜色本身即表示激活状态，无需额外高亮
-    &.is-active {
-      // no special color needed
-    }
-
     &:hover:not(:disabled) {
-      background-color: rgba($lamp-color-neutral-grey, 0.1);
+      background-color: var(--lamp-grey-10);
     }
 
     &:disabled {
@@ -175,10 +158,10 @@ export default {
     flex-direction: column;
     min-width: 160px;
     padding: 4px 6px;
-    background-color: $lamp-color-neutral-light;
-    border: 1px solid rgba($lamp-color-neutral-grey, 0.2);
+    background-color: var(--lamp-color-neutral-light);
+    border: 1px solid var(--lamp-grey-20);
     border-radius: 8px;
-    box-shadow: 2px 4px 12px 2px rgba($lamp-color-neutral-grey, 0.15);
+    box-shadow: 2px 4px 12px 2px var(--lamp-grey-15);
 
     .dropdown-item {
       display: flex;
@@ -186,7 +169,7 @@ export default {
       gap: 6px;
       padding: 6px 8px;
       font-size: 13px;
-      color: $lamp-color-neutral-dark;
+      color: var(--lamp-color-neutral-dark);
       cursor: pointer;
       background: transparent;
       border: none;
@@ -207,12 +190,12 @@ export default {
       }
 
       &:hover {
-        background-color: rgba($lamp-color-neutral-grey, 0.15);
+        background-color: var(--lamp-grey-15);
       }
 
       &.is-active {
-        color: $lamp-color-primary;
-        background-color: rgba($lamp-color-primary, 0.1);
+        color: var(--lamp-color-primary);
+        background-color: var(--lamp-primary-10);
       }
     }
   }

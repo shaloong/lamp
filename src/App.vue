@@ -1,27 +1,12 @@
 <template>
   <div class="app">
     <div class="app-menu">
-      <main-menu
-        @openFile="openFile"
-        @saveFile="fileSave"
-        @saveFileAs="saveFileAs"
-        @editUndo="menuEditUndo"
-        @editRedo="menuEditRedo"
-        @editCut="menuEditCut"
-        @editCopy="menuEditCopy"
-        @editPaste="menuEditPaste"
-        @editSelectAll="menuEditSelectAll"
-        @editDelete="menuEditDelete"
-        @viewFullScreen="viewFullScreen"
-        @minWindow="minWindow"
-        @maxWindow="maxWindow"
-        @closeWindow="closeWindow"
-        @openSettings="openSettingsDialog"
-        @openPlugins="openPluginsDialog"
-        @openWorkspace="openWorkspace"
-        @closeWorkspace="closeWorkspace"
-        @newFile="newFile"
-      />
+      <main-menu @openFile="openFile" @saveFile="fileSave" @saveFileAs="saveFileAs" @editUndo="menuEditUndo"
+        @editRedo="menuEditRedo" @editCut="menuEditCut" @editCopy="menuEditCopy" @editPaste="menuEditPaste"
+        @editSelectAll="menuEditSelectAll" @editDelete="menuEditDelete" @viewFullScreen="viewFullScreen"
+        @minWindow="minWindow" @maxWindow="maxWindow" @closeWindow="closeWindow" @openSettings="openSettingsDialog"
+        @openPlugins="openPluginsDialog" @openWorkspace="openWorkspace" @closeWorkspace="closeWorkspace"
+        @newFile="newFile" />
     </div>
     <div class="app-content">
       <div class="toolbar">
@@ -806,8 +791,6 @@ export default {
 </script>
 
 <style lang="scss" scoped>
-@use "styles/style" as *;
-
 .app {
   display: grid;
   grid-template-rows: auto 1fr;
@@ -839,8 +822,8 @@ export default {
   width: 42px;
   /* 工具栏的固定宽度 */
   flex-shrink: 0;
-  background-color: rgba($lamp-color-neutral-grey, 0.1);
-  border-right: 1px solid rgba($lamp-color-neutral-dark, 0.1);
+  background-color: #F2F2F2;
+  border-right: 1px solid var(--lamp-dark-10);
 }
 
 .toggle-button {
@@ -862,7 +845,7 @@ export default {
 }
 
 .activeToggleButton {
-  border-color: $lamp-color-primary;
+  border-color: var(--lamp-color-primary);
 }
 
 .close-button {
@@ -881,7 +864,7 @@ export default {
 }
 
 .close-button:hover {
-  background-color: rgba($lamp-color-neutral-grey, 0.2)
+  background-color: var(--lamp-grey-20)
 }
 
 .tool-view {
@@ -890,7 +873,7 @@ export default {
   display: flex;
   /* 设置为 flex 布局 */
   flex-direction: column;
-  background-color: rgba($lamp-color-neutral-grey, 0.1);
+  background-color: #F2F2F2;
 }
 
 .tool1 {
@@ -901,8 +884,7 @@ export default {
 .editor {
   grid-column: 3 / 4;
   height: 100%;
-  margin-right: 5px;
-  background-color: $lamp-color-neutral-light;
+  background-color: var(--lamp-color-neutral-light);
   display: grid;
   grid-template-rows: auto 1fr;
   overflow: hidden;
@@ -912,7 +894,7 @@ export default {
   grid-row: 1;
   display: flex;
   flex-wrap: wrap;
-  border-bottom: 1px solid #ccc;
+  border-bottom: 1px solid var(--lamp-grey-20);
 }
 
 .editor-editor {
@@ -926,7 +908,7 @@ export default {
   padding: 6px 10px 4px 14px;
   cursor: pointer;
   font-size: 12px;
-  color: $lamp-color-neutral-grey;
+  color: var(--lamp-color-neutral-grey);
   display: flex;
   align-items: center;
 
@@ -940,8 +922,8 @@ export default {
 }
 
 .activeTab {
-  color: $lamp-color-neutral-dark;
-  border: 0 0 3px 0 $lamp-color-primary;
+  color: var(--lamp-color-neutral-dark);
+  border: 0 0 3px 0 var(--lamp-color-primary);
 
   .close-button {
     margin-left: 4px;
@@ -958,13 +940,13 @@ export default {
   left: 0;
   width: 100%;
   height: 3px;
-  background-color: $lamp-color-primary;
+  background-color: var(--lamp-color-primary);
   border-radius: 4px;
   transition: height 0.3s ease;
 }
 
 .editor-tab:hover {
-  background-color: rgba($lamp-color-neutral-grey, 0.1);
+  background-color: var(--lamp-grey-10);
 
   .close-button {
     visibility: visible;
@@ -980,8 +962,8 @@ export default {
 
 .workspace-header {
   padding: 8px 12px;
-  border-bottom: 1px solid rgba($lamp-color-neutral-grey, 0.15);
-  background-color: rgba($lamp-color-neutral-grey, 0.05);
+  border-bottom: 1px solid var(--lamp-grey-15);
+  background-color: var(--lamp-grey-05);
 }
 
 .workspace-name {
@@ -989,13 +971,13 @@ export default {
   align-items: center;
   font-size: 13px;
   font-weight: 500;
-  color: $lamp-color-neutral-dark;
+  color: var(--lamp-color-neutral-dark);
 
   .workspace-icon {
     width: 16px;
     height: 16px;
     margin-right: 6px;
-    color: $lamp-color-primary;
+    color: var(--lamp-color-primary);
   }
 }
 
@@ -1005,8 +987,8 @@ export default {
 }
 
 .temp-files-section {
-  border-top: 1px solid rgba($lamp-color-neutral-grey, 0.15);
-  background-color: rgba($lamp-color-neutral-grey, 0.03);
+  border-top: 1px solid var(--lamp-grey-15);
+  background-color: var(--lamp-grey-03);
   max-height: 150px;
   overflow-y: auto;
 }
@@ -1019,11 +1001,11 @@ export default {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  color: $lamp-color-neutral-grey;
+  color: var(--lamp-color-neutral-grey);
   cursor: pointer;
 
   &:hover {
-    background-color: rgba($lamp-color-neutral-grey, 0.08);
+    background-color: var(--lamp-grey-08);
   }
 
   .section-icon {
@@ -1059,14 +1041,14 @@ export default {
   cursor: pointer;
 
   &:hover {
-    background-color: rgba($lamp-color-neutral-grey, 0.1);
+    background-color: var(--lamp-grey-10);
   }
 
   .file-icon {
     width: 14px;
     height: 14px;
     margin-right: 6px;
-    color: $lamp-color-neutral-grey;
+    color: var(--lamp-color-neutral-grey);
   }
 
   .file-name {
@@ -1074,7 +1056,7 @@ export default {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    color: $lamp-color-neutral-dark;
+    color: var(--lamp-color-neutral-dark);
   }
 }
 
@@ -1092,7 +1074,7 @@ export default {
 
 .empty-text {
   font-size: 14px;
-  color: $lamp-color-neutral-grey;
+  color: var(--lamp-color-neutral-grey);
   margin-bottom: 20px;
 }
 </style>

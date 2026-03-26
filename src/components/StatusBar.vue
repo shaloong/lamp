@@ -40,7 +40,6 @@ const column = ref(1)
 </template>
 
 <style lang="scss" scoped>
-@use "/src/styles/style" as *;
 
 .status-bar {
   display: flex;
@@ -48,7 +47,7 @@ const column = ref(1)
   align-items: center;
   height: 24px;
   padding: 0 12px;
-  background-color: rgba($lamp-color-primary, 0.85);
+  background-color: var(--lamp-primary-85);
   color: #fff;
   font-size: 11px;
   user-select: none;

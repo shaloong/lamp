@@ -1,8 +1,9 @@
+// Element Plus SCSS variable overrides
 @forward 'element-plus/theme-chalk/src/common/var.scss' with (
-  $color-white: #F2F2F2,
-  $color-primary: #007AFF,
-  $text: (
-    'color-primary': #007AFF,
+  $colors: (
+    'primary': (
+      'base': #006EFF,
+    ),
   ),
   $font-size: (
     'base': 13px,
@@ -19,3 +20,98 @@
     'icon-width': 20px,
   ),
 );
+
+// Lamp design tokens — names kept for backward compatibility with components
+$lamp-color-primary: #006EFF;
+$lamp-color-neutral-light: #FFFFFF;
+$lamp-color-neutral-grey: #8E8E93;
+$lamp-color-neutral-dark: #1C1C1E;
+$lamp-font-size-small: 12px;
+$lamp-font-size-medium: 13px;
+
+// Precomputed hover colors for button variants
+$lamp-btn-primary-hover: #2985ff;
+$lamp-btn-warning-hover: #f89292;
+$lamp-btn-grey-hover: #a3a3a7;
+
+// ============================================================
+// CSS custom properties (available globally via additionalData)
+//
+// All lamp-* custom properties are available in every component's
+// <style> block — no SCSS @use needed.
+// ============================================================
+:root {
+  --lamp-color-primary: #{$lamp-color-primary};
+  --lamp-color-neutral-light: #{$lamp-color-neutral-light};
+  --lamp-color-neutral-grey: #{$lamp-color-neutral-grey};
+  --lamp-color-neutral-dark: #{$lamp-color-neutral-dark};
+
+  // Button hover states
+  --lamp-btn-primary-hover: #{$lamp-btn-primary-hover};
+  --lamp-btn-warning-hover: #{$lamp-btn-warning-hover};
+  --lamp-btn-grey-hover: #{$lamp-btn-grey-hover};
+
+  // Precomputed rgba variants (CSS rgba() can't use a var as its color arg)
+  // Grey: #8E8E93 = rgb(142, 142, 147)
+  --lamp-grey-03: rgba(142, 142, 147, 0.03);
+  --lamp-grey-05: rgba(142, 142, 147, 0.05);
+  --lamp-grey-08: rgba(142, 142, 147, 0.08);
+  --lamp-grey-10: rgba(142, 142, 147, 0.10);
+  --lamp-grey-15: rgba(142, 142, 147, 0.15);
+  --lamp-grey-20: rgba(142, 142, 147, 0.20);
+  --lamp-grey-40: rgba(142, 142, 147, 0.40);
+  --lamp-grey-50: rgba(142, 142, 147, 0.50);
+  --lamp-grey-60: rgba(142, 142, 147, 0.60);
+  --lamp-grey-70: rgba(142, 142, 147, 0.70);
+  --lamp-grey-80: rgba(142, 142, 147, 0.80);
+  --lamp-grey-90: rgba(142, 142, 147, 0.90);
+  // Dark: #1C1C1E = rgb(28, 28, 30)
+  --lamp-dark-10: rgba(28, 28, 30, 0.10);
+  // Primary: #006EFF = rgb(0, 110, 255)
+  --lamp-primary-10: rgba(0, 110, 255, 0.10);
+  --lamp-primary-15: rgba(0, 110, 255, 0.15);
+  --lamp-primary-20: rgba(0, 110, 255, 0.20);
+  --lamp-primary-85: rgba(0, 110, 255, 0.85);
+
+  font-family: Inter, 'Helvetica Neue', Helvetica, 'PingFang SC',
+    'Hiragino Sans GB', 'Microsoft YaHei', '微软雅黑', Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color-scheme: light dark;
+  color: $lamp-color-neutral-light;
+  background-color: $lamp-color-neutral-dark;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+#app {
+  margin: 0;
+  padding: 0;
+  text-align: center;
+}
+
+a {
+  font-weight: 500;
+  color: $lamp-color-primary;
+  text-decoration: inherit;
+
+  &:hover {
+    filter: brightness(1.15);
+  }
+}
+
+.icon {
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.15em;
+  fill: currentColor;
+  overflow: hidden;
+}

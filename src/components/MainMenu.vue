@@ -181,8 +181,10 @@ export default {
 </script>
 
 <style lang="scss">
-@use "@/styles/element/index" as *;
-@use "@/styles/style" as *;
+
+.el-divider--horizontal {
+  margin: 4px 0;
+}
 
 .flex-grow {
   flex-grow: 1;
@@ -203,7 +205,7 @@ export default {
   flex: 1;
   height: 38px !important;
   border: 0 !important;
-  border-bottom: 1px solid rgba($lamp-color-neutral-grey, 0.2) !important;
+  border-bottom: 1px solid var(--lamp-grey-20) !important;
 }
 
 .el-menu--horizontal>.el-menu-item,
@@ -213,7 +215,7 @@ export default {
 }
 
 .el-sub-menu__title {
-  color: $lamp-color-neutral-dark !important;
+  color: var(--lamp-color-neutral-dark) !important;
   border-bottom-color: transparent !important;
 }
 
@@ -223,16 +225,16 @@ export default {
 }
 
 .el-menu-item:hover {
-  color: $lamp-color-neutral-dark !important;
-  background-color: rgba($lamp-color-neutral-grey, 0.2) !important;
+  color: var(--lamp-color-neutral-dark) !important;
+  background-color: var(--lamp-grey-20) !important;
 }
 
 .menu-item__title {
-  color: $lamp-color-neutral-dark;
+  color: var(--lamp-color-neutral-dark);
 }
 
 .menu-item__shortcut {
-  color: rgba($lamp-color-neutral-grey, 0.7);
+  color: var(--lamp-grey-70);
   font-size: 11px;
 }
 
@@ -242,7 +244,7 @@ export default {
   align-items: stretch;
   -webkit-app-region: no-drag;
   background-color: #F2F2F2;
-  border-bottom: 1px solid rgba($lamp-color-neutral-grey, 0.2);
+  border-bottom: 1px solid var(--lamp-grey-20);
 }
 
 .win-btn {
@@ -254,12 +256,12 @@ export default {
   border: 0;
   border-radius: 0;
   background-color: transparent;
-  color: $lamp-color-neutral-dark;
+  color: var(--lamp-color-neutral-dark);
   cursor: default;
   transition: background-color 0.15s;
 
   &:hover {
-    background-color: rgba($lamp-color-neutral-grey, 0.15);
+    background-color: var(--lamp-grey-15);
   }
 }
 
