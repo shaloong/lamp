@@ -11,7 +11,7 @@ const emit = defineEmits([
   'editUndo', 'editRedo', 'editCut', 'editCopy', 'editPaste',
   'editSelectAll', 'editDelete',
   'viewFullScreen',
-  'openSettings', 'openPlugins',
+  'openWorkspace', 'closeWorkspace',
   'minWindow', 'maxWindow',
 ])
 
@@ -143,23 +143,7 @@ function resolveLabel(label) {
       </el-sub-menu>
 
       <!-- 设置菜单 -->
-      <el-sub-menu index="settings">
-        <template #title>{{ t('menu.settings') }}</template>
-        <el-menu-item index="settings-open" @click="emit('openSettings')">
-          <div class="menu-item__title">{{ t('menu.settings') }}</div>
-        </el-menu-item>
-        <!-- 来自插件的设置菜单项 -->
-        <template v-for="item in pluginHost.contributions.getMenuItemsBy('settings')" :key="item.id">
-          <el-divider v-if="item.separatorBefore" />
-          <el-menu-item :index="item.id" @click="invokeAction(item.pluginId, item.action)">
-            <div class="menu-item__title">{{ resolveLabel(item.label) }}</div>
-          </el-menu-item>
-        </template>
-        <el-divider />
-        <el-menu-item index="settings-plugins" @click="emit('openPlugins')">
-          <div class="menu-item__title">{{ t('menu.plugins') }}</div>
-        </el-menu-item>
-      </el-sub-menu>
+      <!-- 设置入口已移至左侧工具栏 -->
     </el-menu>
 
     <!-- 窗口控制按钮：位于右上角，与菜单项同一行 -->

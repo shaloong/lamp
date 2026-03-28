@@ -4,23 +4,25 @@
       <main-menu @openFile="openFile" @saveFile="fileSave" @saveFileAs="saveFileAs" @editUndo="menuEditUndo"
         @editRedo="menuEditRedo" @editCut="menuEditCut" @editCopy="menuEditCopy" @editPaste="menuEditPaste"
         @editSelectAll="menuEditSelectAll" @editDelete="menuEditDelete" @viewFullScreen="viewFullScreen"
-        @minWindow="minWindow" @maxWindow="maxWindow" @closeWindow="closeWindow" @openSettings="openSettingsDialog"
-        @openPlugins="openPluginsDialog" @openWorkspace="openWorkspace" @closeWorkspace="closeWorkspace"
-        @newFile="newFile" />
+        @minWindow="minWindow" @maxWindow="maxWindow" @closeWindow="closeWindow"
+        @openWorkspace="openWorkspace" @closeWorkspace="closeWorkspace" @newFile="newFile" />
     </div>
     <div class="app-content">
       <div class="toolbar">
-        <!-- 工具栏 -->
-        <!-- 工具1 -->
+        <!-- 顶部按钮 -->
         <button class="toggle-button" :class="{ activeToggleButton: tool1Active }" @click="toggleTool1()">
           <svg class="icon" aria-hidden="true">
             <use xlink:href="#icon-folder"></use>
           </svg>
         </button>
-        <!-- 工具2 -->
-        <!--        <button class="toggle-button" @click="toggleTool2()">-->
-        <!--          工具2-->
-        <!--        </button>-->
+        <!-- Spacer -->
+        <div style="flex: 1" />
+        <!-- 底部：设置 -->
+        <button class="toggle-button" @click="openSettingsDialog">
+          <svg class="icon" aria-hidden="true">
+            <use xlink:href="#icon-setting"></use>
+          </svg>
+        </button>
       </div>
       <div class="tool-view" v-show="tool1Active || tool2Active">
         <!-- 工具1操作视图 -->
@@ -112,34 +114,8 @@
           </div>
         </template>
       </el-dialog>
-
-      <el-dialog v-model="dialogPlugins" :title="$t('app.pluginsTitle')" width="600" center>
-        <div class="plugins-list">
-          <div v-if="pluginHost.pluginCount === 0" class="plugins-empty">
-            {{ $t('app.noPlugins') }}
-          </div>
-          <div v-for="plugin in pluginHost.loadedManifests" :key="plugin.id" class="plugin-item">
-            <div class="plugin-info">
-              <div class="plugin-name">{{ resolvePluginName(plugin.name) }}</div>
-              <div class="plugin-meta">
-                <span class="plugin-id">{{ plugin.id }}</span>
-                <span class="plugin-version">v{{ plugin.version }}</span>
-                <span v-if="plugin.description" class="plugin-desc">{{ plugin.description }}</span>
-              </div>
-            </div>
-            <div class="plugin-actions">
-              <el-tag v-if="plugin.disableable === false" size="small" type="warning">{{ $t('app.core') }}</el-tag>
-              <el-tag v-else size="small" type="success">{{ $t('app.enabled') }}</el-tag>
-            </div>
-          </div>
-        </div>
-        <template #footer>
-          <div class="dialog-footer">
-            <button class="lamp-btn-inconspicuous" @click="dialogPlugins = false">{{ $t('common.close') }}</button>
-          </div>
-        </template>
-      </el-dialog>
     </div>
+
     <CommandPalette v-model="dialogCommandPalette" />
     <SettingsDialog v-model="dialogSettings" />
   </div>
@@ -201,7 +177,6 @@ export default {
       toolViewHeight: 400,
       dialogConfirmCloseTab: false,
       indexCloseTab: -1, // 删除的索引号，-1表示没有传递
-      dialogPlugins: false,
       dialogSettings: false,
       dialogCommandPalette: false,
       pluginHost,
@@ -294,10 +269,6 @@ export default {
 
     openSettingsDialog() {
       this.dialogSettings = true;
-    },
-
-    openPluginsDialog() {
-      this.dialogPlugins = true;
     },
 
     newFile() {
@@ -790,6 +761,8 @@ export default {
   flex-shrink: 0;
   background-color: #F2F2F2;
   border-right: 1px solid var(--lamp-dark-10);
+  display: flex;
+  flex-direction: column;
 }
 
 .toggle-button {
