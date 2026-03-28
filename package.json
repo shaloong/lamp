@@ -7,7 +7,6 @@
   "author": "Shaloong",
   "scripts": {
     "dev": "vite",
-    "dev:ui": "vite --port 1086",
     "build": "vite build",
     "preview": "vite preview",
     "tauri": "tauri",
