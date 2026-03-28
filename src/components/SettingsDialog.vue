@@ -17,29 +17,23 @@
           @click="activeTab = item.id"
         >
           <span class="nav-icon">
-            <svg v-if="item.id === 'general'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-              <circle cx="12" cy="12" r="3"/>
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            <svg v-if="item.id === 'general'" viewBox="0 0 1024 1024" fill="currentColor">
+              <use xlink:href="#icon-setting" />
             </svg>
-            <svg v-else-if="item.id === 'editor'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+            <svg v-else-if="item.id === 'editor'" viewBox="0 0 1024 1024" fill="currentColor">
+              <use xlink:href="#icon-edit" />
             </svg>
-            <svg v-else-if="item.id === 'ai'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-              <path d="M12 2a4 4 0 0 1 4 4v1h1a3 3 0 0 1 0 6h-1v1a4 4 0 0 1-8 0v-1H7a3 3 0 0 1 0-6h1V6a4 4 0 0 1 4-4z"/>
-              <circle cx="8" cy="14" r="1"/><circle cx="16" cy="14" r="1"/>
-              <path d="M9 18h6"/>
+            <svg v-else-if="item.id === 'ai'" viewBox="0 0 1024 1024" fill="currentColor">
+              <use xlink:href="#icon-Bot" />
             </svg>
-            <svg v-else-if="item.id === 'plugins'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-              <path d="M20.7 5.5a1 1 0 0 0-.3-.9l-6.7-3.9a1 1 0 0 0-.9 0l-6.7 3.9a1 1 0 0 0-.3.9v11.4a1 1 0 0 0 .3.9l6.7 3.9a1 1 0 0 0 .9 0l6.7-3.9a1 1 0 0 0 .3-.9V5.5z"/>
+            <svg v-else-if="item.id === 'plugins'" viewBox="0 0 1024 1024" fill="currentColor">
+              <use xlink:href="#icon-plugin" />
             </svg>
-            <svg v-else-if="item.id === 'shortcuts'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-              <rect x="2" y="6" width="20" height="12" rx="2"/>
-              <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/>
+            <svg v-else-if="item.id === 'shortcuts'" viewBox="0 0 1024 1024" fill="currentColor">
+              <use xlink:href="#icon-jianpankuaijiejian" />
             </svg>
-            <svg v-else-if="item.id === 'about'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-              <circle cx="12" cy="12" r="10"/>
-              <path d="M12 16v-4M12 8h.01"/>
+            <svg v-else-if="item.id === 'about'" viewBox="0 0 1024 1024" fill="currentColor">
+              <use xlink:href="#icon-tongzhi" />
             </svg>
           </span>
           <span class="nav-label">{{ item.label }}</span>
