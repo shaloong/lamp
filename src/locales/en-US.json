@@ -51,10 +51,15 @@
     "openLastWorkspace": "Open last workspace",
     "openLastWorkspaceDesc": "Automatically open the last used workspace on startup",
     "ai": "AI",
+    "aiProvider": "Provider",
     "aiBaseUrl": "Base URL",
     "aiModel": "Model",
     "aiApiKey": "API Key",
-    "aiApiKeyPlaceholder": "Secret Key"
+    "aiApiKeyPlaceholder": "Secret Key",
+    "getApiKey": "Get Key",
+    "customModel": "Custom",
+    "presetModels": "Select preset model",
+    "modelPlaceholder": "Enter model name"
   },
   "common": {
     "save": "Save",

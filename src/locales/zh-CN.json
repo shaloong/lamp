@@ -51,10 +51,15 @@
     "openLastWorkspace": "打开上次工作区",
     "openLastWorkspaceDesc": "启动时自动打开上次使用的工作区",
     "ai": "AI",
+    "aiProvider": "供应商",
     "aiBaseUrl": "Base URL",
     "aiModel": "模型",
     "aiApiKey": "API Key",
-    "aiApiKeyPlaceholder": "Secret Key"
+    "aiApiKeyPlaceholder": "Secret Key",
+    "getApiKey": "获取密钥",
+    "customModel": "自定义",
+    "presetModels": "选择预设模型",
+    "modelPlaceholder": "输入模型名称"
   },
   "common": {
     "save": "保存",

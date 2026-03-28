@@ -101,9 +101,10 @@ function initElectronAPI() {
     ai: (prompt, message) => invoke('ai_chat', { prompt, message }),
     getAiSettings: () => invoke('get_ai_settings'),
     saveAiSettings: (settings) => invoke('save_ai_settings', {
-      baseUrl: settings.baseURL,
-      apiKey: settings.apiKey,
-      model: settings.model,
+      provider: settings.provider,
+      baseUrl: settings.baseURL || '',
+      apiKey: settings.apiKey || '',
+      model: settings.model || '',
     }),
 
     // ==================== 通用设置 ====================

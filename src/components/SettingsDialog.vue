@@ -116,6 +116,24 @@
         <section v-else-if="activeTab === 'ai'" class="settings-section">
           <h3 class="section-title">{{ t('settings.ai') }}</h3>
 
+          <!-- 供应商 -->
+          <div class="setting-row">
+            <div class="setting-info">
+              <div class="setting-label">{{ t('settings.aiProvider') }}</div>
+            </div>
+            <div class="setting-control">
+              <el-select v-model="aiForm.provider" style="width: 320px">
+                <el-option
+                  v-for="p in providers"
+                  :key="p.id"
+                  :value="p.id"
+                  :label="p.name"
+                />
+              </el-select>
+            </div>
+          </div>
+
+          <!-- Base URL -->
           <div class="setting-row">
             <div class="setting-info">
               <div class="setting-label">{{ t('settings.aiBaseUrl') }}</div>
@@ -123,30 +141,43 @@
             <div class="setting-control">
               <el-input
                 v-model="aiForm.baseURL"
-                :placeholder="'https://api.deepseek.com'"
+                :placeholder="currentProvider?.baseUrl || ''"
+                :disabled="!isCustomProvider"
                 style="width: 320px"
               />
             </div>
           </div>
 
+          <!-- 模型 -->
           <div class="setting-row">
             <div class="setting-info">
               <div class="setting-label">{{ t('settings.aiModel') }}</div>
             </div>
             <div class="setting-control">
-              <el-input
+              <el-select
                 v-model="aiForm.model"
-                :placeholder="'deepseek-chat'"
+                filterable
+                allow-create
+                default-first-option
+                :placeholder="t('settings.modelPlaceholder')"
                 style="width: 320px"
-              />
+              >
+                <el-option
+                  v-for="m in currentProviderModels"
+                  :key="m.value"
+                  :value="m.value"
+                  :label="m.label"
+                />
+              </el-select>
             </div>
           </div>
 
+          <!-- API Key -->
           <div class="setting-row">
             <div class="setting-info">
               <div class="setting-label">{{ t('settings.aiApiKey') }}</div>
             </div>
-            <div class="setting-control">
+            <div class="setting-control api-key-control">
               <el-input
                 v-model="aiForm.apiKey"
                 type="password"
@@ -154,6 +185,18 @@
                 :placeholder="t('settings.aiApiKeyPlaceholder')"
                 style="width: 320px"
               />
+              <a
+                v-if="currentProvider?.helpUrl"
+                :href="currentProvider.helpUrl"
+                target="_blank"
+                class="help-link"
+                :title="t('settings.getApiKey')"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" width="14" height="14">
+                  <use xlink:href="#icon-tongzhi" />
+                </svg>
+                <span>{{ t('settings.getApiKey') }}</span>
+              </a>
             </div>
           </div>
         </section>
@@ -214,7 +257,77 @@ const form = ref({
   restoreOnStart: true,
   openLastWorkspace: false,
 })
+
+const providers = [
+  {
+    id: 'deepseek',
+    name: 'DeepSeek',
+    baseUrl: 'https://api.deepseek.com',
+    models: [
+      { value: 'deepseek-chat', label: 'deepseek-chat' },
+      { value: 'deepseek-reasoner', label: 'deepseek-reasoner' },
+    ],
+    helpUrl: 'https://platform.deepseek.com/api_keys',
+  },
+  {
+    id: 'openai',
+    name: 'OpenAI',
+    baseUrl: 'https://api.openai.com',
+    models: [
+      { value: 'gpt-4o', label: 'gpt-4o' },
+      { value: 'gpt-4o-mini', label: 'gpt-4o-mini' },
+      { value: 'gpt-4-turbo', label: 'gpt-4-turbo' },
+      { value: 'gpt-3.5-turbo', label: 'gpt-3.5-turbo' },
+    ],
+    helpUrl: 'https://platform.openai.com/api-keys',
+  },
+  {
+    id: 'anthropic',
+    name: 'Anthropic',
+    baseUrl: 'https://api.anthropic.com',
+    models: [
+      { value: 'claude-sonnet-4-20250514', label: 'claude-sonnet-4-20250514' },
+      { value: 'claude-3-5-sonnet-latest', label: 'claude-3-5-sonnet-latest' },
+      { value: 'claude-3-5-haiku-latest', label: 'claude-3-5-haiku-latest' },
+      { value: 'claude-3-opus-latest', label: 'claude-3-opus-latest' },
+    ],
+    helpUrl: 'https://console.anthropic.com/settings/keys',
+  },
+  {
+    id: 'zhipu',
+    name: '智谱 GLM',
+    baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+    models: [
+      { value: 'glm-4', label: 'glm-4' },
+      { value: 'glm-4-flash', label: 'glm-4-flash' },
+      { value: 'glm-4-plus', label: 'glm-4-plus' },
+      { value: 'glm-3-turbo', label: 'glm-3-turbo' },
+    ],
+    helpUrl: 'https://open.bigmodel.cn/usercenter/apikeys',
+  },
+  {
+    id: 'siliconflow',
+    name: 'SiliconFlow',
+    baseUrl: 'https://api.siliconflow.cn/v1',
+    models: [
+      { value: 'Qwen/Qwen2.5-72B-Instruct', label: 'Qwen/Qwen2.5-72B-Instruct' },
+      { value: 'deepseek-ai/DeepSeek-V3', label: 'deepseek-ai/DeepSeek-V3' },
+      { value: 'THUDM/glm-4-9b-chat', label: 'THUDM/glm-4-9b-chat' },
+      { value: 'Pro/Qwen2.5-7B-Instruct', label: 'Pro/Qwen2.5-7B-Instruct' },
+    ],
+    helpUrl: 'https://cloud.siliconflow.cn/account/ak',
+  },
+  {
+    id: 'custom',
+    name: 'Custom',
+    baseUrl: '',
+    models: [],
+    helpUrl: '',
+  },
+]
+
 const aiForm = ref({
+  provider: 'deepseek',
   baseURL: '',
   apiKey: '',
   model: '',
@@ -242,6 +355,30 @@ watch(locale, () => {
 watch(() => form.value.language, (lang) => {
   locale.value = lang
   updateNavLabels()
+})
+
+const currentProvider = computed(() =>
+  providers.find(p => p.id === aiForm.value.provider) || providers[providers.length - 1]
+)
+
+const currentProviderModels = computed(() =>
+  currentProvider.value.models || []
+)
+
+const isCustomProvider = computed(() =>
+  aiForm.value.provider === 'custom'
+)
+
+// 切换供应商时：填充 baseUrl，重置 model
+watch(() => aiForm.value.provider, (newProvider) => {
+  const p = providers.find(p => p.id === newProvider)
+  if (p && p.id !== 'custom') {
+    aiForm.value.baseURL = p.baseUrl
+    aiForm.value.model = p.models[0]?.value || ''
+  } else {
+    aiForm.value.baseURL = ''
+    aiForm.value.model = ''
+  }
 })
 
 function updateNavLabels() {
@@ -272,10 +409,13 @@ async function loadSettings() {
       restoreOnStart: general.restoreOnStart ?? true,
       openLastWorkspace: general.openLastWorkspace ?? false,
     }
+    const savedProvider = ai.provider || 'deepseek'
+    const p = providers.find(p => p.id === savedProvider) || providers[0]
     aiForm.value = {
-      baseURL: ai.base_url || '',
+      provider: savedProvider,
+      baseURL: savedProvider === 'custom' ? (ai.base_url || '') : (p.baseUrl || ai.base_url || ''),
       apiKey: ai.api_key || '',
-      model: ai.model || '',
+      model: ai.model || (p.models[0]?.value || ''),
     }
   } catch (error) {
     console.error('Failed to load settings', error)
@@ -292,6 +432,7 @@ async function handleSave() {
     await window.electronAPI.saveGeneralSettings(generalPayload)
 
     const aiPayload = {
+      provider: aiForm.value.provider,
       baseURL: aiForm.value.baseURL,
       apiKey: aiForm.value.apiKey,
       model: aiForm.value.model,
@@ -446,5 +587,43 @@ function handleClose() {
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--lamp-color-primary);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.api-key-control {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.help-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--lamp-color-primary);
+  font-size: 12px;
+  text-decoration: none;
+  white-space: nowrap;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  svg {
+    flex-shrink: 0;
+  }
 }
 </style>
