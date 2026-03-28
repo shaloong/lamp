@@ -107,6 +107,54 @@ export interface PluginContributions {
 
   /** TipTap extensions — registered via lamp.editor.registerTipTapExtension() */
   tipTapExtensions?: TipTapExtensionDefinition[];
+
+  /** Settings sections and items contributed by this plugin */
+  settings?: PluginSettingsSection[];
+}
+
+/**
+ * A settings section contributed by a plugin.
+ * Appears as a top-level tab (if priority > built-in tabs) or grouped under a label.
+ */
+export interface PluginSettingsSection {
+  /** Unique id within the plugin, e.g. "prompts" */
+  id: string;
+  /** i18n key or plain string for the section label */
+  label: string;
+  /** Priority for ordering (higher = earlier). Built-in tabs are priority 100. */
+  priority?: number;
+  /** Setting items in this section */
+  items: PluginSettingsItem[];
+}
+
+/** A single setting item within a plugin's settings section */
+export interface PluginSettingsItem {
+  /** Unique id within the plugin */
+  id: string;
+  /** i18n key or plain string for the label */
+  label: string;
+  /** i18n key or plain string for the description */
+  description?: string;
+  /** Item type determines the rendered control */
+  type: 'text' | 'textarea' | 'select' | 'toggle' | 'component';
+  /** Default value when no saved value exists */
+  defaultValue?: unknown;
+  /** Current value — read from ctx.storage; set automatically by the host */
+  value?: unknown;
+  /** For type="select": array of options */
+  options?: Array<{ value: string; label: string }>;
+  /** For type="component": path to a Vue 3 SFC relative to plugin root */
+  component?: string;
+  /**
+   * Called when the user changes the value.
+   * Receives the new value; persists it via ctx.storage automatically unless you override.
+   */
+  onChange?: (value: unknown) => void | Promise<void>;
+  /**
+   * Override the default storage behavior. If true, onChange is responsible for persistence.
+   * Default: false (host auto-saves to ctx.storage).
+   */
+  manualPersist?: boolean;
 }
 
 export interface EditorToolbarItem {
