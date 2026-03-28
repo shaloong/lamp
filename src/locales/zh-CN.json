@@ -1,42 +1,4 @@
 {
-  "plugins": {
-    "lamp-ai-actions": "AI 写作助手"
-  },
-  "ai": {
-    "name": "AI 写作助手",
-    "polish": "润色",
-    "polishing": "润色中...",
-    "expand": "扩写",
-    "expanding": "扩写中...",
-    "continue": "续写",
-    "continuing": "续写中...",
-    "summarize": "概述",
-    "summarizing": "概述中..."
-  },
-  "editor": {
-    "bold": "粗体",
-    "italic": "斜体",
-    "strike": "删除线",
-    "align": "对齐",
-    "alignLeft": "居左对齐",
-    "alignCenter": "居中对齐",
-    "alignRight": "居右对齐",
-    "alignJustify": "两端对齐",
-    "heading": "标题",
-    "paragraph": "段落文本",
-    "heading1": "一级标题",
-    "heading2": "二级标题",
-    "heading3": "三级标题",
-    "heading4": "四级标题",
-    "heading5": "五级标题",
-    "heading6": "六级标题",
-    "bulletList": "无序列表",
-    "orderedList": "有序列表",
-    "horizontalRule": "分割线",
-    "clearFormat": "清除格式",
-    "undo": "撤销",
-    "redo": "重做"
-  },
   "settings": {
     "title": "设置",
     "general": "通用",
@@ -59,7 +21,10 @@
     "getApiKey": "获取密钥",
     "customModel": "自定义",
     "presetModels": "选择预设模型",
-    "modelPlaceholder": "输入模型名称"
+    "modelPlaceholder": "输入模型名称",
+    "editor": "编辑器",
+    "shortcuts": "快捷键",
+    "plugins": "插件"
   },
   "common": {
     "save": "保存",
