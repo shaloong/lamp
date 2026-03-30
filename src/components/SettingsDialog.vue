@@ -365,8 +365,8 @@ watch(() => aiForm.value.provider, (newProvider) => {
 async function loadSettings() {
   try {
     const [general, ai] = await Promise.all([
-      window.electronAPI.getGeneralSettings(),
-      window.electronAPI.getAiSettings(),
+      window.lampAPI.getGeneralSettings(),
+      window.lampAPI.getAiSettings(),
     ])
     form.value = {
       language: locale.value,
@@ -393,8 +393,8 @@ async function handleSave() {
   submitting.value = true
   try {
     const generalPayload = JSON.parse(JSON.stringify(form.value))
-    await window.electronAPI.saveGeneralSettings(generalPayload)
-    await window.electronAPI.saveAiSettings({
+    await window.lampAPI.saveGeneralSettings(generalPayload)
+    await window.lampAPI.saveAiSettings({
       provider: aiForm.value.provider,
       baseURL: aiForm.value.baseURL,
       apiKey: aiForm.value.apiKey,

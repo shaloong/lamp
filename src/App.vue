@@ -227,44 +227,44 @@ export default {
 
       if (this.activeTab !== null && tab.filePath) {
         // 如果 filePath 不为空，则执行保存操作
-        window.electronAPI.saveInfo(tab.filePath, tab.content);
+        window.lampAPI.saveInfo(tab.filePath, tab.content);
       } else {
         // 否则执行另存为操作
         this.saveFileAs(tabIndex)
       }
     },
     menuEditUndo() {
-      window.electronAPI.menuEditUndo();
+      window.lampAPI.menuEditUndo();
     },
     menuEditRedo() {
-      window.electronAPI.menuEditRedo();
+      window.lampAPI.menuEditRedo();
     },
     menuEditCut() {
-      window.electronAPI.menuEditCut();
+      window.lampAPI.menuEditCut();
     },
     menuEditCopy() {
-      window.electronAPI.menuEditCopy();
+      window.lampAPI.menuEditCopy();
     },
     menuEditPaste() {
-      window.electronAPI.menuEditPaste();
+      window.lampAPI.menuEditPaste();
     },
     menuEditSelectAll() {
-      window.electronAPI.menuEditSelectAll();
+      window.lampAPI.menuEditSelectAll();
     },
     menuEditDelete() {
-      window.electronAPI.menuEditDelete();
+      window.lampAPI.menuEditDelete();
     },
     viewFullScreen() {
-      window.electronAPI.menuViewFullScreen();
+      window.lampAPI.menuViewFullScreen();
     },
     minWindow() {
-      window.electronAPI.minWindow();
+      window.lampAPI.minWindow();
     },
     maxWindow() {
-      window.electronAPI.maxWindow();
+      window.lampAPI.maxWindow();
     },
     closeWindow() {
-      window.electronAPI.closeWindow();
+      window.lampAPI.closeWindow();
     },
 
     openSettingsDialog() {
@@ -279,7 +279,7 @@ export default {
 
     async loadGeneralSettings() {
       try {
-        const settings = await window.electronAPI.getGeneralSettings();
+        const settings = await window.lampAPI.getGeneralSettings();
         // 同步语言到 i18n
         if (settings.language) {
           i18n.global.locale = settings.language;
@@ -310,7 +310,7 @@ export default {
     // 打开工作区（选择文件夹）
     async openWorkspace() {
       try {
-        const result = await window.electronAPI.openWorkspace()
+        const result = await window.lampAPI.openWorkspace()
         if (result) {
           this.workspaceStore.setWorkspace({
             workspacePath: '',  // 不需要配置文件
@@ -322,7 +322,7 @@ export default {
           if (result.rootPath) {
             this.showDirection(result.rootPath)
             // 开始监视文件夹
-            await window.electronAPI.startWatching(result.rootPath)
+            await window.lampAPI.startWatching(result.rootPath)
           }
           // 清空临时文件
           this.tempFiles = []
@@ -335,7 +335,7 @@ export default {
     // 关闭工作区
     async closeWorkspace() {
       // 停止监视
-      await window.electronAPI.stopWatching()
+      await window.lampAPI.stopWatching()
       this.workspaceStore.clearWorkspace()
       this.fileStore.clearAll()
       this.folderContent = ''
@@ -344,7 +344,7 @@ export default {
 
     // 初始化文件变化监听
     initFileWatcher() {
-      window.electronAPI.onFileChange((event) => {
+      window.lampAPI.onFileChange((event) => {
         console.log('文件变化:', event)
         // 有变化时自动刷新文件树（使用 refresh 模式保留展开状态）
         if (this.workspaceStore.isOpen && this.workspaceStore.rootPath) {
@@ -395,7 +395,7 @@ export default {
       }
 
       if (path !== "") {
-        window.electronAPI.getFolderContent(path).then(result => {
+        window.lampAPI.getFolderContent(path).then(result => {
           this.folderContent = this.convertToTree(result);
 
           // 恢复展开状态
@@ -570,7 +570,7 @@ export default {
         return;
       }
 
-      const resultPath = await window.electronAPI.saveFileAs(tab.title || 'untitled', tab.content || '')
+      const resultPath = await window.lampAPI.saveFileAs(tab.title || 'untitled', tab.content || '')
       if (resultPath !== "") {
         this.tabs[tabIndex].filePath = resultPath
         this.tabs[tabIndex].title = this.tabs[tabIndex].filePath.split('\\').pop()
@@ -583,12 +583,12 @@ export default {
 
     // 检查文件是否存在
     async hasFile(filePath) {
-      return await window.electronAPI.hasFile(filePath)
+      return await window.lampAPI.hasFile(filePath)
     },
 
     // 删除文件
     async delFile(filePath) {
-      const result = await window.electronAPI.delFile(filePath)
+      const result = await window.lampAPI.delFile(filePath)
       if (result === false) {
         console.log("Error: 在删除 " + filePath + " 文件时发生了失败。")
       }
@@ -606,16 +606,16 @@ export default {
     // 监听通道，接收主进程发送的内容
     initIpcRenderers() {
       // 打开文件：监听主进程，被触发后接收文件路径和内容
-      window.electronAPI.openFile((status, path, data) => {
+      window.lampAPI.openFile((status, path, data) => {
         this.openFile(status, path, data);
       });
       // 保存文件：监听主进程，被触发后将路径和内容发送给主进程执行保存操作；若文件路径为空则另存为
-      window.electronAPI.saveFile(() => {
+      window.lampAPI.saveFile(() => {
         if (this.activeTab !== null && this.tabs[this.activeTab].filePath) {
           // 如果 filePath 不为空，则执行保存操作
           const filePath = this.tabs[this.activeTab].filePath;
           const fileContent = this.tabs[this.activeTab].content;
-          window.electronAPI.saveInfo(filePath, fileContent);
+          window.lampAPI.saveInfo(filePath, fileContent);
           const result = this.hasFile(this.tabs[index].filePath + '.lampsave');
           if (result) {
             this.delFile(this.tabs[this.activeTab].filePath + '.lampsave') // 删除自动保存的文件
@@ -635,7 +635,7 @@ export default {
 
       const currentTab = this.tabs[this.activeTab];
       if (currentTab && currentTab.filePath && currentTab.filePath !== '' && currentTab.filePath.split('.').pop() !== 'lampsave') {
-        window.electronAPI.saveInfo(currentTab.filePath + '.lampsave', currentTab.content)
+        window.lampAPI.saveInfo(currentTab.filePath + '.lampsave', currentTab.content)
       }
     },
 
@@ -648,7 +648,7 @@ export default {
       if ((filePath !== '') && (this.tabs.some(tab => tab.filePath === filePath))) {
         this.switchTab(this.tabs.findIndex(tab => tab.filePath === filePath))
       } else {
-        const data = await window.electronAPI.openSpecificFile(filePath)
+        const data = await window.lampAPI.openSpecificFile(filePath)
         if (data && data[0] === 1) {
           const title = filePath.split('\\').pop()
           const { filePath, fileContent } = this.format2html(filePath, data[1]) // 格式转换

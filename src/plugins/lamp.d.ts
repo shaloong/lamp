@@ -30,11 +30,63 @@ import type {
   LampEventAPI,
 } from './types';
 
+// ─── Raw Tauri IPC Bridge (preload.js) ───────────────────────
+
+/** The raw Tauri IPC bridge exposed by preload.js */
+interface LampAPI {
+  // Window
+  minWindow(): Promise<void>;
+  maxWindow(): Promise<void>;
+  closeWindow(): Promise<void>;
+  menuViewFullScreen(): Promise<void>;
+  isMaximized(): Promise<boolean>;
+  // File
+  menuFileOpen(): Promise<[number, string, string] | [-1]>;
+  saveInfo(filePath: string, content: string): Promise<void>;
+  saveFileAs(fileName: string, data: string): Promise<string>;
+  getFolderContent(folderPath: string): Promise<import('./types').FileInfo[]>;
+  openSpecificFile(filePath: string): Promise<import('@tauri-apps/api/core').JsonValue[]>;
+  hasFile(filePath: string): Promise<boolean>;
+  delFile(filePath: string): Promise<boolean>;
+  // Edit (DOM fallback)
+  menuEditUndo(): void;
+  menuEditRedo(): void;
+  menuEditCut(): void;
+  menuEditCopy(): void;
+  menuEditPaste(): void;
+  menuEditDelete(): void;
+  menuEditSelectAll(): void;
+  // AI
+  ai(prompt: string, message: string): Promise<string>;
+  getAiSettings(): Promise<import('./types').AISettings>;
+  saveAiSettings(settings: import('./types').AISettings): Promise<boolean>;
+  // Settings
+  getGeneralSettings(): Promise<unknown>;
+  saveGeneralSettings(settings: unknown): Promise<boolean>;
+  // Events
+  openFile(callback: (status: number, path: string, data: string) => void): void;
+  saveFile(callback: () => void): void;
+  newFile(callback: (path: string) => void): void;
+  onFileChange(callback: (event: unknown) => void): void;
+  // Workspace
+  openWorkspace(): Promise<{ name: string; rootPath: string } | null>;
+  isFileInDirectory(filePath: string, dirPath: string): Promise<boolean>;
+  // File watching
+  startWatching(folderPath: string): Promise<void>;
+  stopWatching(): Promise<void>;
+  // Plugins
+  readTextFile(filePath: string): Promise<string>;
+  getAppDataDir(): Promise<string>;
+  getUserPluginsDir(): Promise<string>;
+}
+
 // ─── Global window extension ────────────────────────────────
 
 declare global {
   interface Window {
-    /** The LAMP Host API exposed to plugins */
+    /** Raw Tauri IPC bridge exposed by preload.js */
+    lampAPI: LampAPI;
+    /** High-level plugin host API */
     lamp: LampHostAPI;
   }
 }

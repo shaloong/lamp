@@ -18,7 +18,7 @@ export class PluginLoader {
         name: string;
         path: string;
         isDirectory: boolean;
-      }> = await window.electronAPI.getFolderContent(dirPath);
+      }> = await window.lampAPI.getFolderContent(dirPath);
 
       const manifests: LampPluginManifest[] = [];
       for (const entry of entries) {
@@ -46,7 +46,7 @@ export class PluginLoader {
   async readManifest(pluginDirPath: string): Promise<LampPluginManifest | null> {
     const manifestPath = this._join(pluginDirPath, 'manifest.json');
     try {
-      const content: string = await window.electronAPI.readTextFile(manifestPath);
+      const content: string = await window.lampAPI.readTextFile(manifestPath);
       const manifest = JSON.parse(content) as LampPluginManifest;
 
       // Basic validation

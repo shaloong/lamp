@@ -372,7 +372,7 @@ export class PluginHost {
 
       // 2. User plugins: ~/.lamp/plugins/
       try {
-        const userDir = await window.electronAPI.getUserPluginsDir();
+        const userDir = await window.lampAPI.getUserPluginsDir();
         const userManifests = await this._loader.scanPlugins(userDir);
         await this._activateAllDynamic(userManifests, userDir, 'user');
       } catch (err) {
