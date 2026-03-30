@@ -5,8 +5,7 @@
 // contribution registry to the rest of the app.
 // ============================================================
 
-import { reactive, readonly } from 'vue';
-import type { Editor } from '@tiptap/core';
+import { reactive, readonly } from 'vue';import type { Editor } from '@tiptap/core';
 import { EventBus } from './EventBus';
 import { ContributionRegistry } from './ContributionRegistry';
 import { PluginLoader } from './PluginLoader';
@@ -17,6 +16,13 @@ import type {
   PluginScope,
 } from './types';
 import { PluginContext } from './types';
+
+// Extend the Window interface to include __lamp_app__
+declare global {
+  interface Window {
+    __lamp_app__?: { i18n?: any };
+  }
+}
 
 // Re-export for external consumers
 export { EventBus } from './EventBus';
@@ -120,19 +126,21 @@ class I18nService {
       const localeMsgs = allMessages[locale];
       if (!localeMsgs) continue;
 
-      for (const [ns, flatMessages] of Object.entries(namespaceMap)) {
-        // ns = 'plugins.lamp-ai-actions', split at first dot:
-        // top = 'plugins', rest = 'lamp-ai-actions.name'
-        const dotIdx = ns.indexOf('.');
-        const top = ns.slice(0, dotIdx);
-        const rest = ns.slice(dotIdx + 1);
-        if (!localeMsgs[top]) localeMsgs[top] = {};
+      for (const [nsFullKey, flatMessages] of Object.entries(namespaceMap)) {
+        // nsFullKey = 'plugins.lamp-ai-actions', stored keys in flatMessages have the prefix
+        // e.g. flatMessages = { 'plugins.lamp-ai-actions.bold': '粗体', 'plugins.lamp-ai-actions.italic': '斜体' }
+        const nsParts = nsFullKey.split('.'); // ['plugins', 'lamp-ai-actions']
 
-        for (const [flatKey, value] of Object.entries(flatMessages as Record<string, unknown>)) {
-          // fullKey = 'plugins.lamp-ai-actions.name', remainder = 'name'
-          const remainder = flatKey.slice(ns.length + 1);
-          const parts = [rest, ...remainder.split('.')];
-          let cur = localeMsgs[top] as Record<string, unknown>;
+        for (const [fullKey, value] of Object.entries(flatMessages as Record<string, unknown>)) {
+          // Skip if the key is exactly the namespace (no remainder = nothing to add)
+          if (fullKey === nsFullKey) continue;
+          // remainder = key without the namespace prefix, e.g. 'bold' or 'ai.polish'
+          const remainder = fullKey.slice(nsFullKey.length + 1);
+          const remainderParts = remainder.split('.'); // always non-empty after 'continue' above
+          // Full path: namespace parts + remainder parts
+          const parts = [...nsParts, ...remainderParts];
+
+          let cur = localeMsgs;
           for (let i = 0; i < parts.length - 1; i++) {
             if (!cur[parts[i]]) cur[parts[i]] = {};
             cur = cur[parts[i]] as Record<string, unknown>;
@@ -192,6 +200,188 @@ class I18nService {
   }
 }
 
+// ─── Shortcut Service ────────────────────────────────────────
+
+export interface ShortcutEntry {
+  id: string;
+  label: string;
+  icon?: string;
+  defaultAccelerator?: string;
+  effectiveAccelerator?: string;
+  pluginId?: string;
+}
+
+interface ParsedShortcut {
+  ctrl: boolean;
+  meta: boolean;
+  alt: boolean;
+  shift: boolean;
+  key: string;
+}
+
+class ShortcutService {
+  // commandId → full entry (id, label, icon, keybinding)
+  private entries = new Map<string, {
+    id: string;
+    label: string;
+    icon?: string;
+    keybinding?: string;
+  }>();
+  // commandId → accelerator string (user override)
+  private overrides = new Map<string, string>();
+  // commandId → handler
+  private handlers = new Map<string, () => void>();
+  private listening = false;
+  // External register function from useShortcutCenter composable
+  private extRegister: ((id: string, acc: string, handler: () => void) => void) | null = null;
+
+  constructor() {
+    this._load();
+  }
+
+  /**
+   * Set the external register function from useShortcutCenter composable.
+   * When set, ShortcutService will delegate shortcut watching to the composable.
+   */
+  setExternalRegister(fn: (id: string, acc: string, handler: () => void) => void): void {
+    this.extRegister = fn;
+  }
+
+  /** Register a command with an optional keybinding. Called by CommandService. */
+  registerCommand(cmd: {
+    id: string;
+    label: string;
+    keybinding?: string;
+    icon?: string;
+    handler: () => void | Promise<void>;
+  }): void {
+    this.entries.set(cmd.id, { id: cmd.id, label: cmd.label, icon: cmd.icon, keybinding: cmd.keybinding });
+    if (cmd.keybinding) {
+      this.handlers.set(cmd.id, cmd.handler);
+      if (this.listening && this.extRegister) {
+        this.extRegister(cmd.id, cmd.keybinding, cmd.handler);
+      }
+    }
+  }
+
+  /** Remove a command's handler when it is unregistered. */
+  unregisterCommand(id: string): void {
+    this.entries.delete(id);
+    this.overrides.delete(id);
+    this.handlers.delete(id);
+  }
+
+  /** Start listening. Call AFTER setExternalRegister() and after commands are registered. */
+  startListening(): void {
+    if (this.listening) return;
+    for (const [id, entry] of this.entries) {
+      const acc = this.overrides.get(id) ?? entry.keybinding;
+      if (acc && this.extRegister) this.extRegister(id, acc, this.handlers.get(id)!);
+    }
+    this.listening = true;
+  }
+
+  /** Stop listening. */
+  stopListening(): void {
+    this.listening = false;
+  }
+
+  /** Get the currently active accelerator for a command (override > default). */
+  getEffectiveAccelerator(commandId: string): string | undefined {
+    return this.overrides.get(commandId) ?? this.entries.get(commandId)?.keybinding;
+  }
+
+  /** Override a command's accelerator. Pass null to remove override. */
+  setOverride(commandId: string, accelerator: string | null): void {
+    const entry = this.entries.get(commandId);
+    if (!entry) return;
+    const acc = accelerator ?? entry.keybinding;
+    if (this.listening && this.extRegister && acc) {
+      this.extRegister(commandId, acc, this.handlers.get(commandId)!);
+    }
+    if (accelerator === null) {
+      this.overrides.delete(commandId);
+    } else {
+      this.overrides.set(commandId, accelerator);
+    }
+    this._persist();
+  }
+
+  /** Reset a command to its default accelerator. */
+  resetToDefault(commandId: string): void {
+    this.overrides.delete(commandId);
+    this._persist();
+  }
+
+  /** Reset all overrides. */
+  resetAll(): void {
+    this.overrides.clear();
+    this._persist();
+  }
+
+  /** Get all shortcuts for the settings UI. */
+  getAll(): ShortcutEntry[] {
+    return [...this.entries.values()].map(entry => ({
+      ...entry,
+      defaultAccelerator: entry.keybinding,
+      effectiveAccelerator: this.overrides.get(entry.id) ?? entry.keybinding,
+    }));
+  }
+
+  /** Check if an accelerator conflicts with any existing command. */
+  checkConflict(accelerator: string, excludeId?: string): string | null {
+    for (const [id, entry] of this.entries) {
+      if (id === excludeId) continue;
+      const other = this.overrides.get(id) ?? entry.keybinding;
+      if (!other) continue;
+      if (this._acceleratorsEqual(accelerator, other)) return id;
+    }
+    return null;
+  }
+
+  // ── Private ─────────────────────────────────────────────────
+
+  parseAccelerator(str: string): ParsedShortcut | null {
+    if (!str) return null;
+    const parts = str.split('+').map(p => p.trim());
+    const shortcut: ParsedShortcut = { ctrl: false, meta: false, alt: false, shift: false, key: '' };
+    for (const part of parts) {
+      const p = part.toLowerCase();
+      if (p === 'ctrl' || p === 'control') shortcut.ctrl = true;
+      else if (p === 'meta' || p === 'cmd' || p === 'command') shortcut.meta = true;
+      else if (p === 'alt' || p === 'option') shortcut.alt = true;
+      else if (p === 'shift') shortcut.shift = true;
+      else shortcut.key = part;
+    }
+    if (!shortcut.key) return null;
+    return shortcut;
+  }
+
+  private _acceleratorsEqual(a: string, b: string): boolean {
+    const pa = this.parseAccelerator(a);
+    const pb = this.parseAccelerator(b);
+    if (!pa || !pb) return false;
+    const norm = (s: ParsedShortcut) => ({ ctrl: s.ctrl, alt: s.alt, shift: s.shift, key: s.key.toLowerCase() });
+    return JSON.stringify(norm(pa)) === JSON.stringify(norm(pb));
+  }
+
+  private _persist(): void {
+    const obj: Record<string, string> = {};
+    for (const [k, v] of this.overrides) obj[k] = v;
+    localStorage.setItem('lamp:shortcuts:overrides', JSON.stringify(obj));
+  }
+
+  private _load(): void {
+    try {
+      const raw = localStorage.getItem('lamp:shortcuts:overrides');
+      if (raw) {
+        const parsed = JSON.parse(raw) as Record<string, string>;
+        for (const [k, v] of Object.entries(parsed)) this.overrides.set(k, v);
+      }
+    } catch { /* ignore */ }
+  }
+}
+
 // ─── Command Service ────────────────────────────────────────
 
 class CommandService {
@@ -203,6 +393,13 @@ class CommandService {
     icon?: string;
     handler: () => void | Promise<void>;
   }>>();
+  // commandId → pluginId (for getAll)
+  private commandPlugins = new Map<string, string>();
+
+  constructor(
+    private shortcutService: ShortcutService,
+    private events: EventBus,
+  ) {}
 
   register(pluginId: string, cmd: {
     id: string;
@@ -215,6 +412,9 @@ class CommandService {
       this.registry.set(pluginId, new Map());
     }
     this.registry.get(pluginId)!.set(cmd.id, cmd);
+    this.commandPlugins.set(cmd.id, pluginId);
+    // Also register with shortcut service
+    this.shortcutService.registerCommand(cmd);
     return () => this.unregister(cmd.id);
   }
 
@@ -222,6 +422,8 @@ class CommandService {
     for (const pluginCmds of this.registry.values()) {
       if (pluginCmds.has(id)) {
         const cmd = pluginCmds.get(id)!;
+        // Emit event so App.vue can route commands to menu handlers
+        this.events.emit('lamp.command.execute', { id });
         const result = cmd.handler();
         if (result instanceof Promise) return result;
         return Promise.resolve();
@@ -231,10 +433,12 @@ class CommandService {
   }
 
   getAll() {
-    const result: Array<{ id: string; label: string; keybinding?: string; icon?: string }> = [];
-    for (const pluginCmds of this.registry.values()) {
+    const result: Array<{ id: string; label: string; keybinding?: string; icon?: string; pluginId?: string }> = [];
+    for (const [pluginId, pluginCmds] of this.registry.entries()) {
       for (const cmd of pluginCmds.values()) {
-        result.push({ id: cmd.id, label: cmd.label, keybinding: cmd.keybinding, icon: cmd.icon });
+        // Use effective accelerator (user override > default)
+        const effective = this.shortcutService.getEffectiveAccelerator(cmd.id);
+        result.push({ id: cmd.id, label: cmd.label, keybinding: effective ?? cmd.keybinding, icon: cmd.icon, pluginId });
       }
     }
     return result;
@@ -242,7 +446,11 @@ class CommandService {
 
   unregister(id: string): void {
     for (const pluginCmds of this.registry.values()) {
-      if (pluginCmds.delete(id)) return;
+      if (pluginCmds.delete(id)) {
+        this.commandPlugins.delete(id);
+        this.shortcutService.unregisterCommand(id);
+        return;
+      }
     }
   }
 }
@@ -274,7 +482,8 @@ export class PluginHost {
   readonly storageService = new StorageService();
 
   /** Command service for plugins */
-  readonly commandService = new CommandService();
+  readonly shortcutService = new ShortcutService();
+  readonly commandService = new CommandService(this.shortcutService, this.events);
 
   /** I18n service — for built-in messages collected before Vue mounts */
   readonly i18nService = new I18nService();
@@ -413,6 +622,7 @@ export class PluginHost {
       workspace: this._workspace,
       storageService: this.storageService,
       commandService: this.commandService,
+      shortcutService: this.shortcutService,
       aiState: this.aiState,
       i18nService: this.i18nService,
     });
@@ -468,6 +678,7 @@ export class PluginHost {
       workspace: this._workspace,
       storageService: this.storageService,
       commandService: this.commandService,
+      shortcutService: this.shortcutService,
       aiState: this.aiState,
       i18nService: this.i18nService,
     });
@@ -618,6 +829,7 @@ export class PluginHost {
       workspace: this._workspace,
       storageService: this.storageService,
       commandService: this.commandService,
+      shortcutService: this.shortcutService,
       aiState: this.aiState,
       i18nService: this.i18nService,
     });

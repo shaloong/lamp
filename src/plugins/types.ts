@@ -442,6 +442,13 @@ export interface LampStorageAPI {
   clear(): void;
 }
 
+export interface LampShortcutsAPI {
+  getAll(): Array<{ id: string; label: string; defaultAccelerator?: string; effectiveAccelerator?: string }>;
+  setOverride(commandId: string, accelerator: string | null): void;
+  resetToDefault(commandId: string): void;
+  checkConflict(accelerator: string, excludeId?: string): string | null;
+}
+
 export interface LampEventAPI {
   on<T = unknown>(event: string, handler: (data: T) => void): () => void;
   once<T = unknown>(event: string, handler: (data: T) => void): void;
@@ -510,6 +517,7 @@ export class PluginContext {
   storage: LampStorageAPI;
   event: LampEventAPI;
   i18n: LampI18nAPI;
+  shortcuts: LampShortcutsAPI;
 
   constructor(
     manifest: LampPluginManifest,
@@ -521,6 +529,7 @@ export class PluginContext {
       workspace: { isOpen: boolean; rootPath: string; name: string };
       storageService: unknown;
       commandService: unknown;
+      shortcutService: unknown;
       aiState: { isLoading: boolean; actionLabel: string; error: string | null; suggestion: AISuggestion | null };
       i18nService: {
         setLocaleMessages(pluginId: string, locale: string, messages: Record<string, unknown>): void;
@@ -537,6 +546,7 @@ export class PluginContext {
     this.storage   = this._buildStorageAPI();
     this.event     = this._buildEventAPI();
     this.i18n      = this._buildI18nAPI();
+    this.shortcuts = this._buildShortcutsAPI();
   }
 
   private _buildEditorAPI(): LampEditorAPI {
@@ -716,6 +726,21 @@ export class PluginContext {
       setLocaleMessages: (locale, messages) => {
         this.host.i18nService.setLocaleMessages(pid, locale, messages);
       },
+    };
+  }
+
+  private _buildShortcutsAPI(): LampShortcutsAPI {
+    const ss = this.host.shortcutService as {
+      getAll(): Array<{ id: string; label: string; defaultAccelerator?: string; effectiveAccelerator?: string }>;
+      setOverride(commandId: string, accelerator: string | null): void;
+      resetToDefault(commandId: string): void;
+      checkConflict(accelerator: string, excludeId?: string): string | null;
+    };
+    return {
+      getAll: () => ss.getAll(),
+      setOverride: (commandId, accelerator) => ss.setOverride(commandId, accelerator),
+      resetToDefault: (commandId) => ss.resetToDefault(commandId),
+      checkConflict: (accelerator, excludeId) => ss.checkConflict(accelerator, excludeId),
     };
   }
 }

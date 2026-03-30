@@ -1,11 +1,7 @@
 <template>
   <div class="app">
     <div class="app-menu">
-      <main-menu @openFile="openFile" @saveFile="fileSave" @saveFileAs="saveFileAs" @editUndo="menuEditUndo"
-        @editRedo="menuEditRedo" @editCut="menuEditCut" @editCopy="menuEditCopy" @editPaste="menuEditPaste"
-        @editSelectAll="menuEditSelectAll" @editDelete="menuEditDelete" @viewFullScreen="viewFullScreen"
-        @minWindow="minWindow" @maxWindow="maxWindow" @closeWindow="closeWindow"
-        @openWorkspace="openWorkspace" @closeWorkspace="closeWorkspace" @newFile="newFile" />
+      <main-menu @minWindow="minWindow" @maxWindow="maxWindow" @closeWindow="closeWindow" />
     </div>
     <div class="app-content">
       <div class="toolbar">
@@ -129,7 +125,8 @@ import { v4 as uuidv4 } from 'uuid';
 import editor from "@/components/Editor.vue";
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useFileStore } from '@/stores/files'
-import { pluginHost } from './plugins/index'
+import { pluginHost } from '@/plugins/index'
+import { useShortcutCenter } from '@/composables/useShortcutCenter'
 import CommandPalette from './components/CommandPalette.vue'
 import SettingsDialog from './components/SettingsDialog.vue'
 import { i18n } from './i18n.js'
@@ -282,7 +279,8 @@ export default {
         const settings = await window.lampAPI.getGeneralSettings();
         // 同步语言到 i18n
         if (settings.language) {
-          i18n.global.locale = settings.language;
+          // 归一化 locale 名称，确保始终匹配 i18n messages 的 key
+          i18n.global.locale = settings.language === 'zh' ? 'zh-CN' : settings.language;
         }
       } catch (error) {
         console.error('Failed to load general settings', error);
@@ -704,24 +702,79 @@ export default {
 
   created() {
     // 等待语言加载完成后再初始化 tab，确保标题语言正确
-    ;(async () => {
+    ; (async () => {
       await this.loadGeneralSettings()
       this.tabs.push({ title: i18n.global.t('app.newLampText'), filePath: '', content: '', id: uuidv4() })
     })()
     this.initIpcRenderers()
     this.initFileWatcher()
     window.addEventListener('resize', this.handleResize)
-    // Ctrl+Shift+P 打开命令面板
-    window.addEventListener('keydown', (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'P') {
-        e.preventDefault();
-        this.dialogCommandPalette = true;
-      }
+
+    // ── Register all main menu commands with the centralized ShortcutService ──
+    // Router: commandId → bound method on this component instance
+    this._cmdRouter = {
+      'app.newFile': () => this.newFile(),
+      'app.openFile': () => { window.lampAPI.menuFileOpen(); },
+      'app.save': () => this.fileSave(),
+      'app.saveAs': () => this.saveFileAs(),
+      'app.close': () => this.closeWindow(),
+      'app.undo': () => this.menuEditUndo(),
+      'app.redo': () => this.menuEditRedo(),
+      'app.cut': () => this.menuEditCut(),
+      'app.copy': () => this.menuEditCopy(),
+      'app.paste': () => this.menuEditPaste(),
+      'app.selectAll': () => this.menuEditSelectAll(),
+      'app.delete': () => this.menuEditDelete(),
+      'app.fullScreen': () => this.viewFullScreen(),
+      'app.openWorkspace': () => this.openWorkspace(),
+      'app.closeWorkspace': () => this.closeWorkspace(),
+    };
+
+    // Register each command; ShortcutService handles the keydown dispatch
+    for (const [id, handler] of Object.entries(this._cmdRouter)) {
+      const keybinding = {
+        'app.newFile': 'Ctrl+N',
+        'app.openFile': 'Ctrl+O',
+        'app.save': 'Ctrl+S',
+        'app.saveAs': 'Ctrl+Shift+S',
+        'app.close': 'Ctrl+W',
+        'app.undo': 'Ctrl+Z',
+        'app.redo': 'Ctrl+Y',
+        'app.cut': 'Ctrl+X',
+        'app.copy': 'Ctrl+C',
+        'app.paste': 'Ctrl+V',
+        'app.selectAll': 'Ctrl+A',
+        'app.delete': 'Delete',
+        'app.fullScreen': 'F11',
+        'app.openWorkspace': 'Ctrl+Shift+O',
+        'app.closeWorkspace': 'Ctrl+Shift+W',
+      }[id];
+
+      pluginHost.commandService.register('lamp.app', {
+        id,
+        label: `commands.${id}`,
+        keybinding,
+        handler,
+      });
+    }
+
+    // Listen for command executions to route to menu handlers
+    this._cmdUnlisten = pluginHost.events.on('lamp.command.execute', ({ id }) => {
+      const handler = this._cmdRouter[id];
+      if (handler) handler();
     });
+  },
+
+  beforeUnmount() {
+    if (this._cmdUnlisten) this._cmdUnlisten();
   },
 
   mounted() {
     this.showDirection();
+    // Initialize VueUse shortcut polling and start listening
+    const { register } = useShortcutCenter();
+    pluginHost.shortcutService.setExternalRegister(register);
+    pluginHost.shortcutService.startListening();
   },
 
 };
