@@ -233,7 +233,7 @@ class ShortcutService {
   private handlers = new Map<string, () => void>();
   private listening = false;
   // External register function from useShortcutCenter composable
-  private extRegister: ((id: string, acc: string, handler: () => void) => void) | null = null;
+  private extRegister: ((id: string, acc: string) => void) | null = null;
 
   constructor() {
     this._load();
@@ -243,7 +243,7 @@ class ShortcutService {
    * Set the external register function from useShortcutCenter composable.
    * When set, ShortcutService will delegate shortcut watching to the composable.
    */
-  setExternalRegister(fn: (id: string, acc: string, handler: () => void) => void): void {
+  setExternalRegister(fn: (id: string, acc: string) => void): void {
     this.extRegister = fn;
   }
 
@@ -259,7 +259,7 @@ class ShortcutService {
     if (cmd.keybinding) {
       this.handlers.set(cmd.id, cmd.handler);
       if (this.listening && this.extRegister) {
-        this.extRegister(cmd.id, cmd.keybinding, cmd.handler);
+        this.extRegister(cmd.id, cmd.keybinding);
       }
     }
   }
@@ -276,7 +276,7 @@ class ShortcutService {
     if (this.listening) return;
     for (const [id, entry] of this.entries) {
       const acc = this.overrides.get(id) ?? entry.keybinding;
-      if (acc && this.extRegister) this.extRegister(id, acc, this.handlers.get(id)!);
+      if (acc && this.extRegister) this.extRegister(id, acc);
     }
     this.listening = true;
   }
@@ -297,7 +297,7 @@ class ShortcutService {
     if (!entry) return;
     const acc = accelerator ?? entry.keybinding;
     if (this.listening && this.extRegister && acc) {
-      this.extRegister(commandId, acc, this.handlers.get(commandId)!);
+      this.extRegister(commandId, acc);
     }
     if (accelerator === null) {
       this.overrides.delete(commandId);
@@ -361,8 +361,9 @@ class ShortcutService {
     const pa = this.parseAccelerator(a);
     const pb = this.parseAccelerator(b);
     if (!pa || !pb) return false;
-    const norm = (s: ParsedShortcut) => ({ ctrl: s.ctrl, alt: s.alt, shift: s.shift, key: s.key.toLowerCase() });
-    return JSON.stringify(norm(pa)) === JSON.stringify(norm(pb));
+    return pa.ctrl === pb.ctrl && pa.alt === pb.alt &&
+           pa.shift === pb.shift &&
+           pa.key.toLowerCase() === pb.key.toLowerCase();
   }
 
   private _persist(): void {

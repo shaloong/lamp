@@ -97,7 +97,6 @@ function resolveLabel(label) {
 const searchQuery = ref('')
 const recordingId = ref(null)
 const conflictId = ref(null)
-const conflictName = ref('')
 let recordingHandler = null
 
 // Collect all commands with keybindings from ShortcutService (has label + keybinding)
@@ -112,43 +111,26 @@ const allShortcuts = computed(() => {
   }))
 })
 
-// Group by pluginId
-const grouped = computed(() => {
-  const map = new Map()
-  for (const s of allShortcuts.value) {
-    if (!map.has(s.pluginId)) {
-      map.set(s.pluginId, [])
-    }
-    map.get(s.pluginId).push(s)
-  }
-  return map
-})
-
-// Filter by search query
+// Filter by search query; pluginId grouping is done inline to avoid an extra computed pass
 const filteredGroups = computed(() => {
   const q = searchQuery.value.toLowerCase()
-  if (!q) {
-    return [...grouped.value.entries()].map(([pluginId, items]) => ({ pluginId, items }))
-  }
-  const result = []
-  for (const [pluginId, items] of grouped.value.entries()) {
-    const filtered = items.filter(item =>
-      (item.label || '').toLowerCase().includes(q) ||
-      (item.effectiveAccelerator || '').toLowerCase().includes(q) ||
-      (item.defaultAccelerator || '').toLowerCase().includes(q) ||
-      item.id.toLowerCase().includes(q)
-    )
-    if (filtered.length > 0) {
-      result.push({ pluginId, items: filtered })
+  const map = new Map()
+  for (const s of allShortcuts.value) {
+    if (q && !((s.label || '').toLowerCase().includes(q)) &&
+        !(s.effectiveAccelerator || '').toLowerCase().includes(q) &&
+        !(s.defaultAccelerator || '').toLowerCase().includes(q) &&
+        !s.id.toLowerCase().includes(q)) {
+      continue
     }
+    if (!map.has(s.pluginId)) map.set(s.pluginId, []);
+    map.get(s.pluginId).push(s);
   }
-  return result
+  return [...map.entries()].map(([pluginId, items]) => ({ pluginId, items }));
 })
 
 function startRecording(item) {
   if (recordingId.value) return
   recordingId.value = item.id
-  conflictId.value = null
 
   recordingHandler = (e) => {
     // Build accelerator string from event
@@ -193,9 +175,7 @@ function startRecording(item) {
     // Check conflict
     const conflictCmdId = pluginHost.shortcutService.checkConflict(acc, item.id)
     if (conflictCmdId) {
-      const conflictingCmd = pluginHost.commandService.getAll().find(c => c.id === conflictCmdId)
       conflictId.value = item.id
-      conflictName.value = conflictingCmd?.label || conflictCmdId
       return
     }
 

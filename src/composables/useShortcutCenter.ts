@@ -2,28 +2,34 @@
  * useShortcutCenter — centralized keyboard shortcut composable.
  *
  * MUST be called from a Vue component's setup() context.
- * Returns a simple register() function and manages lifecycle automatically.
+ * The singleton (keys, pollInterval, watchers) lives at module scope — it is shared
+ * across all callers. The component's onUnmounted does NOT tear it down because
+ * other components (and the app shell) still need it while they run.
+ *
+ * The shortcut center does NOT store or call handlers directly.
+ * Instead, when a shortcut fires it calls pluginHost.commandService.execute(id),
+ * which is the single canonical execution path for both keyboard shortcuts and menu clicks.
  */
-import { onUnmounted } from 'vue'
 import { useMagicKeys } from '@vueuse/core'
+import { pluginHost } from '@/plugins/index'
 
 let keys: Record<string, boolean> | null = null
 let pollInterval: ReturnType<typeof setInterval> | null = null
-const watchers = new Map<string, { keys: string[]; handler: () => void; wasActive: boolean }>()
+const watchers = new Map<string, { keys: string[]; wasActive: boolean }>()
 
 function ensureInit() {
   if (!keys) {
-    // With reactive: true, useMagicKeys returns Record<string, boolean> directly
     keys = useMagicKeys({ reactive: true }) as Record<string, boolean>
-    // Poll at ~60fps to detect shortcut activation (rising edge detection)
     pollInterval = setInterval(() => {
       if (!keys) return
-      for (const [_id, w] of watchers) {
+      for (const [id, w] of watchers) {
         const allActive = w.keys.every(key => !!keys![key])
         if (allActive && !w.wasActive) {
           const tag = (document.activeElement as HTMLElement)?.tagName
           if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
-            w.handler()
+            // Route through CommandService so both keyboard shortcuts and menu clicks
+            // share the same execution path — no double-invocation possible.
+            pluginHost.commandService.execute(id).catch(() => {/* unknown command */})
           }
         }
         w.wasActive = allActive
@@ -35,18 +41,15 @@ function ensureInit() {
 export function useShortcutCenter() {
   ensureInit()
 
-  onUnmounted(() => {
-    if (pollInterval) { clearInterval(pollInterval); pollInterval = null }
-    watchers.clear()
-  })
+  // Do NOT tear down the global singleton on unmount — it is shared.
+  // Each component calling this composable only contributes registrations.
 
   /**
    * Register a shortcut to watch.
    * @param id Unique command id
    * @param accelerator Accelerator string e.g. 'Ctrl+O'
-   * @param handler Callback when shortcut fires
    */
-  function register(id: string, accelerator: string, handler: () => void) {
+  function register(id: string, accelerator: string) {
     if (!accelerator) return
     const MOD: Record<string, string> = {
       control: 'ctrl', ctrl: 'ctrl',
@@ -56,7 +59,7 @@ export function useShortcutCenter() {
     }
     const parts = accelerator.split('+').map(p => p.trim())
     const partKeys = parts.map(p => (MOD[p.toLowerCase()] ?? p.toLowerCase()))
-    watchers.set(id, { keys: partKeys, handler, wasActive: false })
+    watchers.set(id, { keys: partKeys, wasActive: false })
   }
 
   return { register }

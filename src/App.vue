@@ -758,15 +758,10 @@ export default {
       });
     }
 
-    // Listen for command executions to route to menu handlers
-    this._cmdUnlisten = pluginHost.events.on('lamp.command.execute', ({ id }) => {
-      const handler = this._cmdRouter[id];
-      if (handler) handler();
-    });
   },
 
   beforeUnmount() {
-    if (this._cmdUnlisten) this._cmdUnlisten();
+    // No listener to clean up — App.vue no longer listens for lamp.command.execute
   },
 
   mounted() {
