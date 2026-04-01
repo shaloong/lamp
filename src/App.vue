@@ -232,7 +232,13 @@ export default {
         // 同步语言到 i18n
         if (settings.language) {
           // 归一化 locale 名称，确保始终匹配 i18n messages 的 key
-          i18n.global.locale = settings.language === 'zh' ? 'zh-CN' : settings.language;
+          const nextLocale = settings.language === 'zh' ? 'zh-CN' : settings.language;
+          const globalLocale = i18n.global.locale;
+          if (typeof globalLocale === 'string') {
+            i18n.global.locale = nextLocale;
+          } else if (globalLocale && typeof globalLocale === 'object' && 'value' in globalLocale) {
+            globalLocale.value = nextLocale;
+          }
         }
       } catch (error) {
         console.error('Failed to load general settings', error);

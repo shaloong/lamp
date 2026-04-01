@@ -1,4 +1,4 @@
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, isRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { pluginHost } from '@/plugins/index'
 import { AI_PROVIDERS, BUILTIN_NAV_ITEMS } from '@/components/settings/config'
@@ -9,17 +9,33 @@ export function useSettingsDialogState(props, emit) {
   const { t, locale } = useI18n()
 
   function getCurrentLocale() {
+    const globalLocale = i18n.global.locale
+    if (typeof globalLocale === 'string') return globalLocale
+    if (globalLocale && typeof globalLocale === 'object' && 'value' in globalLocale) {
+      return globalLocale.value
+    }
     return typeof locale === 'string' ? locale : locale?.value
   }
 
   function setCurrentLocale(lang) {
-    if (typeof locale === 'string') {
-      // legacy mode: update locale on app-level i18n instance
+    const globalLocale = i18n.global.locale
+    
+    // Try to set via ref first (Vue 3 composition mode)
+    if (isRef(globalLocale)) {
+      globalLocale.value = lang
+      return
+    }
+    
+    // Fall back to direct assignment
+    if (typeof globalLocale === 'string') {
       i18n.global.locale = lang
       return
     }
-    if (locale && typeof locale === 'object' && 'value' in locale) {
+    
+    // Try composable locale
+    if (isRef(locale)) {
       locale.value = lang
+      return
     }
   }
 
@@ -34,6 +50,8 @@ export function useSettingsDialogState(props, emit) {
 
   const activeTab = ref('general')
   const submitting = ref(false)
+  const hydratingSettings = ref(false)
+  const savedLanguage = ref('zh-CN') // Track original language when dialog opens
 
   const form = ref({
     language: 'zh-CN',
@@ -112,13 +130,10 @@ export function useSettingsDialogState(props, emit) {
     if (val) {
       loadSettings()
     }
-  })
-
-  watch(() => form.value.language, (lang) => {
-    setCurrentLocale(lang)
-  })
+  }, { immediate: true })
 
   watch(() => aiForm.value.provider, (newProvider) => {
+    if (hydratingSettings.value) return
     const p = providers.find(item => item.id === newProvider)
     if (p && p.id !== 'custom') {
       aiForm.value.baseUrl = p.baseUrl
@@ -131,27 +146,44 @@ export function useSettingsDialogState(props, emit) {
 
   async function loadSettings() {
     try {
+      hydratingSettings.value = true
       const [general, ai] = await Promise.all([
         window.lampAPI.getGeneralSettings(),
         window.lampAPI.getAiSettings(),
       ])
+
+      const language = general?.language || getCurrentLocale() || 'zh-CN'
+      const autoSave = general?.autoSave ?? general?.auto_save ?? true
+      const autoSaveInterval = general?.autoSaveInterval ?? general?.auto_save_interval ?? 30
+      const restoreOnStart = general?.restoreOnStart ?? general?.restore_on_start ?? true
+      const openLastWorkspace = general?.openLastWorkspace ?? general?.open_last_workspace ?? false
+
       form.value = {
-        language: general.language || getCurrentLocale() || 'zh-CN',
-        autoSave: general.autoSave ?? true,
-        autoSaveInterval: general.autoSaveInterval || 30,
-        restoreOnStart: general.restoreOnStart ?? true,
-        openLastWorkspace: general.openLastWorkspace ?? false,
+        language,
+        autoSave,
+        autoSaveInterval,
+        restoreOnStart,
+        openLastWorkspace,
       }
-      const savedProvider = ai.provider || 'deepseek'
+      savedLanguage.value = language // Save original language for potential rollback
+
+      const aiProvider = ai?.provider || 'deepseek'
+      const aiBaseUrl = ai?.baseUrl ?? ai?.base_url ?? ''
+      const aiApiKey = ai?.apiKey ?? ai?.api_key ?? ''
+      const aiModel = ai?.model || ''
+
+      const savedProvider = aiProvider
       const provider = providers.find(item => item.id === savedProvider) || providers[0]
       aiForm.value = {
         provider: savedProvider,
-        baseUrl: savedProvider === 'custom' ? (ai.baseUrl || '') : (provider.baseUrl || ai.baseUrl || ''),
-        apiKey: ai.apiKey || '',
-        model: ai.model || (provider.models[0]?.value || ''),
+        baseUrl: savedProvider === 'custom' ? aiBaseUrl : (provider.baseUrl || aiBaseUrl || ''),
+        apiKey: aiApiKey,
+        model: aiModel || (provider.models[0]?.value || ''),
       }
     } catch (error) {
       console.error('Failed to load settings', error)
+    } finally {
+      hydratingSettings.value = false
     }
   }
 
@@ -167,6 +199,10 @@ export function useSettingsDialogState(props, emit) {
         apiKey: aiForm.value.apiKey,
         model: aiForm.value.model,
       })
+      // Update global locale only after successful save
+      if (form.value.language !== savedLanguage.value) {
+        setCurrentLocale(form.value.language)
+      }
       visible.value = false
     } catch (error) {
       console.error('Failed to save settings', error)
@@ -176,6 +212,10 @@ export function useSettingsDialogState(props, emit) {
   }
 
   function handleClose() {
+    // Restore original language if it was modified but not saved
+    if (form.value.language !== savedLanguage.value) {
+      setCurrentLocale(savedLanguage.value)
+    }
     visible.value = false
   }
 
