@@ -9,7 +9,7 @@
             </div>
             <div class="setting-control">
                 <Select v-model="form.language">
-                    <SelectTrigger class="w-44">
+                    <SelectTrigger class="settings-control-field-md">
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -36,7 +36,7 @@
             </div>
             <div class="setting-control">
                 <Input type="number" v-model.number="form.autoSaveInterval" :min="5" :max="300"
-                    :disabled="!form.autoSave" class="w-32.5" />
+                    :disabled="!form.autoSave" class="settings-control-field-sm" />
                 <span class="input-suffix">{{ t('settings.seconds') }}</span>
             </div>
         </div>

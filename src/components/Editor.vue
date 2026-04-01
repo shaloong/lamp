@@ -245,8 +245,8 @@ export default {
 }
 
 .toolbar-area>button.is-active {
-  background-color: color-mix(in oklab, var(--primary) 14%, transparent);
-  color: var(--primary);
+  background-color: color-mix(in oklab, var(--foreground) 14%, transparent);
+  color: var(--foreground);
 }
 
 .content-area {
@@ -299,30 +299,32 @@ export default {
   list-style: none;
   padding: 4px 6px;
   border-radius: 8px;
-  background-color: var(--muted);
+  background-color: var(--popover);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 20px color-mix(in oklab, var(--foreground) 18%, transparent);
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
-  gap: 4px;
-  border: 1px solid var(--border);
+  gap: 6px;
 }
 
 .menu-select .button {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  font-size: 14px;
+  gap: 6px;
+  padding: 6px 8px;
+  font-size: 13px;
   color: var(--foreground);
   background-color: transparent;
   border: none;
+  border-radius: 4px;
   cursor: pointer;
 }
 
 .menu-select .button .icon {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
   color: var(--foreground);
 }
@@ -332,8 +334,8 @@ export default {
 }
 
 .menu-select .button:hover {
-  background-color: var(--muted);
-  color: var(--foreground);
+  background-color: color-mix(in oklab, var(--foreground) 10%, transparent);
+  color: var(--accent-foreground);
 }
 
 /* ── AI Inline Ghost Text ────────────────────────────────────── */

@@ -14,15 +14,16 @@
                         @change="handlePluginSettingChange(item, $event)" />
 
                     <Input v-else-if="item.type === 'text'" :model-value="getPluginValue(item)"
-                        @update:model-value="handlePluginSettingChange(item, $event)" class="w-80" />
+                        @update:model-value="handlePluginSettingChange(item, $event)"
+                        class="settings-control-field-lg" />
 
                     <textarea v-else-if="item.type === 'textarea'" :value="getPluginValue(item)"
                         @input="handlePluginSettingChange(item, $event.target.value)" rows="4"
-                        class="flex w-80 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50" />
+                        class="settings-control-field-xl settings-textarea flex rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50" />
 
                     <Select v-else-if="item.type === 'select'" :model-value="getPluginValue(item)"
                         @update:model-value="handlePluginSettingChange(item, $event)">
-                        <SelectTrigger class="w-80">
+                        <SelectTrigger class="settings-control-field-lg">
                             <SelectValue />
                         </SelectTrigger>
                         <SelectContent>

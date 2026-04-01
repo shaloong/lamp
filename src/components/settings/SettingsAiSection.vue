@@ -8,7 +8,7 @@
             </div>
             <div class="setting-control">
                 <Select v-model="aiForm.provider">
-                    <SelectTrigger class="w-80">
+                    <SelectTrigger class="settings-control-field-lg">
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -24,7 +24,7 @@
             </div>
             <div class="setting-control">
                 <Input v-model="aiForm.baseURL" :placeholder="currentProvider?.baseUrl || ''"
-                    :disabled="!isCustomProvider" class="w-80" />
+                    :disabled="!isCustomProvider" class="settings-control-field-lg" />
             </div>
         </div>
 
@@ -34,7 +34,7 @@
             </div>
             <div class="setting-control">
                 <Select v-model="aiForm.model">
-                    <SelectTrigger class="w-80">
+                    <SelectTrigger class="settings-control-field-lg">
                         <SelectValue :placeholder="t('settings.modelPlaceholder')" />
                     </SelectTrigger>
                     <SelectContent>
@@ -51,7 +51,7 @@
             </div>
             <div class="setting-control api-key-control">
                 <Input v-model="aiForm.apiKey" type="password" :placeholder="t('settings.aiApiKeyPlaceholder')"
-                    class="w-80" />
+                    class="settings-control-field-lg" />
                 <a v-if="currentProvider?.helpUrl" :href="currentProvider.helpUrl" target="_blank" class="help-link"
                     :title="t('settings.getApiKey')">
                     <ExternalLink :size="14" />

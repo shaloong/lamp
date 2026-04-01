@@ -1,6 +1,6 @@
 <template>
   <Dialog :open="visible" @update:open="visible = $event">
-    <DialogContent class="max-w-180 max-h-[85vh]" @pointer-down-outside="() => { }">
+    <DialogContent class="max-h-[85vh]" style="max-width: 48rem" @pointer-down-outside="() => { }">
       <DialogHeader>
         <DialogTitle>{{ t('settings.title') }}</DialogTitle>
       </DialogHeader>
@@ -142,7 +142,7 @@ function getNavIcon(icon) {
 }
 
 .settings-nav {
-  padding: 8px;
+  padding: 8px 16px 8px 0;
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -195,7 +195,7 @@ function getNavIcon(icon) {
 
 .settings-content {
   flex: 1;
-  padding: 8px 24px;
+  padding: 8px 0 8px 24px;
   overflow-y: auto;
   min-width: 0;
   text-align: left;
@@ -204,15 +204,15 @@ function getNavIcon(icon) {
 .settings-section {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 2px;
 }
 
 .section-title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--foreground);
-  margin: 0 0 16px 0;
-  padding-bottom: 8px;
+  margin: 0 0 12px 0;
+  padding-bottom: 10px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -220,9 +220,9 @@ function getNavIcon(icon) {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
-  padding: 12px 0;
-  border-bottom: 1px solid var(--accent);
+  gap: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid color-mix(in oklab, var(--border) 85%, transparent);
 
   &.disabled {
     opacity: 0.5;
@@ -244,13 +244,13 @@ function getNavIcon(icon) {
   font-size: 13px;
   font-weight: 500;
   color: var(--foreground);
-  margin-bottom: 2px;
+  margin-bottom: 3px;
 }
 
 .setting-desc {
   font-size: 12px;
   color: var(--muted-foreground);
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
 .setting-control {
@@ -258,6 +258,31 @@ function getNavIcon(icon) {
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
+}
+
+.settings-control-field-sm {
+  width: 8.5rem;
+  max-width: 100%;
+}
+
+.settings-control-field-md {
+  width: 11rem;
+  max-width: 100%;
+}
+
+.settings-control-field-lg {
+  width: 20rem;
+  max-width: 100%;
+}
+
+.settings-control-field-xl {
+  width: 28rem;
+  max-width: 100%;
+}
+
+.settings-textarea {
+  min-height: 96px;
+  resize: vertical;
 }
 
 .input-suffix {
@@ -308,7 +333,7 @@ function getNavIcon(icon) {
 .plugins-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .plugins-empty {
@@ -322,9 +347,9 @@ function getNavIcon(icon) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
+  padding: 12px 12px;
   border-radius: 6px;
-  background-color: var(--secondary);
+  background-color: color-mix(in oklab, var(--foreground) 4%, var(--background));
   border: 1px solid var(--border);
   gap: 16px;
 }
