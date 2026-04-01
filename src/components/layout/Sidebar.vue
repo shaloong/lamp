@@ -1,9 +1,9 @@
 <template>
-    <div class="sidebar-shell">
-        <SidebarRail :tool1Active="tool1Active" @toggle-tool1="$emit('toggle-tool1')"
-            @open-settings="$emit('open-settings')" />
+    <div class="sidebar-shell" @contextmenu="$emit('contextmenu', $event)">
+        <SidebarRail :explorerPanelActive="explorerPanelActive" @toggle-explorer-panel="$emit('toggle-explorer-panel')"
+            :showExplorerButton="showExplorerButton" @open-settings="$emit('open-settings')" />
 
-        <WorkspacePanel :tool1Active="tool1Active" :tool2Active="tool2Active" :workspaceStore="workspaceStore"
+        <WorkspacePanel :explorerPanelActive="explorerPanelActive" :workspaceStore="workspaceStore"
             :folderContent="folderContent" :toolViewHeight="toolViewHeight" :tempFiles="tempFiles"
             :tempSectionExpanded="tempSectionExpanded" :expandedKeys="expandedKeys"
             @open-workspace="$emit('open-workspace')" @open-temp-file="$emit('open-temp-file', $event)"
@@ -17,8 +17,8 @@ import SidebarRail from './SidebarRail.vue'
 import WorkspacePanel from './WorkspacePanel.vue'
 
 defineProps({
-    tool1Active: { type: Boolean, default: false },
-    tool2Active: { type: Boolean, default: false },
+    explorerPanelActive: { type: Boolean, default: false },
+    showExplorerButton: { type: Boolean, default: true },
     workspaceStore: { type: Object, required: true },
     folderContent: { type: [Array, String], default: '' },
     toolViewHeight: { type: Number, default: 400 },
@@ -28,13 +28,14 @@ defineProps({
 })
 
 defineEmits([
-    'toggle-tool1',
+    'toggle-explorer-panel',
     'open-settings',
     'open-workspace',
     'open-temp-file',
     'node-click',
     'toggle-expand',
     'update:tempSectionExpanded',
+    'contextmenu',
 ])
 </script>
 

@@ -1,7 +1,7 @@
 <template>
     <div class="toolbar border-r border-border">
-        <button class="toggle-button" :class="{ activeToggleButton: tool1Active }" @click="$emit('toggle-tool1')"
-            style="-webkit-app-region: no-drag">
+        <button v-if="showExplorerButton" class="toggle-button" :class="{ activeToggleButton: explorerPanelActive }"
+            @click="$emit('toggle-explorer-panel')" style="-webkit-app-region: no-drag">
             <Folder :size="20" />
         </button>
 
@@ -17,10 +17,11 @@
 import { Folder, Settings } from 'lucide-vue-next'
 
 defineProps({
-    tool1Active: { type: Boolean, default: false },
+    explorerPanelActive: { type: Boolean, default: false },
+    showExplorerButton: { type: Boolean, default: true },
 })
 
-defineEmits(['toggle-tool1', 'open-settings'])
+defineEmits(['toggle-explorer-panel', 'open-settings'])
 </script>
 
 <style scoped>

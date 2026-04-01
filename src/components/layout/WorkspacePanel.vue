@@ -1,6 +1,6 @@
 <template>
-    <div class="tool-view" v-show="tool1Active || tool2Active" style="-webkit-app-region: no-drag">
-        <div v-show="tool1Active" class="tool1" :class="{ active: tool1Active }">
+    <div class="sidebar-panel" v-show="explorerPanelActive" style="-webkit-app-region: no-drag">
+        <div v-show="explorerPanelActive" class="explorer-panel" :class="{ active: explorerPanelActive }">
             <div v-if="workspaceStore.isOpen" class="file-explorer">
                 <div class="workspace-header">
                     <span class="workspace-name" :title="workspaceStore.rootPath">
@@ -55,8 +55,7 @@ import Button from '@/components/ui/button/Button.vue'
 import { Folder, File, ChevronRight } from 'lucide-vue-next'
 
 defineProps({
-    tool1Active: { type: Boolean, default: false },
-    tool2Active: { type: Boolean, default: false },
+    explorerPanelActive: { type: Boolean, default: false },
     workspaceStore: { type: Object, required: true },
     folderContent: { type: [Array, String], default: '' },
     toolViewHeight: { type: Number, default: 400 },
@@ -75,7 +74,7 @@ defineEmits([
 </script>
 
 <style scoped>
-.tool-view {
+.sidebar-panel {
     width: 300px;
     display: flex;
     flex-direction: column;
@@ -83,7 +82,7 @@ defineEmits([
     border-right: 1px solid var(--border);
 }
 
-.tool1 {
+.explorer-panel {
     flex-grow: 1;
 }
 

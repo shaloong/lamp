@@ -4,21 +4,23 @@
       <AppMenu @minWindow="minWindow" @maxWindow="maxWindow" @closeWindow="closeWindow" />
     </div>
     <div class="app-content">
-      <Sidebar :tool1Active="tool1Active" :tool2Active="tool2Active" :workspaceStore="workspaceStore"
+      <Sidebar :explorerPanelActive="explorerPanelActive" :workspaceStore="workspaceStore"
         :folderContent="folderContent" :toolViewHeight="toolViewHeight" :tempFiles="tempFiles"
-        :expandedKeys="expandedKeys" v-model:tempSectionExpanded="tempSectionExpanded" @toggle-tool1="toggleTool1"
+        :expandedKeys="expandedKeys" :showExplorerButton="sidebarButtonVisibility.explorer"
+        v-model:tempSectionExpanded="tempSectionExpanded" @toggle-explorer-panel="toggleExplorerPanel"
         @open-settings="openSettingsDialog" @open-workspace="openWorkspace" @open-temp-file="openTempFile"
-        @node-click="handleNodeClick" @toggle-expand="handleToggleExpand" />
+        @node-click="handleNodeClick" @toggle-expand="handleToggleExpand" @contextmenu="onSidebarContextMenu" />
       <div class="editor flex flex-col h-full">
         <!-- 编辑器选项卡组 -->
-        <div class="editor-tabs">
+        <div class="editor-tabs" @contextmenu="onTabBarContextMenu">
           <!-- 编辑器选项卡 -->
           <div class="editor-tab h-5.5 pt-2 pr-2.5 pb-1 pl-3.5 box-content" v-for="(tab, index) in tabs" :key="index"
-            @click="switchTab(index)" :class="{ activeTab: activeTab === index }">
+            @click="switchTab(index)" @contextmenu.stop.prevent="onTabContextMenu(index, $event)"
+            :class="{ activeTab: activeTab === index }">
             <File :size="12" style="margin-right: 4px; flex-shrink: 0;" />
             {{ tab.title }}
             <button class="close-button" @click.stop="toggleCloseTab(index)">
-              <X :size="8" />
+              <X :size="12" />
             </button>
             <span class="active-indicator" v-show="activeTab === index"></span>
           </div>
@@ -49,6 +51,16 @@
 
     <CommandPalette v-if="dialogCommandPalette" v-model="dialogCommandPalette" />
     <SettingsDialog v-if="dialogSettings" v-model="dialogSettings" />
+
+    <div v-if="contextMenu.visible" class="ui-context-menu" :style="contextMenuStyle" @click.stop>
+      <button v-for="item in contextMenu.items" :key="item.id" class="ui-context-item"
+        :class="{ checked: item.checked }" :disabled="item.disabled" @click="onContextMenuItemClick(item)">
+        <span class="check">
+          <Check v-if="item.checked" :size="12" class="check-icon" />
+        </span>
+        <span>{{ item.label }}</span>
+      </button>
+    </div>
   </div>
 </template>
 
@@ -72,7 +84,7 @@ import DialogHeader from '@/components/ui/dialog/DialogHeader.vue'
 import DialogTitle from '@/components/ui/dialog/DialogTitle.vue'
 import DialogFooter from '@/components/ui/dialog/DialogFooter.vue'
 import DialogClose from '@/components/ui/dialog/DialogClose.vue'
-import { File, X } from 'lucide-vue-next'
+import { Check, File, X } from 'lucide-vue-next'
 import { i18n } from './i18n.js'
 
 export default {
@@ -88,17 +100,16 @@ export default {
     DialogTitle,
     DialogFooter,
     DialogClose,
+    Check,
     File,
     X,
   },
   data() {
     return {
-      tool1Active: false, // 工具1是否激活
-      tool2Active: false, // 工具2是否激活
+      explorerPanelActive: false,
       tabs: [],
       activeTab: 0,
       folderContent: "",
-      toolHeight: window.innerHeight,
       toolViewHeight: 400,
       dialogConfirmCloseTab: false,
       indexCloseTab: -1, // 删除的索引号，-1表示没有传递
@@ -110,6 +121,17 @@ export default {
       tempSectionExpanded: true,
       expandedKeys: [],
       treeRefreshKey: 0,
+      isDevMode: import.meta.env.DEV,
+      contextMenu: {
+        visible: false,
+        x: 0,
+        y: 0,
+        items: [],
+      },
+      sidebarButtonVisibility: {
+        explorer: true,
+      },
+      hiddenSidebarPluginPanels: [],
     };
   },
 
@@ -217,10 +239,10 @@ export default {
       }
     },
 
-    // 工具1
-    toggleTool1() {
-      this.tool1Active = !this.tool1Active;
-      if (this.tool1Active) {
+    // 切换资源管理器侧边面板
+    toggleExplorerPanel() {
+      this.explorerPanelActive = !this.explorerPanelActive;
+      if (this.explorerPanelActive) {
         this.updateToolViewHeight();
       }
     },
@@ -228,24 +250,11 @@ export default {
     // 更新工具视图高度
     updateToolViewHeight() {
       this.$nextTick(() => {
-        const toolView = document.querySelector('.tool-view');
-        if (toolView) {
-          this.toolViewHeight = toolView.clientHeight - 50; // 减去header高度
+        const sidebarPanel = document.querySelector('.sidebar-panel');
+        if (sidebarPanel) {
+          this.toolViewHeight = sidebarPanel.clientHeight - 50; // 减去header高度
         }
       });
-    },
-
-    // 工具2
-    toggleTool2() {
-      this.tool2Active = !this.tool2Active;
-      // 视窗1调整
-      if (window.innerHeight != null) {
-        if (this.tool2Active === false) {
-          this.toolHeight = window.innerHeight;
-        } else {
-          this.toolHeight = window.innerHeight / 2;
-        }
-      }
     },
 
     // 切换标签页
@@ -427,12 +436,141 @@ export default {
 
     // 缩放窗口后行为
     handleResize() {
-      if (window.innerHeight != null) {
-        if (this.tool2Active === false) {
-          this.toolHeight = window.innerHeight;
-        } else {
-          this.toolHeight = window.innerHeight / 2;
+      this.updateToolViewHeight();
+    },
+
+    isEditableTarget(target) {
+      if (!(target instanceof Element)) return false;
+      const editable = target.closest('input, textarea, [contenteditable="true"], [role="textbox"]');
+      return !!editable;
+    },
+
+    hideContextMenu() {
+      this.contextMenu.visible = false;
+      this.contextMenu.items = [];
+    },
+
+    showContextMenu(event, items) {
+      event.preventDefault();
+      this.contextMenu = {
+        visible: true,
+        x: event.clientX,
+        y: event.clientY,
+        items,
+      };
+    },
+
+    onContextMenuItemClick(item) {
+      if (item.disabled) return;
+      if (typeof item.action === 'function') item.action();
+      this.hideContextMenu();
+    },
+
+    onTabContextMenu(index, event) {
+      this.showContextMenu(event, [
+        {
+          id: 'close-current',
+          label: this.$t('common.close') || '关闭',
+          action: () => this.toggleCloseTab(index),
+        },
+      ]);
+    },
+
+    onTabBarContextMenu(event) {
+      if (event.target.closest('.editor-tab')) return;
+      this.showContextMenu(event, [
+        {
+          id: 'new-tab',
+          label: this.$t('app.newLampText') || '新建',
+          action: () => this.newFile(),
+        },
+      ]);
+    },
+
+    onSidebarContextMenu(event) {
+      const pluginPanelItems = (this.pluginHost.contributions.sortedSidebarPanels || []).map((panel) => {
+        const id = `plugin:${panel.pluginId || 'builtin'}:${panel.id}`;
+        const checked = !this.hiddenSidebarPluginPanels.includes(id);
+        return {
+          id,
+          label: panel.title,
+          checked,
+          action: () => this.toggleSidebarPluginPanel(id),
+        };
+      });
+
+      this.showContextMenu(event, [
+        {
+          id: 'toggle-explorer',
+          label: this.$t('app.openWorkspace') || '资源管理器',
+          checked: this.sidebarButtonVisibility.explorer,
+          action: () => this.toggleSidebarButton('explorer'),
+        },
+        ...pluginPanelItems,
+      ]);
+    },
+
+    toggleSidebarButton(key) {
+      this.sidebarButtonVisibility[key] = !this.sidebarButtonVisibility[key];
+      localStorage.setItem('lamp:ui:sidebar-buttons', JSON.stringify(this.sidebarButtonVisibility));
+      if (key === 'explorer' && !this.sidebarButtonVisibility[key]) {
+        this.explorerPanelActive = false;
+      }
+    },
+
+    toggleSidebarPluginPanel(id) {
+      const has = this.hiddenSidebarPluginPanels.includes(id);
+      this.hiddenSidebarPluginPanels = has
+        ? this.hiddenSidebarPluginPanels.filter((x) => x !== id)
+        : [...this.hiddenSidebarPluginPanels, id];
+      localStorage.setItem('lamp:ui:hidden-sidebar-plugin-panels', JSON.stringify(this.hiddenSidebarPluginPanels));
+    },
+
+    loadUiPreferences() {
+      try {
+        const rawButtons = localStorage.getItem('lamp:ui:sidebar-buttons');
+        if (rawButtons) {
+          const parsed = JSON.parse(rawButtons);
+          this.sidebarButtonVisibility = {
+            ...this.sidebarButtonVisibility,
+            ...parsed,
+          };
         }
+      } catch (error) {
+        console.warn('Failed to load sidebar button visibility', error);
+      }
+
+      try {
+        const rawPanels = localStorage.getItem('lamp:ui:hidden-sidebar-plugin-panels');
+        if (rawPanels) {
+          const parsed = JSON.parse(rawPanels);
+          this.hiddenSidebarPluginPanels = Array.isArray(parsed) ? parsed : [];
+        }
+      } catch (error) {
+        console.warn('Failed to load sidebar panel visibility', error);
+      }
+    },
+
+    handleGlobalContextMenu(event) {
+      if (this.isDevMode) return;
+      if (this.isEditableTarget(event.target)) return;
+      event.preventDefault();
+    },
+
+    handleGlobalWebShortcutGuard(event) {
+      if (this.isDevMode) return;
+      const key = event.key.toLowerCase();
+      const ctrlOrMeta = event.ctrlKey || event.metaKey;
+      const blocked =
+        event.key === 'F5' ||
+        event.key === 'F12' ||
+        (ctrlOrMeta && key === 'r') ||
+        (ctrlOrMeta && key === 'u') ||
+        (ctrlOrMeta && event.shiftKey && ['i', 'j', 'c', 'r'].includes(key));
+
+      if (blocked) {
+        event.preventDefault();
+        event.stopPropagation();
       }
     },
 
@@ -446,6 +584,7 @@ export default {
     })()
     this.initIpcRenderers()
     this.initFileWatcher()
+    this.loadUiPreferences()
     window.addEventListener('resize', this.handleResize)
 
     // ── Register all main menu commands with the centralized ShortcutService ──
@@ -499,15 +638,32 @@ export default {
   },
 
   beforeUnmount() {
-    // No listener to clean up — App.vue no longer listens for lamp.command.execute
+    window.removeEventListener('resize', this.handleResize)
+    document.removeEventListener('click', this.hideContextMenu)
+    window.removeEventListener('blur', this.hideContextMenu)
+    document.removeEventListener('contextmenu', this.handleGlobalContextMenu, true)
+    window.removeEventListener('keydown', this.handleGlobalWebShortcutGuard, true)
   },
 
   mounted() {
     this.showDirection();
+    document.addEventListener('click', this.hideContextMenu)
+    window.addEventListener('blur', this.hideContextMenu)
+    document.addEventListener('contextmenu', this.handleGlobalContextMenu, true)
+    window.addEventListener('keydown', this.handleGlobalWebShortcutGuard, true)
     // Initialize VueUse shortcut polling and start listening
     const { register } = useShortcutCenter();
     pluginHost.shortcutService.setExternalRegister(register);
     pluginHost.shortcutService.startListening();
+  },
+
+  computed: {
+    contextMenuStyle() {
+      return {
+        left: `${this.contextMenu.x}px`,
+        top: `${this.contextMenu.y}px`,
+      };
+    },
   },
 
 };
@@ -538,6 +694,7 @@ export default {
   border: 0;
   border-radius: 7px;
   font-size: 10px;
+  margin-left: 4px;
   align-items: center;
   display: flex;
   justify-content: center;
@@ -597,5 +754,54 @@ export default {
   background-color: var(--primary);
   border-radius: 4px;
   transition: height 0.3s ease;
+}
+
+.ui-context-menu {
+  position: fixed;
+  z-index: 3000;
+  min-width: 180px;
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--popover);
+  box-shadow: 0 10px 24px color-mix(in oklab, var(--foreground) 16%, transparent);
+}
+
+.ui-context-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  background: transparent;
+  color: var(--foreground);
+  font-size: 13px;
+  border-radius: 6px;
+  padding: 6px 8px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ui-context-item:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--foreground) 8%, transparent);
+}
+
+.ui-context-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ui-context-item .check {
+  width: 12px;
+  height: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted-foreground);
+}
+
+.ui-context-item.checked .check,
+.ui-context-item .check-icon {
+  color: var(--foreground);
 }
 </style>
