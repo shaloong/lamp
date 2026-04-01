@@ -78,6 +78,7 @@ import { useFileStore } from '@/stores/files'
 import { pluginHost } from '@/plugins/index'
 import { useShortcutCenter } from '@/composables/useShortcutCenter'
 import { workspaceExplorerMethods } from '@/composables/workspaceExplorerMethods'
+import { getLampAPI } from '@/lib/lampApi'
 const CommandPalette = defineAsyncComponent(() => import('./components/CommandPalette.vue'))
 const SettingsDialog = defineAsyncComponent(() => import('./components/SettingsDialog.vue'))
 import AppMenu from './components/AppMenu.vue'
@@ -161,12 +162,7 @@ export default {
     },
 
     getLampAPI() {
-      const api = window.lampAPI;
-      if (!api) {
-        console.warn('lampAPI is unavailable');
-        return null;
-      }
-      return api;
+      return getLampAPI();
     },
 
     openFile(status, path, data) {

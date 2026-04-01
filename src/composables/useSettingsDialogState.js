@@ -4,6 +4,7 @@ import { pluginHost } from '@/plugins/index'
 import { AI_PROVIDERS, BUILTIN_NAV_ITEMS } from '@/components/settings/config'
 import { resolveI18nLabel } from '@/lib/resolveI18nLabel'
 import { i18n } from '@/i18n'
+import { requireLampAPI } from '@/lib/lampApi'
 
 export function useSettingsDialogState(props, emit) {
   const { t, locale } = useI18n()
@@ -147,9 +148,10 @@ export function useSettingsDialogState(props, emit) {
   async function loadSettings() {
     try {
       hydratingSettings.value = true
+      const api = requireLampAPI('settings load')
       const [general, ai] = await Promise.all([
-        window.lampAPI.getGeneralSettings(),
-        window.lampAPI.getAiSettings(),
+        api.getGeneralSettings(),
+        api.getAiSettings(),
       ])
 
       const language = general?.language || getCurrentLocale() || 'zh-CN'
@@ -191,9 +193,10 @@ export function useSettingsDialogState(props, emit) {
     if (submitting.value) return
     submitting.value = true
     try {
+      const api = requireLampAPI('settings save')
       const generalPayload = JSON.parse(JSON.stringify(form.value))
-      await window.lampAPI.saveGeneralSettings(generalPayload)
-      await window.lampAPI.saveAiSettings({
+      await api.saveGeneralSettings(generalPayload)
+      await api.saveAiSettings({
         provider: aiForm.value.provider,
         baseUrl: normalizeBaseUrl(aiForm.value.baseUrl),
         apiKey: aiForm.value.apiKey,

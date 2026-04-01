@@ -4,6 +4,7 @@
 // ============================================================
 
 import type { Editor } from '@tiptap/core';
+import { requireLampAPI } from '../lib/lampApi';
 
 // ─── Manifest ───────────────────────────────────────────────
 
@@ -573,14 +574,15 @@ export class PluginContext {
   }
 
   private _buildFileAPI(): LampFileAPI {
+    const api = requireLampAPI('plugin file API build');
     return {
-      read: (filePath) => window.lampAPI.readTextFile(filePath),
-      write: (filePath, content) => window.lampAPI.saveInfo(filePath, content),
-      exists: (filePath) => window.lampAPI.hasFile(filePath),
-      delete: (filePath) => window.lampAPI.delFile(filePath),
-      getFolderContent: (folderPath) => window.lampAPI.getFolderContent(folderPath),
-      watch: (folderPath) => window.lampAPI.startWatching(folderPath),
-      unwatch: () => window.lampAPI.stopWatching(),
+      read: (filePath) => api.readTextFile(filePath),
+      write: (filePath, content) => api.saveInfo(filePath, content),
+      exists: (filePath) => api.hasFile(filePath),
+      delete: (filePath) => api.delFile(filePath),
+      getFolderContent: (folderPath) => api.getFolderContent(folderPath),
+      watch: (folderPath) => api.startWatching(folderPath),
+      unwatch: () => api.stopWatching(),
     };
   }
 
@@ -591,7 +593,8 @@ export class PluginContext {
       get rootPath() { return host.workspace.rootPath; },
       get name() { return host.workspace.name; },
       open: async () => {
-        const result = await window.lampAPI.openWorkspace();
+        const api = requireLampAPI('plugin workspace open');
+        const result = await api.openWorkspace();
         if (result) {
           host.workspace.isOpen = true;
           host.workspace.rootPath = result.rootPath;
@@ -609,9 +612,9 @@ export class PluginContext {
   private _buildAIAPI(): LampAIAPI {
     const aiState = this.host.aiState;
     return {
-      chat: (systemPrompt, userMessage) => window.lampAPI.ai(systemPrompt, userMessage),
-      getSettings: () => window.lampAPI.getAiSettings(),
-      saveSettings: (settings) => window.lampAPI.saveAiSettings(settings),
+      chat: (systemPrompt, userMessage) => requireLampAPI('plugin ai chat').ai(systemPrompt, userMessage),
+      getSettings: () => requireLampAPI('plugin ai get settings').getAiSettings(),
+      saveSettings: (settings) => requireLampAPI('plugin ai save settings').saveAiSettings(settings),
       startLoading: (actionLabel) => {
         aiState.isLoading = true;
         aiState.actionLabel = actionLabel;

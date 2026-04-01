@@ -5,6 +5,7 @@
 // ============================================================
 
 import type { LampPluginManifest } from './types';
+import { requireLampAPI } from '../lib/lampApi';
 
 export class PluginLoader {
   /**
@@ -14,11 +15,12 @@ export class PluginLoader {
   async scanPlugins(dirPath: string): Promise<LampPluginManifest[]> {
     if (!dirPath) return [];
     try {
+      const api = requireLampAPI('plugin scan');
       const entries: Array<{
         name: string;
         path: string;
         isDirectory: boolean;
-      }> = await window.lampAPI.getFolderContent(dirPath);
+      }> = await api.getFolderContent(dirPath);
 
       const manifests: LampPluginManifest[] = [];
       for (const entry of entries) {
@@ -46,7 +48,8 @@ export class PluginLoader {
   async readManifest(pluginDirPath: string): Promise<LampPluginManifest | null> {
     const manifestPath = this._join(pluginDirPath, 'manifest.json');
     try {
-      const content: string = await window.lampAPI.readTextFile(manifestPath);
+      const api = requireLampAPI('plugin manifest read');
+      const content: string = await api.readTextFile(manifestPath);
       const manifest = JSON.parse(content) as LampPluginManifest;
 
       // Basic validation

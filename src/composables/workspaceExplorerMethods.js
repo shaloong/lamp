@@ -1,10 +1,8 @@
+import { getLampAPI } from '@/lib/lampApi'
+
 export const workspaceExplorerMethods = {
   getLampAPI() {
-    if (!window.lampAPI) {
-      console.warn('lampAPI is unavailable')
-      return null
-    }
-    return window.lampAPI
+    return getLampAPI()
   },
 
   // 获取父目录

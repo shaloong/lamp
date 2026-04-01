@@ -16,6 +16,7 @@ import type {
   PluginScope,
 } from './types';
 import { PluginContext } from './types';
+import { requireLampAPI } from '../lib/lampApi';
 
 // Extend the Window interface to include __lamp_app__
 declare global {
@@ -582,7 +583,8 @@ export class PluginHost {
 
       // 2. User plugins: ~/.lamp/plugins/
       try {
-        const userDir = await window.lampAPI.getUserPluginsDir();
+          const api = requireLampAPI('user plugin discovery');
+          const userDir = await api.getUserPluginsDir();
         const userManifests = await this._loader.scanPlugins(userDir);
         await this._activateAllDynamic(userManifests, userDir, 'user');
       } catch (err) {
