@@ -96,6 +96,7 @@
     "enabled": "Enabled",
     "noWorkspace": "No workspace open",
     "openWorkspace": "Open Workspace",
+    "explorer": "Explorer",
     "tempFiles": "Temp Files",
     "newLampText": "New Lamp Text"
   },

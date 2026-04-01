@@ -508,7 +508,7 @@ export default {
       this.showContextMenu(event, [
         {
           id: 'toggle-explorer',
-          label: this.$t('app.openWorkspace') || '资源管理器',
+          label: this.$t('app.explorer') || '资源管理器',
           checked: this.sidebarButtonVisibility.explorer,
           action: () => this.toggleSidebarButton('explorer'),
         },

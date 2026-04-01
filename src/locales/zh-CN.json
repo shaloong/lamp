@@ -97,6 +97,7 @@
     "enabled": "已启用",
     "noWorkspace": "当前未打开任何工作区",
     "openWorkspace": "打开工作区",
+    "explorer": "资源管理器",
     "tempFiles": "临时打开",
     "newLampText": "新 Lamp 文本"
   },
