@@ -205,24 +205,47 @@ export default {
 }
 
 .toolbar-area {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   flex-shrink: 0;
   margin: 1px 0;
+  padding: 0 2px;
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
-  text-align: center;
 }
 
 .toolbar-area>button {
-  padding: 5px 10px;
-  color: #333;
+  padding: 4px 8px;
+  color: var(--muted-foreground);
   font-size: 14px;
   cursor: pointer;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.toolbar-area>button:hover:not(:disabled) {
+  color: var(--accent-foreground);
+  background-color: color-mix(in oklab, var(--foreground) 9%, transparent);
+}
+
+.toolbar-area>button:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--ring) 55%, transparent);
+  outline-offset: 1px;
+}
+
+.toolbar-area>button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .toolbar-area>button.is-active {
-  background-color: var(--accent);
+  background-color: color-mix(in oklab, var(--primary) 14%, transparent);
   color: var(--primary);
 }
 

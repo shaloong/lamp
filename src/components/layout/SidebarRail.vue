@@ -46,12 +46,26 @@ defineEmits(['toggle-tool1', 'open-settings'])
     width: 32px;
     height: 32px;
     overflow: hidden;
+    border: none;
     background-color: transparent;
     color: var(--muted-foreground);
+    border-radius: var(--radius-sm);
+    opacity: 0.7;
+    transition: color 0.15s ease, opacity 0.15s ease;
+}
+
+.toggle-button:hover {
+    color: var(--foreground);
+    opacity: 1;
+}
+
+.toggle-button:focus-visible {
+    outline: 2px solid color-mix(in oklab, var(--ring) 55%, transparent);
+    outline-offset: 1px;
 }
 
 .activeToggleButton {
     color: var(--primary);
-    border-color: var(--primary);
+    opacity: 1;
 }
 </style>

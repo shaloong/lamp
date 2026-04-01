@@ -44,12 +44,12 @@ function pluginMenuItems(area) {
     <img class="mr-2 ml-3 my-auto w-4.5 h-4.5 pointer-events-none" src="/src/assets/lamp-icon.svg" alt="Lamp" />
 
     <!-- Menu bar -->
-    <nav class="flex-1 flex items-stretch">
+    <nav class="flex-1 flex items-center px-2 gap-0.5">
 
       <DropdownMenu v-for="section in menuSections" :key="section.id">
         <DropdownMenuTrigger as-child>
           <button style="-webkit-app-region: no-drag"
-            class="flex items-center px-3 h-full text-sm font-medium text-foreground hover:bg-accent transition-colors cursor-default">
+            class="menu-trigger flex items-center px-2.5 h-7 rounded-md text-sm font-medium text-foreground transition-colors cursor-default">
             {{ t(section.titleKey) }}
           </button>
         </DropdownMenuTrigger>
@@ -86,20 +86,20 @@ function pluginMenuItems(area) {
     <!-- Window controls -->
     <div class="flex items-stretch" style="-webkit-app-region: no-drag">
       <button @click.stop="$emit('minWindow')" title="最小化"
-        class="w-11.5 h-full flex items-center justify-center hover:bg-accent transition-colors">
+        class="window-btn w-11.5 h-full flex items-center justify-center transition-colors">
         <svg class="w-2.5 h-2.5 text-foreground" viewBox="0 0 16 16" fill="currentColor">
           <rect x="2" y="7" width="12" height="2" />
         </svg>
       </button>
       <button @click.stop="$emit('maxWindow')" title="最大化"
-        class="w-11.5 h-full flex items-center justify-center hover:bg-accent transition-colors">
+        class="window-btn w-11.5 h-full flex items-center justify-center transition-colors">
         <svg class="w-2.5 h-2.5 text-foreground" viewBox="0 0 16 16" fill="none" stroke="currentColor"
           stroke-width="1.5">
           <rect x="2.5" y="2.5" width="11" height="11" rx="1" />
         </svg>
       </button>
       <button @click.stop="$emit('closeWindow')" title="关闭"
-        class="w-11.5 h-full flex items-center justify-center hover:bg-destructive hover:text-white transition-colors">
+        class="window-btn-close w-11.5 h-full flex items-center justify-center transition-colors">
         <svg class="w-2.5 h-2.5" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"
           stroke-linecap="round">
           <path d="M3.5 3.5l9 9M12.5 3.5l-9 9" />
@@ -108,3 +108,30 @@ function pluginMenuItems(area) {
     </div>
   </div>
 </template>
+
+<style scoped>
+.menu-trigger:hover,
+.menu-trigger[data-state='open'] {
+  background-color: color-mix(in oklab, var(--foreground) 8%, transparent);
+}
+
+.menu-trigger {
+  margin-inline: 2px;
+}
+
+.menu-trigger:focus-visible,
+.window-btn:focus-visible,
+.window-btn-close:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--ring) 55%, transparent);
+  outline-offset: -2px;
+}
+
+.window-btn:hover {
+  background-color: color-mix(in oklab, var(--foreground) 8%, transparent);
+}
+
+.window-btn-close:hover {
+  background-color: var(--destructive);
+  color: var(--destructive-foreground);
+}
+</style>
