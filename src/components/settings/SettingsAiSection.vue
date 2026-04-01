@@ -23,7 +23,7 @@
                 <div class="setting-label">{{ t('settings.aiBaseUrl') }}</div>
             </div>
             <div class="setting-control">
-                <Input v-model="aiForm.baseURL" :placeholder="currentProvider?.baseUrl || ''"
+                <Input v-model="aiForm.baseUrl" :placeholder="currentProvider?.baseUrl || ''"
                     :disabled="!isCustomProvider" class="settings-control-field-lg" />
             </div>
         </div>
@@ -33,15 +33,9 @@
                 <div class="setting-label">{{ t('settings.aiModel') }}</div>
             </div>
             <div class="setting-control">
-                <Select v-model="aiForm.model">
-                    <SelectTrigger class="settings-control-field-lg">
-                        <SelectValue :placeholder="t('settings.modelPlaceholder')" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem v-for="m in currentProviderModels" :key="m.value" :value="m.value">{{ m.label }}
-                        </SelectItem>
-                    </SelectContent>
-                </Select>
+                <Combobox v-model="aiForm.model" class="settings-control-field-lg" :options="currentProviderModels"
+                    :placeholder="t('settings.modelPlaceholder')" :empty-text="t('settings.noModelSuggestions')"
+                    suggestion-mode="all" />
             </div>
         </div>
 
@@ -65,6 +59,7 @@
 <script setup>
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
+import { Combobox } from '@/components/ui/combobox'
 import { ExternalLink } from 'lucide-vue-next'
 
 defineProps({
@@ -75,4 +70,5 @@ defineProps({
     isCustomProvider: { type: Boolean, required: true },
     t: { type: Function, required: true },
 })
+
 </script>

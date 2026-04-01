@@ -195,7 +195,7 @@ function getNavIcon(icon) {
 
 .settings-content {
   flex: 1;
-  padding: 8px 0 8px 24px;
+  padding: 8px 6px 8px 24px;
   overflow-y: auto;
   min-width: 0;
   text-align: left;

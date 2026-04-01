@@ -55,10 +55,10 @@
     <div v-if="contextMenu.visible" class="ui-context-menu" :style="contextMenuStyle" @click.stop>
       <button v-for="item in contextMenu.items" :key="item.id" class="ui-context-item"
         :class="{ checked: item.checked }" :disabled="item.disabled" @click="onContextMenuItemClick(item)">
-        <span class="check">
-          <Check v-if="item.checked" :size="12" class="check-icon" />
-        </span>
         <span>{{ item.label }}</span>
+        <span class="check">
+          <Check :size="14" class="check-icon" :class="item.checked ? 'opacity-100' : 'opacity-0'" />
+        </span>
       </button>
     </div>
   </div>
@@ -771,7 +771,8 @@ export default {
   width: 100%;
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 12px;
   border: none;
   background: transparent;
   color: var(--foreground);
@@ -792,16 +793,17 @@ export default {
 }
 
 .ui-context-item .check {
-  width: 12px;
-  height: 12px;
-  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  color: var(--muted-foreground);
+  color: var(--foreground);
 }
 
-.ui-context-item.checked .check,
 .ui-context-item .check-icon {
   color: var(--foreground);
+  transition: opacity 0.12s ease;
 }
 </style>

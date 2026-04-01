@@ -3,9 +3,29 @@ import { useI18n } from 'vue-i18n'
 import { pluginHost } from '@/plugins/index'
 import { AI_PROVIDERS, BUILTIN_NAV_ITEMS } from '@/components/settings/config'
 import { resolveI18nLabel } from '@/lib/resolveI18nLabel'
+import { i18n } from '@/i18n'
 
 export function useSettingsDialogState(props, emit) {
   const { t, locale } = useI18n()
+
+  function getCurrentLocale() {
+    return typeof locale === 'string' ? locale : locale?.value
+  }
+
+  function setCurrentLocale(lang) {
+    if (typeof locale === 'string') {
+      // legacy mode: update locale on app-level i18n instance
+      i18n.global.locale = lang
+      return
+    }
+    if (locale && typeof locale === 'object' && 'value' in locale) {
+      locale.value = lang
+    }
+  }
+
+  function normalizeBaseUrl(url) {
+    return String(url || '').trim().replace(/\/+$/, '')
+  }
 
   const visible = computed({
     get: () => props.modelValue,
@@ -24,7 +44,7 @@ export function useSettingsDialogState(props, emit) {
   })
 
   const providers = AI_PROVIDERS
-  const aiForm = ref({ provider: 'deepseek', baseURL: '', apiKey: '', model: '' })
+  const aiForm = ref({ provider: 'deepseek', baseUrl: '', apiKey: '', model: '' })
 
   const navItems = BUILTIN_NAV_ITEMS
 
@@ -95,16 +115,16 @@ export function useSettingsDialogState(props, emit) {
   })
 
   watch(() => form.value.language, (lang) => {
-    locale.value = lang
+    setCurrentLocale(lang)
   })
 
   watch(() => aiForm.value.provider, (newProvider) => {
     const p = providers.find(item => item.id === newProvider)
     if (p && p.id !== 'custom') {
-      aiForm.value.baseURL = p.baseUrl
+      aiForm.value.baseUrl = p.baseUrl
       aiForm.value.model = p.models[0]?.value || ''
     } else {
-      aiForm.value.baseURL = ''
+      aiForm.value.baseUrl = ''
       aiForm.value.model = ''
     }
   })
@@ -116,7 +136,7 @@ export function useSettingsDialogState(props, emit) {
         window.lampAPI.getAiSettings(),
       ])
       form.value = {
-        language: locale.value,
+        language: general.language || getCurrentLocale() || 'zh-CN',
         autoSave: general.autoSave ?? true,
         autoSaveInterval: general.autoSaveInterval || 30,
         restoreOnStart: general.restoreOnStart ?? true,
@@ -126,8 +146,8 @@ export function useSettingsDialogState(props, emit) {
       const provider = providers.find(item => item.id === savedProvider) || providers[0]
       aiForm.value = {
         provider: savedProvider,
-        baseURL: savedProvider === 'custom' ? (ai.base_url || '') : (provider.baseUrl || ai.base_url || ''),
-        apiKey: ai.api_key || '',
+        baseUrl: savedProvider === 'custom' ? (ai.baseUrl || '') : (provider.baseUrl || ai.baseUrl || ''),
+        apiKey: ai.apiKey || '',
         model: ai.model || (provider.models[0]?.value || ''),
       }
     } catch (error) {
@@ -143,7 +163,7 @@ export function useSettingsDialogState(props, emit) {
       await window.lampAPI.saveGeneralSettings(generalPayload)
       await window.lampAPI.saveAiSettings({
         provider: aiForm.value.provider,
-        baseURL: aiForm.value.baseURL,
+        baseUrl: normalizeBaseUrl(aiForm.value.baseUrl),
         apiKey: aiForm.value.apiKey,
         model: aiForm.value.model,
       })
