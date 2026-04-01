@@ -160,6 +160,15 @@ export default {
       return name && name.includes('.') ? i18n.global.t(name) : name;
     },
 
+    getLampAPI() {
+      const api = window.lampAPI;
+      if (!api) {
+        console.warn('lampAPI is unavailable');
+        return null;
+      }
+      return api;
+    },
+
     openFile(status, path, data) {
       // Main process opens file dialog and sends back the result via IPC
       if (status === 1 && path) {
@@ -171,7 +180,7 @@ export default {
     },
 
     async openFileDialog() {
-      const api = window.lampAPI;
+      const api = this.getLampAPI();
       if (!api || typeof api.menuFileOpen !== 'function') {
         console.warn('lampAPI.menuFileOpen is unavailable');
         return;
@@ -207,44 +216,68 @@ export default {
 
       if (this.activeTab !== null && tab.filePath) {
         // 如果 filePath 不为空，则执行保存操作
-        window.lampAPI.saveInfo(tab.filePath, tab.content);
+        const api = this.getLampAPI();
+        if (!api) return;
+        api.saveInfo(tab.filePath, tab.content);
       } else {
         // 否则执行另存为操作
         this.saveFileAs(tabIndex)
       }
     },
     menuEditUndo() {
-      window.lampAPI.menuEditUndo();
+      const api = this.getLampAPI();
+      if (!api) return;
+      api.menuEditUndo();
     },
     menuEditRedo() {
-      window.lampAPI.menuEditRedo();
+      const api = this.getLampAPI();
+      if (!api) return;
+      api.menuEditRedo();
     },
     menuEditCut() {
-      window.lampAPI.menuEditCut();
+      const api = this.getLampAPI();
+      if (!api) return;
+      api.menuEditCut();
     },
     menuEditCopy() {
-      window.lampAPI.menuEditCopy();
+      const api = this.getLampAPI();
+      if (!api) return;
+      api.menuEditCopy();
     },
     menuEditPaste() {
-      window.lampAPI.menuEditPaste();
+      const api = this.getLampAPI();
+      if (!api) return;
+      api.menuEditPaste();
     },
     menuEditSelectAll() {
-      window.lampAPI.menuEditSelectAll();
+      const api = this.getLampAPI();
+      if (!api) return;
+      api.menuEditSelectAll();
     },
     menuEditDelete() {
-      window.lampAPI.menuEditDelete();
+      const api = this.getLampAPI();
+      if (!api) return;
+      api.menuEditDelete();
     },
     viewFullScreen() {
-      window.lampAPI.menuViewFullScreen();
+      const api = this.getLampAPI();
+      if (!api) return;
+      api.menuViewFullScreen();
     },
     minWindow() {
-      window.lampAPI.minWindow();
+      const api = this.getLampAPI();
+      if (!api) return;
+      api.minWindow();
     },
     maxWindow() {
-      window.lampAPI.maxWindow();
+      const api = this.getLampAPI();
+      if (!api) return;
+      api.maxWindow();
     },
     closeWindow() {
-      window.lampAPI.closeWindow();
+      const api = this.getLampAPI();
+      if (!api) return;
+      api.closeWindow();
     },
 
     openSettingsDialog() {
@@ -259,7 +292,9 @@ export default {
 
     async loadGeneralSettings() {
       try {
-        const settings = await window.lampAPI.getGeneralSettings();
+        const api = this.getLampAPI();
+        if (!api) return;
+        const settings = await api.getGeneralSettings();
         // 同步语言到 i18n
         if (settings.language) {
           // 归一化 locale 名称，确保始终匹配 i18n messages 的 key
@@ -383,7 +418,10 @@ export default {
         return;
       }
 
-      const resultPath = await window.lampAPI.saveFileAs(tab.title || 'untitled', tab.content || '')
+      const api = this.getLampAPI();
+      if (!api) return;
+
+      const resultPath = await api.saveFileAs(tab.title || 'untitled', tab.content || '')
       if (resultPath !== "") {
         this.tabs[tabIndex].filePath = resultPath
         this.tabs[tabIndex].title = this.tabs[tabIndex].filePath.split('\\').pop()
@@ -396,12 +434,16 @@ export default {
 
     // 检查文件是否存在
     async hasFile(filePath) {
-      return await window.lampAPI.hasFile(filePath)
+      const api = this.getLampAPI();
+      if (!api) return false;
+      return await api.hasFile(filePath)
     },
 
     // 删除文件
     async delFile(filePath) {
-      const result = await window.lampAPI.delFile(filePath)
+      const api = this.getLampAPI();
+      if (!api) return false;
+      const result = await api.delFile(filePath)
       if (result === false) {
         console.log("Error: 在删除 " + filePath + " 文件时发生了失败。")
       }
@@ -418,22 +460,23 @@ export default {
 
     // 监听通道，接收主进程发送的内容
     initIpcRenderers() {
-      if (!window.lampAPI) {
+      const api = this.getLampAPI();
+      if (!api) {
         console.warn('lampAPI is unavailable, IPC renderers are not initialized');
         return;
       }
       // 打开文件：监听主进程，被触发后接收文件路径和内容
-      window.lampAPI.openFile((status, path, data) => {
+      api.openFile((status, path, data) => {
         this.openFile(status, path, data);
       });
       // 保存文件：监听主进程，被触发后将路径和内容发送给主进程执行保存操作；若文件路径为空则另存为
-      window.lampAPI.saveFile(() => {
+      api.saveFile(() => {
         const hasActiveTab = this.activeTab >= 0 && this.activeTab < this.tabs.length;
         if (hasActiveTab && this.tabs[this.activeTab].filePath) {
           // 如果 filePath 不为空，则执行保存操作
           const filePath = this.tabs[this.activeTab].filePath;
           const fileContent = this.tabs[this.activeTab].content;
-          window.lampAPI.saveInfo(filePath, fileContent);
+          api.saveInfo(filePath, fileContent);
           const result = this.hasFile(this.tabs[this.activeTab].filePath + '.lampsave');
           if (result) {
             this.delFile(this.tabs[this.activeTab].filePath + '.lampsave') // 删除自动保存的文件
@@ -453,7 +496,9 @@ export default {
 
       const currentTab = this.tabs[this.activeTab];
       if (currentTab && currentTab.filePath && currentTab.filePath !== '' && currentTab.filePath.split('.').pop() !== 'lampsave') {
-        window.lampAPI.saveInfo(currentTab.filePath + '.lampsave', currentTab.content)
+        const api = this.getLampAPI();
+        if (!api) return;
+        api.saveInfo(currentTab.filePath + '.lampsave', currentTab.content)
       }
     },
 
@@ -466,7 +511,9 @@ export default {
       if ((filePath !== '') && (this.tabs.some(tab => tab.filePath === filePath))) {
         this.switchTab(this.tabs.findIndex(tab => tab.filePath === filePath))
       } else {
-        const data = await window.lampAPI.openSpecificFile(filePath)
+        const api = this.getLampAPI();
+        if (!api) return;
+        const data = await api.openSpecificFile(filePath)
         if (data && data[0] === 1) {
           const title = filePath.split('\\').pop()
           const [normalizedPath, fileContent] = this.format2html(filePath, data[1]) // 格式转换
