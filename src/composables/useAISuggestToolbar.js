@@ -47,12 +47,28 @@ export function useAISuggestToolbar(editorRef) {
   }
 
   let detachEditorUpdate = null
+  let boundEditor = null
+
+  const unbindEditorUpdate = () => {
+    if (typeof detachEditorUpdate === 'function') {
+      detachEditorUpdate()
+      detachEditorUpdate = null
+    }
+    if (boundEditor?.off) {
+      boundEditor.off('update', updatePosition)
+    }
+    boundEditor = null
+  }
 
   const bindEditorUpdate = (editor) => {
-    detachEditorUpdate?.()
-    detachEditorUpdate = null
+    unbindEditorUpdate()
     if (!editor) return
-    detachEditorUpdate = editor.on('update', updatePosition)
+    const maybeDetach = editor.on('update', updatePosition)
+    if (typeof maybeDetach === 'function') {
+      detachEditorUpdate = maybeDetach
+      return
+    }
+    boundEditor = editor
   }
 
   const stopEditorWatch = watch(editorRef, bindEditorUpdate, { immediate: true })
@@ -72,7 +88,7 @@ export function useAISuggestToolbar(editorRef) {
   onBeforeUnmount(() => {
     stopEditorWatch()
     stopSuggestionWatch()
-    detachEditorUpdate?.()
+    unbindEditorUpdate()
   })
 
   return {
