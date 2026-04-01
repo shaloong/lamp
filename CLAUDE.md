@@ -93,9 +93,30 @@ Key IPC areas:
 
 ### TipTap Editor
 
-Editor is in `src/components/Editor.vue`. Extensions are registered in the component's `mounted` hook — add new extensions there. Current extensions: StarterKit, TextAlign, Highlight, Typography, Focus, BubbleMenu.
+Editor entry is `src/components/Editor.vue`. Extensions are registered in the component's `mounted` hook — add new extensions there. Current extensions: StarterKit, TextAlign, Highlight, Typography, Focus, BubbleMenu.
+
+Editor UI is split into focused subcomponents under `src/components/editor/`:
+
+- `EditorToolbar.vue` — renders plugin-contributed toolbar actions
+- `EditorBubbleMenu.vue` — renders plugin-contributed selection actions
+- `EditorAiDialog.vue` — AI loading/error dialog bound to `pluginHost.aiState`
+- `icons.js` — shared Lucide icon map for editor UI parts
 
 The toolbar renders dynamically from `pluginHost.contributions.sortedEditorToolbar`.
+
+### App Menu
+
+`src/components/AppMenu.vue` uses a config-driven `menuSections` schema to render File/Edit/View menus. Keep command IDs and labels in the schema, and keep the template generic so plugin menu contributions can be inserted consistently via `pluginHost.contributions.getMenuItemsBy(area)`.
+
+Menu schema source: `src/components/menu/config.js`.
+
+### UI Composables
+
+- `src/composables/useSettingsDialogState.js` — SettingsDialog state and side-effect orchestration
+- `src/composables/useShortcutSettings.js` — shortcut recording/filtering/conflict logic
+- `src/composables/useAISuggestToolbar.js` — AI suggestion toolbar positioning and editor/suggestion watchers
+- `src/composables/useCommandPalette.js` — command palette filtering, keyboard navigation, and event subscriptions
+- `src/composables/workspaceExplorerMethods.js` — workspace/file-tree related actions extracted from `App.vue`
 
 ### File Formats
 
@@ -106,8 +127,8 @@ The toolbar renders dynamically from `pluginHost.contributions.sortedEditorToolb
 
 ### Styling
 
-- Design tokens defined as CSS custom properties in `src/styles/element/index.scss`
-- All SCSS components import these tokens via Vite's `additionalData` (configured in `vite.config.js`)
+- Design tokens are defined as CSS custom properties in `src/index.css`
+- Shared UI primitives consume these tokens directly via utility classes and CSS variables
 - Use existing CSS variables rather than hardcoding values
 
 ## Key Files
@@ -119,7 +140,14 @@ The toolbar renders dynamically from `pluginHost.contributions.sortedEditorToolb
 | `src/preload.js` | Tauri IPC bridge |
 | `src/plugins/index.ts` | PluginHost singleton |
 | `src/builtins/index.ts` | Built-in plugin registry |
-| `src/components/Editor.vue` | TipTap editor component |
+| `src/components/Editor.vue` | TipTap editor shell (orchestration + editor lifecycle) |
+| `src/components/editor/EditorToolbar.vue` | Editor toolbar contribution renderer |
+| `src/components/editor/EditorBubbleMenu.vue` | Editor bubble-menu contribution renderer |
+| `src/components/editor/EditorAiDialog.vue` | Editor AI loading/error dialog |
+| `src/components/AppMenu.vue` | Config-driven app menu and window controls |
+| `src/components/menu/config.js` | App menu section schema |
+| `src/composables/useAISuggestToolbar.js` | AI suggestion toolbar state/effects |
+| `src/composables/useCommandPalette.js` | Command palette state/effects |
 | `src-tauri/src/lib.rs` | Rust Tauri commands |
 
 ## Notes

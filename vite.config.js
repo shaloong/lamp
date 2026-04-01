@@ -2,39 +2,26 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
-import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
-
-import {resolve} from 'path'
+import tailwindcss from '@tailwindcss/vite'
+import { fileURLToPath, URL } from 'node:url'
 
 export default defineConfig({
   plugins: [
     vue(),
+    tailwindcss(),
     AutoImport({
-      resolvers: [ElementPlusResolver()],
       imports: ['vue-i18n'],
     }),
     Components({
-      resolvers: [
-          ElementPlusResolver({
-            importStyle: "sass",
-          }),
-        ],
+      excludeNames: ['CommandPalette', 'SettingsDialog'],
     }),
   ],
-  base: '/',
   resolve: {
     alias: {
-      '@': resolve(__dirname, './src')
-    }
-  },
-  css: {
-    preprocessorOptions: {
-      scss: {
-        additionalData: `@use "@/styles/element/index.scss" as *;`,
-      },
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
-  // 开发服务器配置
+  base: '/',
   server: {
     port: 1086,
     strictPort: true,
@@ -42,8 +29,39 @@ export default defineConfig({
   build: {
     target: 'esnext',
     minify: 'esbuild',
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) {
+            return undefined
+          }
+
+          if (id.includes('/@tiptap/') || id.includes('/prosemirror-')) {
+            return 'vendor-tiptap'
+          }
+
+          if (
+            id.includes('/vue/')
+            || id.includes('/@vue/')
+            || id.includes('/vue-i18n/')
+            || id.includes('/pinia/')
+          ) {
+            return 'vendor-framework'
+          }
+
+          if (id.includes('/@tauri-apps/')) {
+            return 'vendor-tauri'
+          }
+
+          if (id.includes('/lucide-vue-next/') || id.includes('/reka-ui/')) {
+            return 'vendor-ui'
+          }
+
+          return undefined
+        },
+      },
+    },
   },
-  // 清除 Vite 缓存时排除 Tauri
   optimizeDeps: {
     exclude: ['@tauri-apps/api'],
     include: [
@@ -51,5 +69,5 @@ export default defineConfig({
       '@tiptap/pm/state',
       '@tiptap/pm/view',
     ],
-  }
+  },
 })

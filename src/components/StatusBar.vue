@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { pluginHost } from '../plugins/index'
 import { useWorkspaceStore } from '../stores/workspace'
+import { Folder, MousePointer2 } from 'lucide-vue-next'
 
 const workspaceStore = useWorkspaceStore()
 const line = ref(1)
@@ -12,26 +13,19 @@ const column = ref(1)
   <div class="status-bar">
     <div class="status-left">
       <span class="workspace-indicator">
-        <svg class="status-icon" aria-hidden="true">
-          <use xlink:href="#icon-folder"></use>
-        </svg>
+        <Folder :size="12" class="status-icon" aria-hidden="true" />
         {{ workspaceStore.isOpen ? workspaceStore.name : '临时编辑器' }}
       </span>
     </div>
     <div class="status-right">
       <span class="status-item">
-        <svg class="status-icon" aria-hidden="true">
-          <use xlink:href="#icon-cursor"></use>
-        </svg>
+        <MousePointer2 :size="12" class="status-icon" aria-hidden="true" />
         Ln {{ line }}, Col {{ column }}
       </span>
       <span class="status-item">UTF-8</span>
       <template v-for="item in pluginHost.contributions.sortedStatusBarItems" :key="item.id">
-        <span
-          class="status-item plugin-status-item"
-          :title="item.tooltip"
-          @click="item.action && item.action({ editor: { getRawEditor: () => null } })"
-        >
+        <span class="status-item plugin-status-item" :title="item.tooltip"
+          @click="item.action && item.action({ editor: { getRawEditor: () => null } })">
           {{ item.text }}
         </span>
       </template>
@@ -39,15 +33,14 @@ const column = ref(1)
   </div>
 </template>
 
-<style lang="scss" scoped>
-
+<style scoped>
 .status-bar {
   display: flex;
   justify-content: space-between;
   align-items: center;
   height: 24px;
   padding: 0 12px;
-  background-color: var(--lamp-primary-85);
+  background-color: oklch(0.5462 0.2451 265.5 / 0.85);
   color: #fff;
   font-size: 11px;
   user-select: none;
@@ -78,13 +71,18 @@ const column = ref(1)
   .plugin-status-item {
     cursor: pointer;
     opacity: 0.85;
-    &:hover { opacity: 1; text-decoration: underline; }
+
+    &:hover {
+      opacity: 1;
+      text-decoration: underline;
+    }
   }
 
   .status-icon {
     width: 12px;
     height: 12px;
-    fill: currentColor;
+    stroke: currentColor;
+    fill: none;
   }
 }
 </style>
