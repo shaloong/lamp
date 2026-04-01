@@ -30,8 +30,7 @@
           v-model="item.content" />
         <!-- 启动页面 -->
         <StartPage v-if="tabs.length === 0" class="flex-1" :recentFiles="recentFiles" @new-file="newFile"
-          @open-file="() => window.lampAPI.menuFileOpen()" @open-workspace="openWorkspace"
-          @open-recent="openSpecificFile" />
+          @open-file="openFileDialog" @open-workspace="openWorkspace" @open-recent="openSpecificFile" />
       </div>
     </div>
     <div class="mask">
@@ -167,6 +166,31 @@ export default {
         const title = path.split('\\').pop();
         const [fp, fileContent] = this.format2html(path, data);
         this.tabs.push({ title, filePath: fp, content: fileContent, id: uuidv4() });
+        this.activeTab = this.tabs.length - 1;
+      }
+    },
+
+    async openFileDialog() {
+      const api = window.lampAPI;
+      if (!api || typeof api.menuFileOpen !== 'function') {
+        console.warn('lampAPI.menuFileOpen is unavailable');
+        return;
+      }
+
+      try {
+        const result = await api.menuFileOpen();
+        // menuFileOpen returns [0, path, content] on success
+        if (Array.isArray(result) && result[0] === 0 && result[1]) {
+          this.openFile(1, result[1], result[2] || '');
+          return;
+        }
+
+        // Compatibility: some environments may return [1, path, content]
+        if (Array.isArray(result) && result[0] === 1 && result[1]) {
+          this.openFile(1, result[1], result[2] || '');
+        }
+      } catch (error) {
+        console.error('Failed to open file dialog', error);
       }
     },
 
@@ -394,13 +418,18 @@ export default {
 
     // 监听通道，接收主进程发送的内容
     initIpcRenderers() {
+      if (!window.lampAPI) {
+        console.warn('lampAPI is unavailable, IPC renderers are not initialized');
+        return;
+      }
       // 打开文件：监听主进程，被触发后接收文件路径和内容
       window.lampAPI.openFile((status, path, data) => {
         this.openFile(status, path, data);
       });
       // 保存文件：监听主进程，被触发后将路径和内容发送给主进程执行保存操作；若文件路径为空则另存为
       window.lampAPI.saveFile(() => {
-        if (this.activeTab !== null && this.tabs[this.activeTab].filePath) {
+        const hasActiveTab = this.activeTab >= 0 && this.activeTab < this.tabs.length;
+        if (hasActiveTab && this.tabs[this.activeTab].filePath) {
           // 如果 filePath 不为空，则执行保存操作
           const filePath = this.tabs[this.activeTab].filePath;
           const fileContent = this.tabs[this.activeTab].content;
@@ -440,8 +469,9 @@ export default {
         const data = await window.lampAPI.openSpecificFile(filePath)
         if (data && data[0] === 1) {
           const title = filePath.split('\\').pop()
-          const { filePath, fileContent } = this.format2html(filePath, data[1]) // 格式转换
-          this.tabs.push({ title: title, filePath: filePath, content: fileContent, id: uuidv4() });
+          const [normalizedPath, fileContent] = this.format2html(filePath, data[1]) // 格式转换
+          this.tabs.push({ title, filePath: normalizedPath, content: fileContent, id: uuidv4() });
+          this.activeTab = this.tabs.length - 1;
         }
       }
     },
@@ -603,7 +633,7 @@ export default {
     // Router: commandId → bound method on this component instance
     this._cmdRouter = {
       'app.newFile': () => this.newFile(),
-      'app.openFile': () => { window.lampAPI.menuFileOpen(); },
+      'app.openFile': () => this.openFileDialog(),
       'app.save': () => this.fileSave(),
       'app.saveAs': () => this.saveFileAs(),
       'app.close': () => this.closeWindow(),

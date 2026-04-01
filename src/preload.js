@@ -1,4 +1,59 @@
-// Tauri 2.x Preload - 前端模块
+// Tauri Preload - 前端模块
+
+function createBrowserFallbackAPI() {
+  const notAvailable = (name) => {
+    console.warn(`[lampAPI:fallback] ${name} is unavailable outside Tauri runtime`)
+  }
+
+  return {
+    minWindow: () => notAvailable('minWindow'),
+    maxWindow: () => notAvailable('maxWindow'),
+    closeWindow: () => notAvailable('closeWindow'),
+    menuViewFullScreen: () => notAvailable('menuViewFullScreen'),
+    isMaximized: async () => false,
+    menuFileOpen: async () => [-1],
+    saveInfo: async () => false,
+    saveFileAs: async () => '',
+    getFolderContent: async () => [],
+    openSpecificFile: async () => [-1],
+    hasFile: async () => false,
+    delFile: async () => false,
+    menuEditUndo: () => notAvailable('menuEditUndo'),
+    menuEditRedo: () => notAvailable('menuEditRedo'),
+    menuEditCut: () => notAvailable('menuEditCut'),
+    menuEditCopy: () => notAvailable('menuEditCopy'),
+    menuEditPaste: () => notAvailable('menuEditPaste'),
+    menuEditDelete: () => notAvailable('menuEditDelete'),
+    menuEditSelectAll: () => notAvailable('menuEditSelectAll'),
+    ai: async () => ({ error: 'Tauri runtime unavailable' }),
+    getAiSettings: async () => ({ provider: 'deepseek', baseUrl: '', apiKey: '', model: '' }),
+    saveAiSettings: async () => false,
+    getGeneralSettings: async () => ({
+      language: 'zh-CN',
+      autoSave: true,
+      autoSaveInterval: 30,
+      restoreOnStart: true,
+      openLastWorkspace: false,
+    }),
+    saveGeneralSettings: async () => false,
+    openFile: () => { },
+    saveFile: () => { },
+    newFile: () => { },
+    openWorkspace: async () => null,
+    isFileInDirectory: async () => false,
+    startWatching: async () => false,
+    stopWatching: async () => false,
+    onFileChange: () => { },
+    readTextFile: async () => '',
+    getAppDataDir: async () => '',
+    getUserPluginsDir: async () => '',
+  }
+}
+
+// Always expose a safe API synchronously to avoid undefined access during app bootstrap.
+if (!window.lampAPI) {
+  window.lampAPI = createBrowserFallbackAPI();
+}
 
 // 等待 DOM 加载完成后初始化
 function initElectronAPI() {

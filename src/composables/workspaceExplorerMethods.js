@@ -1,4 +1,12 @@
 export const workspaceExplorerMethods = {
+  getLampAPI() {
+    if (!window.lampAPI) {
+      console.warn('lampAPI is unavailable')
+      return null
+    }
+    return window.lampAPI
+  },
+
   // 获取父目录
   getParentDirectory(url) {
     if (url === "") {
@@ -18,7 +26,10 @@ export const workspaceExplorerMethods = {
   // 打开工作区（选择文件夹）
   async openWorkspace() {
     try {
-      const result = await window.lampAPI.openWorkspace()
+      const api = this.getLampAPI?.()
+      if (!api) return
+
+      const result = await api.openWorkspace()
       if (result) {
         this.workspaceStore.setWorkspace({
           workspacePath: '',
@@ -29,7 +40,7 @@ export const workspaceExplorerMethods = {
 
         if (result.rootPath) {
           this.showDirection(result.rootPath)
-          await window.lampAPI.startWatching(result.rootPath)
+          await api.startWatching(result.rootPath)
         }
 
         this.tempFiles = []
@@ -41,7 +52,10 @@ export const workspaceExplorerMethods = {
 
   // 关闭工作区
   async closeWorkspace() {
-    await window.lampAPI.stopWatching()
+    const api = this.getLampAPI?.()
+    if (api) {
+      await api.stopWatching()
+    }
     this.workspaceStore.clearWorkspace()
     this.fileStore.clearAll()
     this.folderContent = ''
@@ -50,7 +64,10 @@ export const workspaceExplorerMethods = {
 
   // 初始化文件变化监听
   initFileWatcher() {
-    window.lampAPI.onFileChange((event) => {
+    const api = this.getLampAPI?.()
+    if (!api) return
+
+    api.onFileChange((event) => {
       console.log('文件变化:', event)
       if (this.workspaceStore.isOpen && this.workspaceStore.rootPath) {
         this.showDirection(this.workspaceStore.rootPath, 'refresh')
@@ -97,7 +114,13 @@ export const workspaceExplorerMethods = {
     }
 
     if (path !== "") {
-      window.lampAPI.getFolderContent(path).then(result => {
+      const api = this.getLampAPI?.()
+      if (!api) {
+        this.folderContent = ""
+        return
+      }
+
+      api.getFolderContent(path).then(result => {
         this.folderContent = this.convertToTree(result)
 
         if (mode === 'refresh' && expandedRelativePaths.length > 0) {
