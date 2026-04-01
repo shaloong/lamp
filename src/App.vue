@@ -12,7 +12,7 @@
         @node-click="handleNodeClick" @toggle-expand="handleToggleExpand" @contextmenu="onSidebarContextMenu" />
       <div class="editor flex flex-col h-full">
         <!-- 编辑器选项卡组 -->
-        <div class="editor-tabs" @contextmenu="onTabBarContextMenu">
+        <div v-if="tabs.length > 0" class="editor-tabs" @contextmenu="onTabBarContextMenu">
           <!-- 编辑器选项卡 -->
           <div class="editor-tab h-5.5 pt-2 pr-2.5 pb-1 pl-3.5 box-content" v-for="(tab, index) in tabs" :key="index"
             @click="switchTab(index)" @contextmenu.stop.prevent="onTabContextMenu(index, $event)"
@@ -25,9 +25,13 @@
             <span class="active-indicator" v-show="activeTab === index"></span>
           </div>
         </div>
-        <!-- 编辑器 -->
-        <Editor v-for="(item, index) in tabs" v-show="item.id === tabs[activeTab].id" @update:modelValue="autoSave"
+        <!-- 编辑器内容 -->
+        <Editor v-for="(item, index) in tabs" :key="item.id" v-show="activeTab === index" @update:modelValue="autoSave"
           v-model="item.content" />
+        <!-- 启动页面 -->
+        <StartPage v-if="tabs.length === 0" class="flex-1" :recentFiles="recentFiles" @new-file="newFile"
+          @open-file="() => window.lampAPI.menuFileOpen()" @open-workspace="openWorkspace"
+          @open-recent="openSpecificFile" />
       </div>
     </div>
     <div class="mask">
@@ -67,6 +71,7 @@
 <script>
 import { defineAsyncComponent } from 'vue'
 import Editor from './components/Editor.vue'
+import StartPage from './components/StartPage.vue'
 import { marked } from "marked";
 import { v4 as uuidv4 } from 'uuid';
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -90,6 +95,7 @@ import { i18n } from './i18n.js'
 export default {
   components: {
     Editor,
+    StartPage,
     CommandPalette,
     SettingsDialog,
     AppMenu,
@@ -108,7 +114,7 @@ export default {
     return {
       explorerPanelActive: false,
       tabs: [],
-      activeTab: 0,
+      activeTab: -1, // -1 表示没有活跃的标签页
       folderContent: "",
       toolViewHeight: 400,
       dialogConfirmCloseTab: false,
@@ -118,6 +124,7 @@ export default {
       pluginHost,
       // 工作区相关
       tempFiles: [],
+      recentFiles: [],
       tempSectionExpanded: true,
       expandedKeys: [],
       treeRefreshKey: 0,
@@ -280,22 +287,21 @@ export default {
         return;
       }
 
-      // 如果当前标签页数量大于1
-      if (this.tabs.length > 1) {
-        // 如果删除的标签页是激活的标签页之前的标签页
-        if (index < this.activeTab) {
-          this.activeTab -= 1;
-        } else if (index === this.activeTab) {
-          // 如果删除的是当前激活的标签页，则将 activeTab 设置为前一个标签页的索引
-          if (this.activeTab !== 0) {
-            this.activeTab -= 1
-          }
+      // 调整 activeTab 以适配删除后的标签页列表
+      if (index < this.activeTab) {
+        this.activeTab -= 1;
+      } else if (index === this.activeTab) {
+        // 删除的是当前激活的标签页
+        if (this.tabs.length === 1) {
+          // 最后一个标签页被删除，设置 activeTab 为 -1 表示没有标签页
+          this.activeTab = -1;
+        } else if (this.activeTab >= this.tabs.length - 1) {
+          // 删除的是最后一个标签页，激活前一个
+          this.activeTab = this.tabs.length - 2;
         }
-      } else {
-        // 如果当前标签页数量为1，则先添加一个新的标签页，并将 activeTab 设置为0
-        this.tabs.push({ title: i18n.global.t('app.newLampText'), filePath: '', content: '', id: uuidv4() });
-        this.activeTab = 0;
+        // 否则保持 activeTab 不变（指向新的下一个标签页）
       }
+
       // 删除指定索引的标签页
       this.tabs.splice(index, 1);
       this.$emit('close-tab', index) // 更新父组件，避免显示问题
@@ -411,8 +417,8 @@ export default {
     },
 
     autoSave() {
-      // 防御性检查
-      if (!this.tabs || this.tabs.length === 0 || !this.tabs[this.activeTab]) {
+      // 防御性检查：当没有标签页或 activeTab 无效时，不执行自动保存
+      if (!this.tabs || this.tabs.length === 0 || this.activeTab < 0 || this.activeTab >= this.tabs.length) {
         return;
       }
 
@@ -583,10 +589,10 @@ export default {
   },
 
   created() {
-    // 等待语言加载完成后再初始化 tab，确保标题语言正确
+    // 等待语言加载完成后再初始化，确保翻译正确
     ; (async () => {
       await this.loadGeneralSettings()
-      this.tabs.push({ title: i18n.global.t('app.newLampText'), filePath: '', content: '', id: uuidv4() })
+      // 不自动创建初始标签页，让用户从空状态开始
     })()
     this.initIpcRenderers()
     this.initFileWatcher()

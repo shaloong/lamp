@@ -95,10 +95,15 @@
     "core": "Core",
     "enabled": "Enabled",
     "noWorkspace": "No workspace open",
+    "noOpenTabs": "No open tabs",
     "openWorkspace": "Open Workspace",
     "explorer": "Explorer",
     "tempFiles": "Temp Files",
-    "newLampText": "New Lamp Text"
+    "newLampText": "New Lamp Text",
+    "title": "Lamp",
+    "subtitle": "Distraction-free editor for writers",
+    "recent": "Recent Files",
+    "noRecentFiles": "No recent files yet. Start by creating or opening one above"
   },
   "commandPalette": {
     "placeholder": "Type a command or search...",

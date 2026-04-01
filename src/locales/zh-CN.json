@@ -96,10 +96,15 @@
     "core": "核心",
     "enabled": "已启用",
     "noWorkspace": "当前未打开任何工作区",
+    "noOpenTabs": "暂无打开的标签页",
     "openWorkspace": "打开工作区",
     "explorer": "资源管理器",
     "tempFiles": "临时打开",
-    "newLampText": "新 Lamp 文本"
+    "newLampText": "新 Lamp 文本",
+    "title": "Lamp",
+    "subtitle": "为写作者设计的无干扰编辑器",
+    "recent": "最近打开",
+    "noRecentFiles": "还没有最近文件，从上方选择一个操作开始创作"
   },
   "commandPalette": {
     "placeholder": "输入命令或搜索...",
