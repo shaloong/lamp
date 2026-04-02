@@ -3,7 +3,7 @@
     <div class="editor-body h-full">
       <EditorToolbar :editor="editor" :resolve-label="resolveLabel" :invoke-action="invokeAction" />
       <EditorBubbleMenu :editor="editor" :resolve-label="resolveLabel" :invoke-action="invokeAction" />
-      <editor-content :editor="editor" class="content-area" />
+      <editor-content :editor="editor" :class="editorContentClass" />
       <div class="character-count" v-if="editor">
         {{ getCharacterCount() }} 个字符
       </div>
@@ -23,6 +23,7 @@ import TextAlign from "@tiptap/extension-text-align"
 import { pluginHost } from '../plugins/index'
 import { i18n } from '../i18n'
 import { resolveI18nLabel } from '@/lib/resolveI18nLabel'
+import { useSettingsStore } from '@/stores/settings'
 import AISuggestToolbar from './AISuggestToolbar.vue'
 import EditorToolbar from '@/components/editor/EditorToolbar.vue'
 import EditorBubbleMenu from '@/components/editor/EditorBubbleMenu.vue'
@@ -45,6 +46,54 @@ export default {
   },
 
   methods: {
+    initEditor() {
+      if (this.editor) {
+        this.editor.destroy();
+        this.editor = null;
+      }
+
+      // Plugin extensions may be either Extension.create(...) instances or constructors.
+      const pluginExtensions = pluginHost.contributions.sortedTipTapExtensions
+        .map((def) => {
+          const ext = def.ExtensionClass
+          if (typeof ext === "function") {
+            return new ext()
+          }
+          return ext
+        })
+        .filter(Boolean)
+
+      const extensions = [
+        Focus.configure({
+          className: "has-focus",
+          mode: "all",
+        }),
+        StarterKit,
+        Typography,
+        Highlight,
+        TextAlign.configure({
+          types: ["heading", "paragraph"],
+          defaultAlignment: "left",
+        }),
+        ...pluginExtensions,
+      ]
+
+      this.editor = new Editor({
+        editorProps: {
+          attributes: {
+            style: "width:100%; height:100%; outline:none;",
+          },
+        },
+        extensions,
+        content: this.modelValue,
+        autofocus: true,
+        onUpdate: () => {
+          this.$emit("update:modelValue", this.editor.getHTML())
+        },
+      })
+      pluginHost.setEditorInstance(this.editor)
+    },
+
     getCharacterCount() {
       const text = this.editor.getText();
       return text.length;
@@ -82,6 +131,12 @@ export default {
     }
   },
 
+  computed: {
+    editorContentClass() {
+      return useSettingsStore().focusMode ? 'content-area focus-mode' : 'content-area'
+    },
+  },
+
   watch: {
     modelValue(value) {
       const isSame = this.editor.getHTML() === value
@@ -99,49 +154,15 @@ export default {
   },
 
   mounted() {
-    // Plugin extensions may be either Extension.create(...) instances or constructors.
-    const pluginExtensions = pluginHost.contributions.sortedTipTapExtensions
-      .map((def) => {
-        const ext = def.ExtensionClass
-        if (typeof ext === 'function') {
-          return new ext()
-        }
-        return ext
-      })
-      .filter(Boolean)
-
-    this.editor = new Editor({
-      editorProps: {
-        attributes: {
-          style: 'width:100%; height:100%; outline:none;',
-        },
-      },
-      extensions: [
-        Focus.configure({
-          className: 'has-focus',
-          mode: 'all',
-        }),
-        StarterKit,
-        Typography,
-        Highlight,
-        TextAlign.configure({
-          types: ['heading', 'paragraph'],
-          defaultAlignment: 'left',
-        }),
-        ...pluginExtensions,
-      ],
-      content: this.modelValue,
-      autofocus: true,
-      onUpdate: () => {
-        this.$emit('update:modelValue', this.editor.getHTML())
-      },
-    })
-    pluginHost.setEditorInstance(this.editor)
+    this.initEditor();
   },
 
   beforeUnmount() {
     pluginHost.setEditorInstance(null)
-    this.editor.destroy()
+    if (this.editor) {
+      this.editor.destroy();
+      this.editor = null;
+    }
   },
 }
 </script>
@@ -265,8 +286,12 @@ export default {
   overflow-y: scroll;
   min-height: 0;
   padding: 0 0 0 15px;
-  color: var(--muted-foreground);
   box-sizing: border-box;
+  color: var(--foreground);
+}
+
+.focus-mode {
+  color: var(--muted-foreground);
 }
 
 .character-count {

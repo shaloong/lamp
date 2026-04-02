@@ -75,6 +75,7 @@ import { marked } from "marked";
 import { v4 as uuidv4 } from 'uuid';
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useFileStore } from '@/stores/files'
+import { useSettingsStore } from '@/stores/settings'
 import { pluginHost } from '@/plugins/index'
 import { useShortcutCenter } from '@/composables/useShortcutCenter'
 import { setupPluginThemes } from '@/composables/usePluginThemes'
@@ -146,9 +147,11 @@ export default {
   setup() {
     const workspaceStore = useWorkspaceStore()
     const fileStore = useFileStore()
+    const settingsStore = useSettingsStore()
     return {
       workspaceStore,
-      fileStore
+      fileStore,
+      settingsStore,
     }
   },
 
@@ -292,17 +295,29 @@ export default {
         const api = this.getLampAPI();
         if (!api) return;
         const settings = await api.getGeneralSettings();
+
+        // 归一化 locale 名称
+        const language = settings.language
+          ? (settings.language === 'zh' ? 'zh-CN' : settings.language)
+          : 'zh-CN';
+
         // 同步语言到 i18n
-        if (settings.language) {
-          // 归一化 locale 名称，确保始终匹配 i18n messages 的 key
-          const nextLocale = settings.language === 'zh' ? 'zh-CN' : settings.language;
-          const globalLocale = i18n.global.locale;
-          if (typeof globalLocale === 'string') {
-            i18n.global.locale = nextLocale;
-          } else if (globalLocale && typeof globalLocale === 'object' && 'value' in globalLocale) {
-            globalLocale.value = nextLocale;
-          }
+        const globalLocale = i18n.global.locale;
+        if (typeof globalLocale === 'string') {
+          i18n.global.locale = language;
+        } else if (globalLocale && typeof globalLocale === 'object' && 'value' in globalLocale) {
+          globalLocale.value = language;
         }
+
+        // 同步所有设置到 Pinia store
+        this.settingsStore.setGeneralSettings({
+          language,
+          autoSave: settings.autoSave ?? settings.auto_save ?? true,
+          autoSaveInterval: settings.autoSaveInterval ?? settings.auto_save_interval ?? 30,
+          restoreOnStart: settings.restoreOnStart ?? settings.restore_on_start ?? true,
+          openLastWorkspace: settings.openLastWorkspace ?? settings.open_last_workspace ?? false,
+          focusMode: settings.focusMode ?? settings.focus_mode ?? false,
+        });
       } catch (error) {
         console.error('Failed to load general settings', error);
       }
