@@ -1,7 +1,7 @@
 import { ref, computed, watch, isRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { pluginHost } from '@/plugins/index'
-import { AI_PROVIDERS, BUILTIN_NAV_ITEMS } from '@/components/settings/config'
+import { AI_PROVIDERS, BUILTIN_SETTINGS_SECTIONS } from '@/components/settings/config'
 import { resolveI18nLabel } from '@/lib/resolveI18nLabel'
 import { i18n } from '@/i18n'
 import { requireLampAPI } from '@/lib/lampApi'
@@ -49,7 +49,7 @@ export function useSettingsDialogState(props, emit) {
     set: (v) => emit('update:modelValue', v),
   })
 
-  const activeTab = ref('general')
+  const activeTab = ref('builtin:general')
   const hydratingSettings = ref(false)
 
   const form = ref({
@@ -63,7 +63,7 @@ export function useSettingsDialogState(props, emit) {
   const providers = AI_PROVIDERS
   const aiForm = ref({ provider: 'deepseek', baseUrl: '', apiKey: '', model: '' })
 
-  const navItems = BUILTIN_NAV_ITEMS
+  const builtinSections = BUILTIN_SETTINGS_SECTIONS
 
   const currentProvider = computed(() => {
     return providers.find(p => p.id === aiForm.value.provider) || providers[providers.length - 1]
@@ -73,9 +73,19 @@ export function useSettingsDialogState(props, emit) {
   const isCustomProvider = computed(() => aiForm.value.provider === 'custom')
 
   const allNavItems = computed(() => {
-    const builtins = navItems.map(item => ({
-      ...item,
+    const builtins = builtinSections.map(item => ({
+      id: `builtin:${item.id}`,
+      sectionId: item.id,
+      icon: item.icon,
+      priority: item.priority,
+      type: 'builtin',
       label: t(item.labelKey),
+      section: {
+        id: item.id,
+        label: t(item.labelKey),
+        type: 'builtin',
+        kind: item.id,
+      },
     }))
 
     const pluginSections = pluginHost.contributions.sortedSettings.map(section => ({
@@ -90,9 +100,19 @@ export function useSettingsDialogState(props, emit) {
     return [...builtins, ...pluginSections].sort((a, b) => (b.priority ?? 50) - (a.priority ?? 50))
   })
 
+  watch(allNavItems, (items) => {
+    if (!items.length) return
+    if (!items.some(item => item.id === activeTab.value)) {
+      activeTab.value = items[0].id
+    }
+  }, { immediate: true })
+
+  const activeNavItem = computed(() => {
+    return allNavItems.value.find(n => n.id === activeTab.value) || null
+  })
+
   const activeSection = computed(() => {
-    const item = allNavItems.value.find(n => n.id === activeTab.value)
-    return item?.type === 'plugin' ? item.section : null
+    return activeNavItem.value?.section || null
   })
 
   function resolveLabel(label) {
@@ -230,8 +250,8 @@ export function useSettingsDialogState(props, emit) {
     currentProvider,
     currentProviderModels,
     isCustomProvider,
-    navItems,
     allNavItems,
+    activeNavItem,
     activeSection,
     resolveLabel,
     resolvePluginName,
