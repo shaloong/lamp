@@ -130,7 +130,6 @@ export default {
       recentFiles: [],
       tempSectionExpanded: true,
       expandedKeys: [],
-      treeRefreshKey: 0,
       isDevMode: import.meta.env.DEV,
       contextMenu: {
         visible: false,
@@ -357,7 +356,6 @@ export default {
         return;
       }
       this.activeTab = index;
-      this.showDirection();
     },
 
     // 关闭标签
@@ -529,15 +527,18 @@ export default {
         return;
       }
 
-      if ((filePath !== '') && (this.tabs.some(tab => tab.filePath === filePath))) {
-        this.switchTab(this.tabs.findIndex(tab => tab.filePath === filePath))
+      // 归一化路径为正斜杠，防止因路径格式不同（\ vs /）导致重复开 tab
+      const normalizedPath = filePath.replace(/\\/g, '/');
+
+      if ((normalizedPath !== '') && (this.tabs.some(tab => tab.filePath === normalizedPath))) {
+        this.switchTab(this.tabs.findIndex(tab => tab.filePath === normalizedPath));
       } else {
         const api = this.getLampAPI();
         if (!api) return;
-        const data = await api.openSpecificFile(filePath)
+        const data = await api.openSpecificFile(normalizedPath);
         if (data && data[0] === 1) {
-          const title = filePath.split('\\').pop()
-          const [normalizedPath, fileContent] = this.format2html(filePath, data[1]) // 格式转换
+          const title = normalizedPath.split('/').pop()
+          const [, fileContent] = this.format2html(normalizedPath, data[1]);
           this.tabs.push({ title, filePath: normalizedPath, content: fileContent, id: uuidv4() });
           this.activeTab = this.tabs.length - 1;
         }

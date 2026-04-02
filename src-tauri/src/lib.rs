@@ -155,9 +155,17 @@ async fn start_watching(
                 };
 
                 for path in event.paths {
+                    let path_str = path.to_string_lossy();
+
+                    // Skip .lampsave auto-save files at the source to prevent tree flicker.
+                    if path_str.ends_with(".lampsave") {
+                        continue;
+                    }
+
                     let change_event = FileChangeEvent {
                         event_type: event_type.to_string(),
-                        path: path.to_string_lossy().to_string(),
+                        // Normalize to forward slashes for consistent path matching in JS.
+                        path: path_str.replace('\\', "/"),
                     };
                     let _ = app_handle.emit("file-change", change_event);
                 }
@@ -167,10 +175,11 @@ async fn start_watching(
     )
     .map_err(|e| e.to_string())?;
 
-    // 开始监视指定文件夹
+    // Normalize to forward slashes for consistent comparison with tree node paths.
+    let decoded_folder_path = folder_path.replace('\\', "/");
     watcher
         .watch(
-            PathBuf::from(&folder_path).as_path(),
+            PathBuf::from(&decoded_folder_path).as_path(),
             RecursiveMode::Recursive,
         )
         .map_err(|e| e.to_string())?;
@@ -182,7 +191,7 @@ async fn start_watching(
     }
     {
         let mut wp = state.watch_path.lock().map_err(|e| e.to_string())?;
-        *wp = Some(folder_path);
+        *wp = Some(decoded_folder_path);
     }
 
     log::info!("Started watching folder");
@@ -446,10 +455,12 @@ struct FileInfo {
 
 #[tauri::command]
 async fn get_folder_content(folder_path: String) -> Result<Vec<FileInfo>, String> {
-    let path = PathBuf::from(&folder_path);
+    // Normalize to forward slashes for consistent path comparison in JS.
+    let normalized = folder_path.replace('\\', "/");
+    let path = PathBuf::from(&normalized);
 
     if !path.exists() {
-        return Err(format!("Path does not exist: {}", folder_path));
+        return Err(format!("Path does not exist: {}", normalized));
     }
 
     fn traverse_folder(path: &PathBuf) -> Result<Vec<FileInfo>, String> {
@@ -466,11 +477,13 @@ async fn get_folder_content(folder_path: String) -> Result<Vec<FileInfo>, String
                 continue;
             }
 
+            // Normalize all paths to forward slashes for JS consumption.
+            let path_str = file_path.to_string_lossy().replace('\\', "/");
             let is_dir = file_path.is_dir();
             let is_supported = !is_dir && is_supported_file(&file_name);
             let mut file_info = FileInfo {
                 name: file_name,
-                path: file_path.to_string_lossy().to_string(),
+                path: path_str,
                 is_directory: is_dir,
                 is_supported,
                 children: None,
@@ -502,10 +515,12 @@ async fn get_folder_content(folder_path: String) -> Result<Vec<FileInfo>, String
 
 #[tauri::command]
 async fn open_specific_file(file_path: String) -> Result<Vec<serde_json::Value>, String> {
-    let path = PathBuf::from(&file_path);
+    // Normalize to forward slashes for consistent comparison with workspace paths.
+    let normalized = file_path.replace('\\', "/");
+    let path = PathBuf::from(&normalized);
 
     if !path.exists() {
-        return Err(format!("File does not exist: {}", file_path));
+        return Err(format!("File does not exist: {}", normalized));
     }
 
     if path.is_dir() {

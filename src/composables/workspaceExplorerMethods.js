@@ -6,19 +6,22 @@ export const workspaceExplorerMethods = {
   },
 
   // 获取父目录
-  getParentDirectory(url) {
-    if (url === "") {
-      return url
+  getParentDirectory(filePath) {
+    if (!filePath) {
+      return filePath
     }
 
-    const path = new URL(url).pathname
-    const parts = path.split('/')
-    parts.shift()
+    // 统一为 /，避免 Windows 路径在 URL 解析下被当成相对路径导致目录错误
+    const normalized = String(filePath).replace(/\\/g, '/')
+    const parts = normalized.split('/').filter(Boolean)
     parts.pop()
+
     if (parts.length === 0) {
       return '/'
     }
-    return parts.join('/') + '/'
+
+    // 保持与后端一致，传递绝对目录路径（不带尾部斜杠）
+    return parts.join('/')
   },
 
   // 打开工作区（选择文件夹）
@@ -65,11 +68,24 @@ export const workspaceExplorerMethods = {
     const api = this.getLampAPI?.()
     if (!api) return
 
+    let refreshTimer = null
+    const debouncedRefresh = () => {
+      if (refreshTimer) clearTimeout(refreshTimer)
+      refreshTimer = setTimeout(() => {
+        refreshTimer = null
+        if (this.workspaceStore.isOpen && this.workspaceStore.rootPath) {
+          this.showDirection(this.workspaceStore.rootPath, 'refresh')
+        }
+      }, 150)
+    }
+
     api.onFileChange((event) => {
-      console.log('文件变化:', event)
-      if (this.workspaceStore.isOpen && this.workspaceStore.rootPath) {
-        this.showDirection(this.workspaceStore.rootPath, 'refresh')
+      // 跳过 .lampsave 自动保存文件，不触发树刷新
+      if (event.path && event.path.endsWith('.lampsave')) {
+        return
       }
+      console.log('[Lamp] File change:', event.type, event.path)
+      debouncedRefresh()
     })
   },
 
@@ -97,14 +113,12 @@ export const workspaceExplorerMethods = {
   },
 
   // 展示目录结构
-  // mode: 'normal' | 'refresh'  - refresh 模式会保留展开状态
-  showDirection(path, mode = 'normal') {
-    // 允许无标签页时也展示文件树（工作区打开时可能还没有标签页）
-    if (path === undefined) {
-      if (!this.tabs || this.tabs.length === 0 || !this.tabs[this.activeTab]) {
-        return
-      }
-      path = this.getParentDirectory(this.tabs[this.activeTab].filePath)
+  // mode: 'normal' | 'refresh' — refresh 保留展开状态
+  showDirection(_path, mode = 'normal') {
+    // 资源树根始终固定为当前工作区根目录
+    const path = this.workspaceStore?.rootPath
+    if (!path) {
+      return
     }
 
     let expandedRelativePaths = []
@@ -115,7 +129,6 @@ export const workspaceExplorerMethods = {
     if (path !== "") {
       const api = this.getLampAPI?.()
       if (!api) {
-        this.folderContent = ""
         return
       }
 
@@ -134,11 +147,14 @@ export const workspaceExplorerMethods = {
           })
         }
       }).catch(error => {
-        console.error(error)
-        this.folderContent = ""
+        // 仅在路径确实无效时清空；其他错误保留旧树
+        const msg = typeof error === 'string' ? error : error?.message || ''
+        if (msg.includes('does not exist') || msg.includes('Path does not exist')) {
+          this.folderContent = ''
+        } else {
+          console.warn('[Lamp] showDirection failed, keeping existing tree:', error)
+        }
       })
-    } else {
-      this.folderContent = ""
     }
   },
 
