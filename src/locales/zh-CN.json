@@ -110,5 +110,29 @@
     "placeholder": "输入命令或搜索...",
     "noResults": "没有找到匹配的命令",
     "hint": "<kbd>↑↓</kbd> 导航 &nbsp; <kbd>Enter</kbd> 执行 &nbsp; <kbd>Esc</kbd> 关闭"
+  },
+  "editorToolbar": {
+    "bold": "粗体",
+    "italic": "斜体",
+    "strike": "删除线",
+    "align": "对齐",
+    "alignLeft": "居左对齐",
+    "alignCenter": "居中对齐",
+    "alignRight": "居右对齐",
+    "alignJustify": "两端对齐",
+    "heading": "标题",
+    "paragraph": "段落文本",
+    "heading1": "一级标题",
+    "heading2": "二级标题",
+    "heading3": "三级标题",
+    "heading4": "四级标题",
+    "heading5": "五级标题",
+    "heading6": "六级标题",
+    "bulletList": "无序列表",
+    "orderedList": "有序列表",
+    "horizontalRule": "分割线",
+    "clearFormat": "清除格式",
+    "undo": "撤销",
+    "redo": "重做"
   }
 }

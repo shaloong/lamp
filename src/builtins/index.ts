@@ -5,15 +5,13 @@
 
 import { pluginHost } from '../plugins/index';
 import aiActionsPlugin from './ai-actions/index';
-import coreToolbarPlugin from './core-toolbar/index';
 import { messages as pluginMessages } from './ai-actions/messages';
 
 pluginHost.registerBuiltin(aiActionsPlugin.manifest.id, aiActionsPlugin);
-pluginHost.registerBuiltin(coreToolbarPlugin.manifest.id, coreToolbarPlugin);
 
 // Collect and register built-in locale messages BEFORE Vue mounts.
 // pluginMessages contains keys with the full namespace prefix baked in
-// (e.g. 'plugins.lamp-ai-actions.name', 'plugins.lamp-core-toolbar.bold').
+// (e.g. 'plugins.lamp-ai-actions.name', 'plugins.lamp-ai-actions.polish').
 // addBuiltinMessages expects keys WITHOUT the namespace prefix.
 // We strip the ns prefix per-plugin so the storage key ends up correct:
 //   input key: 'plugins.lamp-ai-actions.name'
@@ -32,4 +30,3 @@ function registerPlugin(pluginId, nsPrefix) {
 }
 
 registerPlugin(aiActionsPlugin.manifest.id, 'plugins.lamp-ai-actions.');
-registerPlugin(coreToolbarPlugin.manifest.id, 'plugins.lamp-core-toolbar.');

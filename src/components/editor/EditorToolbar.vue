@@ -1,6 +1,6 @@
 <template>
     <div class="toolbar-area" v-if="editor">
-        <template v-for="item in pluginHost.contributions.sortedEditorToolbar" :key="item.id">
+        <template v-for="item in allToolbarItems" :key="(item.pluginId || 'core') + ':' + item.id">
             <ToolbarDropdown v-if="item.type === 'dropdown' && item.children" :label="resolveLabel(item.label)"
                 :children="item.children" :editor="editor"
                 :is-disabled="item.isDisabled ? item.isDisabled(editor) : false" />
@@ -17,13 +17,21 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import ToolbarDropdown from '@/components/ToolbarDropdown.vue'
 import { pluginHost } from '@/plugins/index'
 import { lucideIconMap } from './icons'
+import { CORE_EDITOR_TOOLBAR_ITEMS } from '@/core/editorToolbarItems'
 
 defineProps({
     editor: { type: Object, default: null },
     resolveLabel: { type: Function, required: true },
     invokeAction: { type: Function, required: true },
+})
+
+const allToolbarItems = computed(() => {
+    const pluginItems = pluginHost.contributions.sortedEditorToolbar
+    return [...CORE_EDITOR_TOOLBAR_ITEMS, ...pluginItems]
+        .sort((a, b) => (b.priority ?? 50) - (a.priority ?? 50))
 })
 </script>
