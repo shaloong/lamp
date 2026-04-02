@@ -38,6 +38,10 @@ pub struct GeneralSettings {
     pub restore_on_start: bool,
     #[serde(rename = "openLastWorkspace", default)]
     pub open_last_workspace: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EditorSettings {
     #[serde(rename = "focusMode", default)]
     pub focus_mode: bool,
 }
@@ -54,6 +58,13 @@ impl Default for GeneralSettings {
             auto_save_interval: 30,
             restore_on_start: true,
             open_last_workspace: false,
+        }
+    }
+}
+
+impl Default for EditorSettings {
+    fn default() -> Self {
+        Self {
             focus_mode: false,
         }
     }
@@ -65,6 +76,8 @@ pub struct AppConfig {
     pub general: GeneralSettings,
     #[serde(rename = "ai", default)]
     pub ai_config: AIConfig,
+    #[serde(rename = "editor", default)]
+    pub editor: EditorSettings,
 }
 
 pub struct ConfigState(pub Mutex<AppConfig>);
@@ -210,6 +223,7 @@ fn load_config() -> AppConfig {
             api_key: String::new(),
             model: "deepseek-chat".to_string(),
         },
+        editor: EditorSettings::default(),
     }
 }
 
@@ -362,7 +376,6 @@ fn save_general_settings(
     auto_save_interval: u32,
     restore_on_start: bool,
     open_last_workspace: bool,
-    focus_mode: bool,
 ) -> Result<bool, String> {
     let mut config = config_state.0.lock().map_err(|e| e.to_string())?;
     config.general = GeneralSettings {
@@ -371,8 +384,24 @@ fn save_general_settings(
         auto_save_interval,
         restore_on_start,
         open_last_workspace,
-        focus_mode,
     };
+    save_config(&config)?;
+    Ok(true)
+}
+
+#[tauri::command]
+fn get_editor_settings(config_state: State<'_, ConfigState>) -> Result<EditorSettings, String> {
+    let config = config_state.0.lock().map_err(|e| e.to_string())?;
+    Ok(config.editor.clone())
+}
+
+#[tauri::command]
+fn save_editor_settings(
+    config_state: State<'_, ConfigState>,
+    focus_mode: bool,
+) -> Result<bool, String> {
+    let mut config = config_state.0.lock().map_err(|e| e.to_string())?;
+    config.editor = EditorSettings { focus_mode };
     save_config(&config)?;
     Ok(true)
 }
@@ -594,6 +623,8 @@ pub fn run() {
             // 通用设置
             get_general_settings,
             save_general_settings,
+            get_editor_settings,
+            save_editor_settings,
             // 文件操作
             get_folder_content,
             open_specific_file,

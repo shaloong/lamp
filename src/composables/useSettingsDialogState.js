@@ -162,6 +162,16 @@ export function useSettingsDialogState(props, emit) {
     }
   }
 
+  async function saveEditorSettings() {
+    if (hydratingSettings.value) return
+    try {
+      const api = requireLampAPI('settings save')
+      await api.saveEditorSettings(settingsStore.editorSettings)
+    } catch (error) {
+      console.error('Failed to save editor settings', error)
+    }
+  }
+
   async function saveAiSettings() {
     if (hydratingSettings.value) return
     try {
@@ -187,6 +197,15 @@ export function useSettingsDialogState(props, emit) {
     { deep: true }
   )
 
+  // Auto-save editor settings when any field changes
+  watch(
+    () => settingsStore.editorSettings,
+    () => {
+      saveEditorSettings()
+    },
+    { deep: true }
+  )
+
   // Auto-save AI settings when any field changes
   watch(
     () => settingsStore.aiSettings,
@@ -200,8 +219,9 @@ export function useSettingsDialogState(props, emit) {
     try {
       hydratingSettings.value = true
       const api = requireLampAPI('settings load')
-      const [general, ai] = await Promise.all([
+      const [general, editor, ai] = await Promise.all([
         api.getGeneralSettings(),
+        api.getEditorSettings(),
         api.getAiSettings(),
       ])
 
@@ -212,7 +232,11 @@ export function useSettingsDialogState(props, emit) {
         autoSaveInterval: general?.autoSaveInterval ?? general?.auto_save_interval ?? 30,
         restoreOnStart: general?.restoreOnStart ?? general?.restore_on_start ?? true,
         openLastWorkspace: general?.openLastWorkspace ?? general?.open_last_workspace ?? false,
-        focusMode: general?.focusMode ?? general?.focus_mode ?? false,
+      })
+
+      // 更新 store 中的编辑器设置
+      settingsStore.setEditorSettings({
+        focusMode: editor?.focusMode ?? editor?.focus_mode ?? false,
       })
 
       // 更新 store 中的 AI 设置

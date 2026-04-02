@@ -47,6 +47,7 @@
 import { computed } from 'vue'
 import ShortcutSettings from './ShortcutSettings.vue'
 import SettingsGeneralSection from '@/components/settings/SettingsGeneralSection.vue'
+import SettingsEditorSection from '@/components/settings/SettingsEditorSection.vue'
 import SettingsAiSection from '@/components/settings/SettingsAiSection.vue'
 import SettingsPluginsSection from '@/components/settings/SettingsPluginsSection.vue'
 import SettingsPluginDynamicSection from '@/components/settings/SettingsPluginDynamicSection.vue'
@@ -95,6 +96,7 @@ const {
 
 const builtinSectionComponentMap = {
   general: SettingsGeneralSection,
+  editor: SettingsEditorSection,
   ai: SettingsAiSection,
   plugins: SettingsPluginsSection,
   shortcuts: ShortcutSettings,
@@ -108,6 +110,9 @@ const activeBuiltinComponent = computed(() => {
 const activeBuiltinProps = computed(() => {
   const kind = activeNavItem.value?.section?.kind
   if (kind === 'general') {
+    return { t }
+  }
+  if (kind === 'editor') {
     return { t }
   }
   if (kind === 'ai') {

@@ -36,6 +36,8 @@ function createBrowserFallbackAPI() {
       openLastWorkspace: false,
     }),
     saveGeneralSettings: async () => false,
+    getEditorSettings: async () => ({ focusMode: false }),
+    saveEditorSettings: async () => false,
     openFile: () => { },
     saveFile: () => { },
     newFile: () => { },
@@ -178,6 +180,11 @@ function initElectronAPI() {
       autoSaveInterval: settings.autoSaveInterval,
       restoreOnStart: settings.restoreOnStart,
       openLastWorkspace: settings.openLastWorkspace,
+    }),
+
+    // ==================== 编辑器设置 ====================
+    getEditorSettings: () => invoke('get_editor_settings'),
+    saveEditorSettings: (settings) => invoke('save_editor_settings', {
       focusMode: settings.focusMode,
     }),
 

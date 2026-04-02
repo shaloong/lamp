@@ -294,11 +294,14 @@ export default {
       try {
         const api = this.getLampAPI();
         if (!api) return;
-        const settings = await api.getGeneralSettings();
+        const [general, editor] = await Promise.all([
+          api.getGeneralSettings(),
+          api.getEditorSettings(),
+        ])
 
         // 归一化 locale 名称
-        const language = settings.language
-          ? (settings.language === 'zh' ? 'zh-CN' : settings.language)
+        const language = general.language
+          ? (general.language === 'zh' ? 'zh-CN' : general.language)
           : 'zh-CN';
 
         // 同步语言到 i18n
@@ -309,14 +312,18 @@ export default {
           globalLocale.value = language;
         }
 
-        // 同步所有设置到 Pinia store
+        // 同步通用设置到 Pinia store
         this.settingsStore.setGeneralSettings({
           language,
-          autoSave: settings.autoSave ?? settings.auto_save ?? true,
-          autoSaveInterval: settings.autoSaveInterval ?? settings.auto_save_interval ?? 30,
-          restoreOnStart: settings.restoreOnStart ?? settings.restore_on_start ?? true,
-          openLastWorkspace: settings.openLastWorkspace ?? settings.open_last_workspace ?? false,
-          focusMode: settings.focusMode ?? settings.focus_mode ?? false,
+          autoSave: general.autoSave ?? general.auto_save ?? true,
+          autoSaveInterval: general.autoSaveInterval ?? general.auto_save_interval ?? 30,
+          restoreOnStart: general.restoreOnStart ?? general.restore_on_start ?? true,
+          openLastWorkspace: general.openLastWorkspace ?? general.open_last_workspace ?? false,
+        });
+
+        // 同步编辑器设置到 Pinia store
+        this.settingsStore.setEditorSettings({
+          focusMode: editor?.focusMode ?? editor?.focus_mode ?? false,
         });
       } catch (error) {
         console.error('Failed to load general settings', error);

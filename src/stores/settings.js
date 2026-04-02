@@ -12,6 +12,8 @@ export const useSettingsStore = defineStore('settings', () => {
   const autoSaveInterval = ref(30)
   const restoreOnStart = ref(true)
   const openLastWorkspace = ref(false)
+
+  // ─── 编辑器设置 ────────────────────────────────────────────
   const focusMode = ref(false)
 
   // ─── AI 设置 ────────────────────────────────────────────────
@@ -27,6 +29,10 @@ export const useSettingsStore = defineStore('settings', () => {
     if (settings.autoSaveInterval !== undefined) autoSaveInterval.value = settings.autoSaveInterval
     if (settings.restoreOnStart !== undefined) restoreOnStart.value = settings.restoreOnStart
     if (settings.openLastWorkspace !== undefined) openLastWorkspace.value = settings.openLastWorkspace
+  }
+
+  // ─── 编辑器设置操作 ─────────────────────────────────────────
+  function setEditorSettings(settings) {
     if (settings.focusMode !== undefined) focusMode.value = settings.focusMode
   }
 
@@ -45,6 +51,9 @@ export const useSettingsStore = defineStore('settings', () => {
     autoSaveInterval: autoSaveInterval.value,
     restoreOnStart: restoreOnStart.value,
     openLastWorkspace: openLastWorkspace.value,
+  }))
+
+  const editorSettings = computed(() => ({
     focusMode: focusMode.value,
   }))
 
@@ -62,9 +71,13 @@ export const useSettingsStore = defineStore('settings', () => {
     autoSaveInterval,
     restoreOnStart,
     openLastWorkspace,
-    focusMode,
     generalSettings,
     setGeneralSettings,
+
+    // 编辑器设置
+    focusMode,
+    editorSettings,
+    setEditorSettings,
 
     // AI 设置
     aiProvider,
