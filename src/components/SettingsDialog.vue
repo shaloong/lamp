@@ -84,12 +84,6 @@ const {
   t,
   visible,
   activeTab,
-  form,
-  providers,
-  aiForm,
-  currentProvider,
-  currentProviderModels,
-  isCustomProvider,
   allNavItems,
   activeNavItem,
   activeSection,
@@ -114,17 +108,10 @@ const activeBuiltinComponent = computed(() => {
 const activeBuiltinProps = computed(() => {
   const kind = activeNavItem.value?.section?.kind
   if (kind === 'general') {
-    return { form: form.value, t }
+    return { t }
   }
   if (kind === 'ai') {
-    return {
-      aiForm: aiForm.value,
-      providers,
-      currentProvider: currentProvider.value,
-      currentProviderModels: currentProviderModels.value,
-      isCustomProvider: isCustomProvider.value,
-      t,
-    }
+    return { t }
   }
   if (kind === 'plugins') {
     return {

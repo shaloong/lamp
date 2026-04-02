@@ -1,12 +1,15 @@
 import { ref, computed, watch, isRef } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { pluginHost } from '@/plugins/index'
 import { AI_PROVIDERS, BUILTIN_SETTINGS_SECTIONS } from '@/components/settings/config'
 import { resolveI18nLabel } from '@/lib/resolveI18nLabel'
 import { i18n } from '@/i18n'
 import { requireLampAPI } from '@/lib/lampApi'
+import { useSettingsStore } from '@/stores/settings'
 
 export function useSettingsDialogState(props, emit) {
+  const settingsStore = useSettingsStore()
   const { t, locale } = useI18n()
 
   function getCurrentLocale() {
@@ -52,25 +55,11 @@ export function useSettingsDialogState(props, emit) {
   const activeTab = ref('builtin:general')
   const hydratingSettings = ref(false)
 
-  const form = ref({
-    language: 'zh-CN',
-    autoSave: true,
-    autoSaveInterval: 30,
-    restoreOnStart: true,
-    openLastWorkspace: false,
-  })
+  // 从 store 获取响应式引用
+  const { language, aiProvider } = storeToRefs(settingsStore)
 
   const providers = AI_PROVIDERS
-  const aiForm = ref({ provider: 'deepseek', baseUrl: '', apiKey: '', model: '' })
-
   const builtinSections = BUILTIN_SETTINGS_SECTIONS
-
-  const currentProvider = computed(() => {
-    return providers.find(p => p.id === aiForm.value.provider) || providers[providers.length - 1]
-  })
-
-  const currentProviderModels = computed(() => currentProvider.value?.models || [])
-  const isCustomProvider = computed(() => aiForm.value.provider === 'custom')
 
   const allNavItems = computed(() => {
     const builtins = builtinSections.map(item => ({
@@ -147,15 +136,19 @@ export function useSettingsDialogState(props, emit) {
     }
   }, { immediate: true })
 
-  watch(() => aiForm.value.provider, (newProvider) => {
+  watch(aiProvider, (newProvider) => {
     if (hydratingSettings.value) return
     const p = providers.find(item => item.id === newProvider)
     if (p && p.id !== 'custom') {
-      aiForm.value.baseUrl = p.baseUrl
-      aiForm.value.model = p.models[0]?.value || ''
+      settingsStore.setAiSettings({
+        baseUrl: p.baseUrl,
+        model: p.models[0]?.value || '',
+      })
     } else {
-      aiForm.value.baseUrl = ''
-      aiForm.value.model = ''
+      settingsStore.setAiSettings({
+        baseUrl: '',
+        model: '',
+      })
     }
   })
 
@@ -163,8 +156,7 @@ export function useSettingsDialogState(props, emit) {
     if (hydratingSettings.value) return
     try {
       const api = requireLampAPI('settings save')
-      const generalPayload = JSON.parse(JSON.stringify(form.value))
-      await api.saveGeneralSettings(generalPayload)
+      await api.saveGeneralSettings(settingsStore.generalSettings)
     } catch (error) {
       console.error('Failed to save general settings', error)
     }
@@ -174,11 +166,10 @@ export function useSettingsDialogState(props, emit) {
     if (hydratingSettings.value) return
     try {
       const api = requireLampAPI('settings save')
+      const settings = settingsStore.aiSettings
       await api.saveAiSettings({
-        provider: aiForm.value.provider,
-        baseUrl: normalizeBaseUrl(aiForm.value.baseUrl),
-        apiKey: aiForm.value.apiKey,
-        model: aiForm.value.model,
+        ...settings,
+        baseUrl: normalizeBaseUrl(settings.baseUrl),
       })
     } catch (error) {
       console.error('Failed to save AI settings', error)
@@ -186,16 +177,24 @@ export function useSettingsDialogState(props, emit) {
   }
 
   // Auto-save general settings when any field changes
-  watch(() => form.value, () => {
-    // Language: apply locale immediately
-    setCurrentLocale(form.value.language)
-    saveGeneralSettings()
-  }, { deep: true })
+  watch(
+    () => settingsStore.generalSettings,
+    () => {
+      // Language: apply locale immediately
+      setCurrentLocale(language.value)
+      saveGeneralSettings()
+    },
+    { deep: true }
+  )
 
   // Auto-save AI settings when any field changes
-  watch(() => aiForm.value, () => {
-    saveAiSettings()
-  }, { deep: true })
+  watch(
+    () => settingsStore.aiSettings,
+    () => {
+      saveAiSettings()
+    },
+    { deep: true }
+  )
 
   async function loadSettings() {
     try {
@@ -206,33 +205,29 @@ export function useSettingsDialogState(props, emit) {
         api.getAiSettings(),
       ])
 
-      const language = general?.language || getCurrentLocale() || 'zh-CN'
-      const autoSave = general?.autoSave ?? general?.auto_save ?? true
-      const autoSaveInterval = general?.autoSaveInterval ?? general?.auto_save_interval ?? 30
-      const restoreOnStart = general?.restoreOnStart ?? general?.restore_on_start ?? true
-      const openLastWorkspace = general?.openLastWorkspace ?? general?.open_last_workspace ?? false
+      // 更新 store 中的通用设置
+      settingsStore.setGeneralSettings({
+        language: general?.language || getCurrentLocale() || 'zh-CN',
+        autoSave: general?.autoSave ?? general?.auto_save ?? true,
+        autoSaveInterval: general?.autoSaveInterval ?? general?.auto_save_interval ?? 30,
+        restoreOnStart: general?.restoreOnStart ?? general?.restore_on_start ?? true,
+        openLastWorkspace: general?.openLastWorkspace ?? general?.open_last_workspace ?? false,
+        focusMode: general?.focusMode ?? general?.focus_mode ?? false,
+      })
 
-      form.value = {
-        language,
-        autoSave,
-        autoSaveInterval,
-        restoreOnStart,
-        openLastWorkspace,
-      }
-
-      const aiProvider = ai?.provider || 'deepseek'
-      const aiBaseUrl = ai?.baseUrl ?? ai?.base_url ?? ''
-      const aiApiKey = ai?.apiKey ?? ai?.api_key ?? ''
-      const aiModel = ai?.model || ''
-
-      const savedProvider = aiProvider
+      // 更新 store 中的 AI 设置
+      const savedProvider = ai?.provider || 'deepseek'
       const provider = providers.find(item => item.id === savedProvider) || providers[0]
-      aiForm.value = {
+      const aiBaseUrlVal = ai?.baseUrl ?? ai?.base_url ?? ''
+      const aiApiKeyVal = ai?.apiKey ?? ai?.api_key ?? ''
+      const aiModelVal = ai?.model || ''
+
+      settingsStore.setAiSettings({
         provider: savedProvider,
-        baseUrl: savedProvider === 'custom' ? aiBaseUrl : (provider.baseUrl || aiBaseUrl || ''),
-        apiKey: aiApiKey,
-        model: aiModel || (provider.models[0]?.value || ''),
-      }
+        baseUrl: savedProvider === 'custom' ? aiBaseUrlVal : (provider.baseUrl || aiBaseUrlVal || ''),
+        apiKey: aiApiKeyVal,
+        model: aiModelVal || (provider.models[0]?.value || ''),
+      })
     } catch (error) {
       console.error('Failed to load settings', error)
     } finally {
@@ -244,12 +239,6 @@ export function useSettingsDialogState(props, emit) {
     pluginHost,
     visible,
     activeTab,
-    form,
-    providers,
-    aiForm,
-    currentProvider,
-    currentProviderModels,
-    isCustomProvider,
     allNavItems,
     activeNavItem,
     activeSection,
