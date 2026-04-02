@@ -79,6 +79,7 @@ import { useSettingsStore } from '@/stores/settings'
 import { pluginHost } from '@/plugins/index'
 import { useShortcutCenter } from '@/composables/useShortcutCenter'
 import { setupPluginThemes } from '@/composables/usePluginThemes'
+import { useTheme } from '@/composables/useTheme'
 import { workspaceExplorerMethods } from '@/composables/workspaceExplorerMethods'
 import { getLampAPI } from '@/lib/lampApi'
 const CommandPalette = defineAsyncComponent(() => import('./components/CommandPalette.vue'))
@@ -319,6 +320,7 @@ export default {
           autoSaveInterval: general.autoSaveInterval ?? general.auto_save_interval ?? 30,
           restoreOnStart: general.restoreOnStart ?? general.restore_on_start ?? true,
           openLastWorkspace: general.openLastWorkspace ?? general.open_last_workspace ?? false,
+          theme: general.theme ?? 'system',
         });
 
         // 同步编辑器设置到 Pinia store
@@ -755,6 +757,10 @@ export default {
       this._disposePluginThemes()
       this._disposePluginThemes = null
     }
+    if (typeof this._disposeTheme === 'function') {
+      this._disposeTheme()
+      this._disposeTheme = null
+    }
   },
 
   mounted() {
@@ -768,6 +774,9 @@ export default {
     const { register } = useShortcutCenter();
     pluginHost.shortcutService.setExternalRegister(register);
     pluginHost.shortcutService.startListening();
+
+    // ── Theme ──
+    this._disposeTheme = useTheme();
   },
 
   computed: {

@@ -22,6 +22,25 @@
 
         <div class="setting-row">
             <div class="setting-info">
+                <div class="setting-label">{{ t('settings.theme') }}</div>
+                <div class="setting-desc">{{ t('settings.themeDesc') }}</div>
+            </div>
+            <div class="setting-control">
+                <Select v-model="settingsStore.theme">
+                    <SelectTrigger class="settings-control-field-md">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="light">{{ t('settings.themeLight') }}</SelectItem>
+                        <SelectItem value="dark">{{ t('settings.themeDark') }}</SelectItem>
+                        <SelectItem value="system">{{ t('settings.themeSystem') }}</SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
+        </div>
+
+        <div class="setting-row">
+            <div class="setting-info">
                 <div class="setting-label">{{ t('settings.autoSave') }}</div>
                 <div class="setting-desc">{{ t('settings.autoSaveDesc') }}</div>
             </div>

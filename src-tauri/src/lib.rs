@@ -38,6 +38,12 @@ pub struct GeneralSettings {
     pub restore_on_start: bool,
     #[serde(rename = "openLastWorkspace", default)]
     pub open_last_workspace: bool,
+    #[serde(rename = "theme", default = "default_theme")]
+    pub theme: String,
+}
+
+fn default_theme() -> String {
+    "system".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,6 +64,7 @@ impl Default for GeneralSettings {
             auto_save_interval: 30,
             restore_on_start: true,
             open_last_workspace: false,
+            theme: default_theme(),
         }
     }
 }
@@ -376,6 +383,7 @@ fn save_general_settings(
     auto_save_interval: u32,
     restore_on_start: bool,
     open_last_workspace: bool,
+    theme: String,
 ) -> Result<bool, String> {
     let mut config = config_state.0.lock().map_err(|e| e.to_string())?;
     config.general = GeneralSettings {
@@ -384,6 +392,7 @@ fn save_general_settings(
         auto_save_interval,
         restore_on_start,
         open_last_workspace,
+        theme: theme.trim().to_string(),
     };
     save_config(&config)?;
     Ok(true)

@@ -12,6 +12,7 @@ export const useSettingsStore = defineStore('settings', () => {
   const autoSaveInterval = ref(30)
   const restoreOnStart = ref(true)
   const openLastWorkspace = ref(false)
+  const theme = ref('system') // 'light' | 'dark' | 'system'
 
   // ─── 编辑器设置 ────────────────────────────────────────────
   const focusMode = ref(false)
@@ -29,6 +30,7 @@ export const useSettingsStore = defineStore('settings', () => {
     if (settings.autoSaveInterval !== undefined) autoSaveInterval.value = settings.autoSaveInterval
     if (settings.restoreOnStart !== undefined) restoreOnStart.value = settings.restoreOnStart
     if (settings.openLastWorkspace !== undefined) openLastWorkspace.value = settings.openLastWorkspace
+    if (settings.theme !== undefined) theme.value = settings.theme
   }
 
   // ─── 编辑器设置操作 ─────────────────────────────────────────
@@ -51,6 +53,7 @@ export const useSettingsStore = defineStore('settings', () => {
     autoSaveInterval: autoSaveInterval.value,
     restoreOnStart: restoreOnStart.value,
     openLastWorkspace: openLastWorkspace.value,
+    theme: theme.value,
   }))
 
   const editorSettings = computed(() => ({
@@ -71,6 +74,7 @@ export const useSettingsStore = defineStore('settings', () => {
     autoSaveInterval,
     restoreOnStart,
     openLastWorkspace,
+    theme,
     generalSettings,
     setGeneralSettings,
 

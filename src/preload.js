@@ -34,6 +34,7 @@ function createBrowserFallbackAPI() {
       autoSaveInterval: 30,
       restoreOnStart: true,
       openLastWorkspace: false,
+      theme: 'system',
     }),
     saveGeneralSettings: async () => false,
     getEditorSettings: async () => ({ focusMode: false }),
@@ -180,6 +181,7 @@ function initElectronAPI() {
       autoSaveInterval: settings.autoSaveInterval,
       restoreOnStart: settings.restoreOnStart,
       openLastWorkspace: settings.openLastWorkspace,
+      theme: settings.theme,
     }),
 
     // ==================== 编辑器设置 ====================
