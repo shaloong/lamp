@@ -64,7 +64,7 @@ export const messages = {
     'plugins.lamp-ai-actions.continuing': 'Continuing...',
     'plugins.lamp-ai-actions.summarize': 'Summarize',
     'plugins.lamp-ai-actions.summarizing': 'Summarizing...',
-    'plugins.lamp-ai-actions.prompts': 'Prompt Templates',
+    'plugins.lamp-ai-actions.prompts': 'Prompts',
     'plugins.lamp-ai-actions.polishDesc': 'System prompt for Polish — describes the expert role and output rules',
     'plugins.lamp-ai-actions.expandDesc': 'System prompt for Expand — describes the expert role and output rules',
     'plugins.lamp-ai-actions.continueDesc': 'System prompt for Continue — describes the expert role and output rules',
