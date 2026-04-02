@@ -12,6 +12,8 @@
     "restoreOnStartDesc": "启动时自动恢复上次未保存的文档",
     "openLastWorkspace": "打开上次工作区",
     "openLastWorkspaceDesc": "启动时自动打开上次使用的工作区",
+    "focusMode": "专注模式",
+    "focusModeDesc": "当前段落高亮显示，其余段落降低透明度",
     "ai": "AI",
     "aiProvider": "供应商",
     "aiBaseUrl": "Base URL",

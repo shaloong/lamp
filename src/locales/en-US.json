@@ -12,6 +12,8 @@
     "restoreOnStartDesc": "Automatically restore unsaved documents on startup",
     "openLastWorkspace": "Open last workspace",
     "openLastWorkspaceDesc": "Automatically open the last used workspace on startup",
+    "focusMode": "Focus Mode",
+    "focusModeDesc": "Highlight the current paragraph and dim others",
     "ai": "AI",
     "aiProvider": "Provider",
     "aiBaseUrl": "Base URL",

@@ -38,6 +38,8 @@ pub struct GeneralSettings {
     pub restore_on_start: bool,
     #[serde(rename = "openLastWorkspace", default)]
     pub open_last_workspace: bool,
+    #[serde(rename = "focusMode", default)]
+    pub focus_mode: bool,
 }
 
 fn default_auto_save_interval() -> u32 {
@@ -52,6 +54,7 @@ impl Default for GeneralSettings {
             auto_save_interval: 30,
             restore_on_start: true,
             open_last_workspace: false,
+            focus_mode: false,
         }
     }
 }
@@ -359,6 +362,7 @@ fn save_general_settings(
     auto_save_interval: u32,
     restore_on_start: bool,
     open_last_workspace: bool,
+    focus_mode: bool,
 ) -> Result<bool, String> {
     let mut config = config_state.0.lock().map_err(|e| e.to_string())?;
     config.general = GeneralSettings {
@@ -367,6 +371,7 @@ fn save_general_settings(
         auto_save_interval,
         restore_on_start,
         open_last_workspace,
+        focus_mode,
     };
     save_config(&config)?;
     Ok(true)

@@ -178,6 +178,7 @@ function initElectronAPI() {
       autoSaveInterval: settings.autoSaveInterval,
       restoreOnStart: settings.restoreOnStart,
       openLastWorkspace: settings.openLastWorkspace,
+      focusMode: settings.focusMode,
     }),
 
     // ==================== 事件监听 ====================
