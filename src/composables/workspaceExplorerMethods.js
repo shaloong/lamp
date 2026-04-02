@@ -85,6 +85,8 @@ export const workspaceExplorerMethods = {
       const node = {
         name: item.name,
         path: item.path,
+        isDirectory: item.isDirectory,
+        isSupported: item.isSupported,
       }
       if (item.children && item.children.length > 0) {
         node.children = this.convertToTree(item.children)
@@ -97,12 +99,11 @@ export const workspaceExplorerMethods = {
   // 展示目录结构
   // mode: 'normal' | 'refresh'  - refresh 模式会保留展开状态
   showDirection(path, mode = 'normal') {
-    if (!this.tabs || this.tabs.length === 0 || !this.tabs[this.activeTab]) {
-      this.folderContent = ""
-      return
-    }
-
+    // 允许无标签页时也展示文件树（工作区打开时可能还没有标签页）
     if (path === undefined) {
+      if (!this.tabs || this.tabs.length === 0 || !this.tabs[this.activeTab]) {
+        return
+      }
       path = this.getParentDirectory(this.tabs[this.activeTab].filePath)
     }
 
@@ -120,6 +121,12 @@ export const workspaceExplorerMethods = {
 
       api.getFolderContent(path).then(result => {
         this.folderContent = this.convertToTree(result)
+
+        // normal 模式下自动展开根目录
+        if (mode === 'normal' && this.workspaceStore.rootPath) {
+          this.expandedKeys = [this.workspaceStore.rootPath]
+          this.fileStore.expandedFolders = new Set(this.expandedKeys)
+        }
 
         if (mode === 'refresh' && expandedRelativePaths.length > 0) {
           this.$nextTick(() => {
@@ -188,6 +195,19 @@ export const workspaceExplorerMethods = {
   handleNodeClick(data) {
     const filePath = data.path
 
+    // 目录：切换展开状态
+    if (data.isDirectory) {
+      this.handleToggleExpand(filePath)
+      return
+    }
+
+    // 不支持的文件格式：静默忽略（已由 UI 区分颜色，用户可感知不可点击）
+    if (!data.isSupported) {
+      console.warn(`[Lamp] Unsupported file format: ${filePath}`)
+      return
+    }
+
+    // 正常文件：加入临时文件区并打开
     if (this.workspaceStore.isOpen) {
       const isInWorkspace = this.fileStore.isFileInWorkspace(filePath, this.workspaceStore.rootPath)
       if (!isInWorkspace) {

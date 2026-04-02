@@ -417,12 +417,30 @@ fn save_editor_settings(
 
 // ==================== 文件操作 ====================
 
+fn supported_extensions() -> &'static [&'static str] {
+    &["lmph", "lampsave", "md", "html", "htm", "txt", "text"]
+}
+
+fn is_supported_file(name: &str) -> bool {
+    let name_lower = name.to_lowercase();
+    // Has an extension and it matches
+    if let Some(dot_pos) = name_lower.rfind('.') {
+        let ext = &name_lower[dot_pos + 1..];
+        supported_extensions().contains(&ext)
+    } else {
+        // No extension — treat as unsupported
+        false
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct FileInfo {
     name: String,
     path: String,
     #[serde(rename = "isDirectory")]
     is_directory: bool,
+    #[serde(rename = "isSupported")]
+    is_supported: bool,
     children: Option<Vec<FileInfo>>,
 }
 
@@ -438,17 +456,23 @@ async fn get_folder_content(folder_path: String) -> Result<Vec<FileInfo>, String
         let mut entries = fs::read_dir(path).map_err(|e| e.to_string())?;
         let mut result = Vec::new();
 
-        // entries.next() 返回 Option<Result<DirEntry, Error>>
         while let Some(entry_result) = entries.next() {
             let entry = entry_result.map_err(|e| e.to_string())?;
             let file_path = entry.path();
             let file_name = entry.file_name().to_string_lossy().to_string();
 
+            // Skip dotfiles and dotfolders (e.g. .lamp, .git, .DS_Store)
+            if file_name.starts_with('.') {
+                continue;
+            }
+
             let is_dir = file_path.is_dir();
+            let is_supported = !is_dir && is_supported_file(&file_name);
             let mut file_info = FileInfo {
                 name: file_name,
                 path: file_path.to_string_lossy().to_string(),
                 is_directory: is_dir,
+                is_supported,
                 children: None,
             };
 
@@ -486,6 +510,20 @@ async fn open_specific_file(file_path: String) -> Result<Vec<serde_json::Value>,
 
     if path.is_dir() {
         return Ok(vec![serde_json::Value::Number(0.into())]);
+    }
+
+    let file_name = path.file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+
+    if !is_supported_file(&file_name) {
+        return Err(format!(
+            "Unsupported format: Lamp does not support opening .{}. Supported formats: {}.",
+            path.extension()
+                .map(|e| e.to_string_lossy().to_string())
+                .unwrap_or_else(|| "file".to_string()),
+            supported_extensions().join(", ")
+        ));
     }
 
     let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;

@@ -17,11 +17,12 @@ function isExpanded(node) {
 }
 
 function handleClick(node) {
-  if (node.isDirectory) {
-    emit('toggle-expand', node.path)
-  } else {
-    emit('node-click', node)
-  }
+  emit('node-click', node)
+}
+
+function handleChevronClick(node, event) {
+  event.stopPropagation()
+  emit('toggle-expand', node.path)
 }
 </script>
 
@@ -31,7 +32,10 @@ function handleClick(node) {
       <div v-for="node in data" :key="node.path">
         <div
           class="flex items-center gap-1 px-2 py-1 cursor-pointer rounded text-xs hover:bg-muted transition-colors"
-          :class="{ 'bg-accent': selectedPath === node.path }"
+          :class="{
+            'bg-accent': selectedPath === node.path,
+            'opacity-40': !node.isDirectory && !node.isSupported,
+          }"
           :style="{ paddingLeft: (depth * 14 + 8) + 'px' }"
           @click="handleClick(node)"
         >
@@ -39,7 +43,8 @@ function handleClick(node) {
             :is="isExpanded(node) ? ChevronDown : ChevronRight"
             v-if="node.isDirectory"
             :size="12"
-            class="shrink-0 text-muted-foreground"
+            class="shrink-0 text-muted-foreground cursor-pointer"
+            @click.stop="handleChevronClick(node, $event)"
           />
           <span v-else class="shrink-0 w-3" />
 
