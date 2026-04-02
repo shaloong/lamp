@@ -58,6 +58,8 @@ export class PluginLoader {
         return null;
       }
 
+      manifest.pluginRoot = this._join(pluginDirPath);
+
       return manifest;
     } catch (err) {
       console.warn(`[PluginLoader] No valid manifest.json in "${pluginDirPath}":`, err);

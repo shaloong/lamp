@@ -77,6 +77,7 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { useFileStore } from '@/stores/files'
 import { pluginHost } from '@/plugins/index'
 import { useShortcutCenter } from '@/composables/useShortcutCenter'
+import { setupPluginThemes } from '@/composables/usePluginThemes'
 import { workspaceExplorerMethods } from '@/composables/workspaceExplorerMethods'
 import { getLampAPI } from '@/lib/lampApi'
 const CommandPalette = defineAsyncComponent(() => import('./components/CommandPalette.vue'))
@@ -728,6 +729,10 @@ export default {
     window.removeEventListener('blur', this.hideContextMenu)
     document.removeEventListener('contextmenu', this.handleGlobalContextMenu, true)
     window.removeEventListener('keydown', this.handleGlobalWebShortcutGuard, true)
+    if (typeof this._disposePluginThemes === 'function') {
+      this._disposePluginThemes()
+      this._disposePluginThemes = null
+    }
   },
 
   mounted() {
@@ -736,6 +741,7 @@ export default {
     window.addEventListener('blur', this.hideContextMenu)
     document.addEventListener('contextmenu', this.handleGlobalContextMenu, true)
     window.addEventListener('keydown', this.handleGlobalWebShortcutGuard, true)
+    this._disposePluginThemes = setupPluginThemes(pluginHost)
     // Initialize VueUse shortcut polling and start listening
     const { register } = useShortcutCenter();
     pluginHost.shortcutService.setExternalRegister(register);

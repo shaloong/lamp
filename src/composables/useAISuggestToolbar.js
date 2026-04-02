@@ -1,5 +1,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { pluginHost } from '@/plugins/index'
+import { i18n } from '@/i18n'
+import { resolveI18nLabel } from '@/lib/resolveI18nLabel'
 
 export function useAISuggestToolbar(editorRef) {
   const top = ref(0)
@@ -21,7 +23,7 @@ export function useAISuggestToolbar(editorRef) {
       return
     }
 
-    currentLabel.value = suggestion.actionLabel
+    currentLabel.value = resolveI18nLabel(i18n.global.t, suggestion.actionLabel)
     try {
       const coords = editor.view.coordsAtPos(suggestion.to)
       top.value = coords.top - 10

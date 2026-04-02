@@ -9,6 +9,7 @@ import type { Editor } from '@tiptap/core';
 import { pluginHost } from '../../plugins/index';
 import type { AISuggestion, PluginContributions } from '../../plugins/types';
 import { messages } from './messages';
+import { AISuggestExtension } from './ext/AISuggestExtension';
 
 // Compute namespace prefix from manifest.id using the same logic as I18nService._pluginNamespace.
 function pluginNs(id: string): string {
@@ -95,6 +96,13 @@ export default {
     });
 
     return {
+      tipTapExtensions: [
+        {
+          name: 'aiSuggest',
+          ExtensionClass: AISuggestExtension,
+        },
+      ],
+
       bubbleMenu: [
         {
           id: 'polish',

@@ -17,6 +17,11 @@ export interface LampPluginManifest {
   version: string;
   /** Path to the plugin's main entry point, relative to the manifest file */
   main: string;
+  /**
+   * Internal host metadata: absolute plugin root directory used to resolve
+   * relative plugin assets (e.g. theme stylesheets).
+   */
+  pluginRoot?: string;
   /** Optional longer description */
   description?: string;
   /** Display name of the plugin author */
@@ -286,8 +291,13 @@ export interface ThemeContribution {
 
 export interface TipTapExtensionDefinition {
   name: string;
+  /**
+   * Supports either:
+   * 1) Extension instance returned by Extension.create(...)
+   * 2) Constructor that returns an Extension instance
+   */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ExtensionClass: new (options?: Record<string, any>) => import('@tiptap/core').Extension;
+  ExtensionClass: import('@tiptap/core').Extension | (new (options?: Record<string, any>) => import('@tiptap/core').Extension);
 }
 
 // ─── Host API Namespaces ────────────────────────────────────
