@@ -23,10 +23,6 @@ export const messages = {
     'plugins.lamp-ai-actions.summarize': '概述',
     'plugins.lamp-ai-actions.summarizing': '概述中...',
     'plugins.lamp-ai-actions.prompts': '提示词模板',
-    'plugins.lamp-ai-actions.polishDesc': '润色功能的系统提示词，描述专家角色和输出规则',
-    'plugins.lamp-ai-actions.expandDesc': '扩写功能的系统提示词，描述专家角色和输出规则',
-    'plugins.lamp-ai-actions.continueDesc': '续写功能的系统提示词，描述专家角色和输出规则',
-    'plugins.lamp-ai-actions.summarizeDesc': '概述功能的系统提示词，描述专家角色和输出规则',
 
     // ── Core Toolbar plugin ──────────────────────────────────────
     'plugins.lamp-core-toolbar.name': '核心编辑器工具栏',
@@ -65,10 +61,6 @@ export const messages = {
     'plugins.lamp-ai-actions.summarize': 'Summarize',
     'plugins.lamp-ai-actions.summarizing': 'Summarizing...',
     'plugins.lamp-ai-actions.prompts': 'Prompts',
-    'plugins.lamp-ai-actions.polishDesc': 'System prompt for Polish — describes the expert role and output rules',
-    'plugins.lamp-ai-actions.expandDesc': 'System prompt for Expand — describes the expert role and output rules',
-    'plugins.lamp-ai-actions.continueDesc': 'System prompt for Continue — describes the expert role and output rules',
-    'plugins.lamp-ai-actions.summarizeDesc': 'System prompt for Summarize — describes the expert role and output rules',
 
     // ── Core Toolbar plugin ──────────────────────────────────────
     'plugins.lamp-core-toolbar.name': 'Core Editor Toolbar',
