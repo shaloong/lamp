@@ -1,5 +1,5 @@
 <script setup>
-import { ChevronRight, ChevronDown, Folder, FolderOpen, File } from 'lucide-vue-next'
+import { ChevronRight, ChevronDown, Folder, FolderOpen, FileText } from 'lucide-vue-next'
 import ScrollArea from '@/components/ui/scroll-area/ScrollArea.vue'
 
 defineOptions({ name: 'FileTree' })
@@ -52,7 +52,7 @@ function onChevron(node, e) {
           />
           <span v-else class="shrink-0 w-3" />
           <component
-            :is="node.isDirectory ? (isExpanded(node) ? FolderOpen : Folder) : File"
+            :is="node.isDirectory ? (isExpanded(node) ? FolderOpen : Folder) : FileText"
             :size="16"
             class="shrink-0"
             :class="node.isDirectory ? 'text-primary' : 'text-muted-foreground'"
@@ -95,7 +95,7 @@ function onChevron(node, e) {
         />
         <span v-else class="shrink-0 w-3" />
         <component
-          :is="node.isDirectory ? (isExpanded(node) ? FolderOpen : Folder) : File"
+          :is="node.isDirectory ? (isExpanded(node) ? FolderOpen : Folder) : FileText"
           :size="16"
           class="shrink-0"
           :class="node.isDirectory ? 'text-primary' : 'text-muted-foreground'"

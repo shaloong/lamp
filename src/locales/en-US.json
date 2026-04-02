@@ -43,6 +43,33 @@
     "reset": "Reset",
     "resetAll": "Reset All"
   },
+  "search": {
+    "placeholder": "Find",
+    "replacePlaceholder": "Replace with",
+    "caseSensitive": "Match Case",
+    "wholeWord": "Whole Word",
+    "document": "Document",
+    "workspace": "Workspace",
+    "documentMode": "Current Document",
+    "workspaceMode": "Entire Workspace",
+    "previous": "Previous",
+    "next": "Next",
+    "replace": "Replace",
+    "replaceAll": "Replace All",
+    "replaceSection": "Replace",
+    "searching": "Searching",
+    "noResults": "No matches found",
+    "matches": "matches",
+    "files": "files",
+    "noWorkspace": "Please open a workspace first",
+    "apiUnavailable": "Search service unavailable",
+    "searchFailed": "Search failed, please try again",
+    "documentSummary": "Item {current} of {total} matches",
+    "hintFind": "",
+    "hintReplace": "Use replace buttons to apply replacement",
+    "showReplace": "Show replace",
+    "hideReplace": "Hide replace"
+  },
   "commands": {
     "app": {
       "title": "Main Program",
@@ -63,7 +90,10 @@
       "maxWindow": "Maximize Window",
       "closeWindow": "Close Window",
       "openWorkspace": "Open Workspace",
-      "closeWorkspace": "Close Workspace"
+      "closeWorkspace": "Close Workspace",
+      "find": "Find",
+      "replace": "Replace",
+      "findInWorkspace": "Find in Workspace"
     }
   },
   "common": {

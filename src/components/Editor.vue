@@ -120,6 +120,51 @@ export default {
         pluginHost.aiState.error = err instanceof Error ? err.message : String(err);
       }
     },
+
+    getDocumentSearchMatches(query, options = {}) {
+      if (!this.editor || !query) return [];
+      const caseSensitive = !!options.caseSensitive;
+      const wholeWord = !!options.wholeWord;
+      const needle = caseSensitive ? query : query.toLowerCase();
+      if (!needle) return [];
+
+      const matches = [];
+      this.editor.state.doc.descendants((node, pos) => {
+        if (!node.isText || !node.text) return;
+        const text = node.text;
+        const source = caseSensitive ? text : text.toLowerCase();
+        let start = 0;
+        while (start <= source.length) {
+          const idx = source.indexOf(needle, start);
+          if (idx === -1) break;
+          const end = idx + needle.length;
+          if (wholeWord) {
+            const before = idx > 0 ? source[idx - 1] : '';
+            const after = end < source.length ? source[end] : '';
+            const beforeOk = !before || !/[\p{L}\p{N}_]/u.test(before);
+            const afterOk = !after || !/[\p{L}\p{N}_]/u.test(after);
+            if (!beforeOk || !afterOk) {
+              start = idx + 1;
+              continue;
+            }
+          }
+          matches.push({ from: pos + idx, to: pos + end });
+          start = idx + 1;
+        }
+      });
+      return matches;
+    },
+
+    setDocumentSearchSelection(match) {
+      if (!this.editor || !match) return;
+      this.editor.chain().focus().setTextSelection({ from: match.from, to: match.to }).run();
+    },
+
+    replaceDocumentSearchMatch(match, newText) {
+      if (!this.editor || !match) return false;
+      this.editor.chain().focus().insertContentAt({ from: match.from, to: match.to }, newText).run();
+      return true;
+    },
   },
 
   emits: ['update:modelValue'],

@@ -26,8 +26,14 @@
           </div>
         </div>
         <!-- 编辑器内容 -->
-        <Editor v-for="(item, index) in tabs" :key="item.id" v-show="activeTab === index" @update:modelValue="autoSave"
-          v-model="item.content" />
+        <Editor
+          v-for="(item, index) in tabs"
+          :key="item.id"
+          :ref="(el) => setEditorRef(item.id, el)"
+          v-show="activeTab === index"
+          @update:modelValue="autoSave"
+          v-model="item.content"
+        />
         <!-- 启动页面 -->
         <StartPage v-if="tabs.length === 0" class="flex-1" :recentFiles="recentFiles" @new-file="newFile"
           @open-file="openFileDialog" @open-workspace="openWorkspace" @open-recent="openSpecificFile" />
@@ -54,6 +60,11 @@
 
     <CommandPalette v-if="dialogCommandPalette" v-model="dialogCommandPalette" />
     <SettingsDialog v-if="dialogSettings" v-model="dialogSettings" />
+    <SearchDialog
+      v-if="dialogSearch"
+      @navigate="handleSearchNavigate"
+      @replace="handleSearchReplace"
+    />
 
     <div v-if="contextMenu.visible" class="ui-context-menu" :style="contextMenuStyle" @click.stop>
       <button v-for="item in contextMenu.items" :key="item.id" class="ui-context-item"
@@ -76,6 +87,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useFileStore } from '@/stores/files'
 import { useSettingsStore } from '@/stores/settings'
+import { useSearchStore } from '@/stores/search'
 import { pluginHost } from '@/plugins/index'
 import { useShortcutCenter } from '@/composables/useShortcutCenter'
 import { setupPluginThemes } from '@/composables/usePluginThemes'
@@ -84,6 +96,7 @@ import { workspaceExplorerMethods } from '@/composables/workspaceExplorerMethods
 import { getLampAPI } from '@/lib/lampApi'
 const CommandPalette = defineAsyncComponent(() => import('./components/CommandPalette.vue'))
 const SettingsDialog = defineAsyncComponent(() => import('./components/SettingsDialog.vue'))
+const SearchDialog = defineAsyncComponent(() => import('./components/SearchDialog.vue'))
 import AppMenu from './components/AppMenu.vue'
 import Sidebar from './components/layout/Sidebar.vue'
 import Dialog from '@/components/ui/dialog/Dialog.vue'
@@ -101,6 +114,7 @@ export default {
     StartPage,
     CommandPalette,
     SettingsDialog,
+    SearchDialog,
     AppMenu,
     Sidebar,
     Dialog,
@@ -124,6 +138,7 @@ export default {
       indexCloseTab: -1, // 删除的索引号，-1表示没有传递
       dialogSettings: false,
       dialogCommandPalette: false,
+      dialogSearch: false,
       pluginHost,
       // 工作区相关
       tempFiles: [],
@@ -141,6 +156,13 @@ export default {
         explorer: true,
       },
       hiddenSidebarPluginPanels: [],
+      editorRefs: {},
+      documentSearchState: {
+        query: '',
+        caseSensitive: false,
+        wholeWord: false,
+        currentIndex: -1,
+      },
     };
   },
 
@@ -148,10 +170,12 @@ export default {
     const workspaceStore = useWorkspaceStore()
     const fileStore = useFileStore()
     const settingsStore = useSettingsStore()
+    const searchStore = useSearchStore()
     return {
       workspaceStore,
       fileStore,
       settingsStore,
+      searchStore,
     }
   },
 
@@ -282,6 +306,184 @@ export default {
 
     openSettingsDialog() {
       this.dialogSettings = true;
+    },
+
+    openSearchDialog(mode = 'document') {
+      this.searchStore.open({ mode });
+      this.dialogSearch = true;
+      this.$nextTick(() => {
+        if (mode === 'document') {
+          this.updateDocumentMatchState(this.searchStore.query)
+        }
+      })
+    },
+
+    openReplaceDialog(mode = 'document') {
+      this.searchStore.open({ mode, forceShowReplace: true });
+      this.dialogSearch = true;
+    },
+
+    setEditorRef(tabId, el) {
+      if (!tabId) return;
+      if (el) {
+        this.editorRefs[tabId] = el;
+      } else {
+        delete this.editorRefs[tabId];
+      }
+    },
+
+    getActiveEditorInstance() {
+      const activeTab = this.tabs[this.activeTab];
+      if (!activeTab) return null;
+      const editorComponent = this.editorRefs[activeTab.id];
+      return editorComponent || null;
+    },
+
+    getDocumentMatches(query) {
+      const editor = this.getActiveEditorInstance();
+      if (!editor || !query) return [];
+      return editor.getDocumentSearchMatches(query, this.searchStore.options);
+    },
+
+    updateDocumentMatchState(query) {
+      if (!query) {
+        this.searchStore.documentTotalMatches = 0
+        this.searchStore.documentCurrentMatch = 0
+        return []
+      }
+      const matches = this.getDocumentMatches(query)
+      const current = this.documentSearchState.currentIndex >= 0
+        ? this.documentSearchState.currentIndex + 1
+        : (matches.length > 0 ? 1 : 0)
+      this.searchStore.documentTotalMatches = matches.length
+      this.searchStore.documentCurrentMatch = current
+      return matches
+    },
+
+    moveDocumentSelection(query, direction = 'next') {
+      const matches = this.getDocumentMatches(query);
+      if (matches.length === 0) {
+        this.documentSearchState.currentIndex = -1;
+        this.searchStore.documentTotalMatches = 0
+        this.searchStore.documentCurrentMatch = 0
+        return;
+      }
+
+      const caseSensitive = !!this.searchStore.options.caseSensitive;
+      const wholeWord = !!this.searchStore.options.wholeWord;
+      const sameSearch = this.documentSearchState.query === query
+        && this.documentSearchState.caseSensitive === caseSensitive
+        && this.documentSearchState.wholeWord === wholeWord;
+
+      if (!sameSearch) {
+        this.documentSearchState.currentIndex = -1;
+      }
+
+      const delta = direction === 'prev' ? -1 : 1;
+      const current = this.documentSearchState.currentIndex;
+      const nextIndex = current < 0
+        ? (delta > 0 ? 0 : matches.length - 1)
+        : (current + delta + matches.length) % matches.length;
+
+      this.documentSearchState = {
+        query,
+        caseSensitive,
+        wholeWord,
+        currentIndex: nextIndex,
+      };
+      this.searchStore.documentTotalMatches = matches.length
+      this.searchStore.documentCurrentMatch = nextIndex + 1
+
+      const editor = this.getActiveEditorInstance();
+      if (editor) {
+        editor.setDocumentSearchSelection(matches[nextIndex]);
+      }
+    },
+
+    handleSearchNavigate({ type, filePath, lineNumber, query, direction = 'next' }) {
+      if (type === 'workspace') {
+        // Open the file and jump to line
+        this.openSpecificFile(filePath).then(() => {
+          this.$nextTick(() => {
+            this.scrollEditorToLine(lineNumber, query)
+          })
+        })
+      } else {
+        if (query) {
+          if (direction === 'current') {
+            this.updateDocumentMatchState(query)
+          } else {
+            this.moveDocumentSelection(query, direction)
+          }
+        } else {
+          this.searchStore.documentTotalMatches = 0
+          this.searchStore.documentCurrentMatch = 0
+        }
+      }
+    },
+
+    handleSearchReplace({ type, filePath, oldText, newText, all }) {
+      if (type === 'workspace') {
+        this.replaceInFile(filePath, oldText, newText, all)
+      } else {
+        if (!oldText || !newText) return
+        const editor = this.getActiveEditorInstance()
+        if (!editor) return
+        const matches = this.getDocumentMatches(oldText)
+        if (matches.length === 0) return
+
+        if (all) {
+          for (let i = matches.length - 1; i >= 0; i -= 1) {
+            editor.replaceDocumentSearchMatch(matches[i], newText)
+          }
+          this.documentSearchState.currentIndex = -1
+          this.updateDocumentMatchState(oldText)
+        } else {
+          const { currentIndex } = this.documentSearchState
+          const targetIndex = currentIndex >= 0 && currentIndex < matches.length ? currentIndex : 0
+          editor.replaceDocumentSearchMatch(matches[targetIndex], newText)
+          this.documentSearchState.currentIndex = -1
+          this.moveDocumentSelection(oldText, 'next')
+        }
+      }
+    },
+
+    async replaceInFile(filePath, oldText, newText, all) {
+      const api = this.getLampAPI()
+      if (!api) return
+      try {
+        const data = await api.openSpecificFile(filePath)
+        if (!data || data[0] !== 1) return
+        let content = data[1]
+        if (all) {
+          const caseFlag = this.searchStore.options.caseSensitive ? 'g' : 'gi'
+          const regex = new RegExp(this.escapeRegex(oldText), caseFlag)
+          content = content.replace(regex, newText)
+        } else {
+          const idx = content.toLowerCase().indexOf(oldText.toLowerCase())
+          if (idx !== -1) {
+            content = content.slice(0, idx) + newText + content.slice(idx + oldText.length)
+          }
+        }
+        await api.saveInfo(filePath, content)
+        // Refresh tab if open
+        const tab = this.tabs.find(t => t.filePath === filePath)
+        if (tab) {
+          tab.content = this.format2html(filePath, content)[1]
+        }
+        this.searchStore.requestRefresh()
+      } catch (err) {
+        console.error('Replace failed:', err)
+      }
+    },
+
+    scrollEditorToLine(lineNumber, query) {
+      if (!query) return
+      this.moveDocumentSelection(query, 'next')
+    },
+
+    escapeRegex(str) {
+      return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     },
 
     newFile() {
@@ -669,9 +871,16 @@ export default {
     },
 
     handleGlobalWebShortcutGuard(event) {
-      if (this.isDevMode) return;
       const key = event.key.toLowerCase();
       const ctrlOrMeta = event.ctrlKey || event.metaKey;
+      if (ctrlOrMeta && (key === 'f' || key === 'h')) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (key === 'f') this.openSearchDialog('document')
+        else this.openReplaceDialog('document')
+        return;
+      }
+      if (this.isDevMode) return;
       const blocked =
         event.key === 'F5' ||
         event.key === 'F12' ||
@@ -716,6 +925,9 @@ export default {
       'app.fullScreen': () => this.viewFullScreen(),
       'app.openWorkspace': () => this.openWorkspace(),
       'app.closeWorkspace': () => this.closeWorkspace(),
+      'app.find': () => this.openSearchDialog('document'),
+      'app.replace': () => this.openReplaceDialog('document'),
+      'app.findInWorkspace': () => this.openSearchDialog('workspace'),
     };
 
     // Register each command; ShortcutService handles the keydown dispatch
@@ -736,6 +948,9 @@ export default {
         'app.fullScreen': 'F11',
         'app.openWorkspace': 'Ctrl+Shift+O',
         'app.closeWorkspace': 'Ctrl+Shift+W',
+        'app.find': 'Ctrl+F',
+        'app.replace': 'Ctrl+H',
+        'app.findInWorkspace': 'Ctrl+Shift+F',
       }[id];
 
       pluginHost.commandService.register('lamp.app', {
@@ -753,6 +968,7 @@ export default {
     document.removeEventListener('click', this.hideContextMenu)
     window.removeEventListener('blur', this.hideContextMenu)
     document.removeEventListener('contextmenu', this.handleGlobalContextMenu, true)
+    document.removeEventListener('keydown', this.handleGlobalWebShortcutGuard, true)
     window.removeEventListener('keydown', this.handleGlobalWebShortcutGuard, true)
     if (typeof this._disposePluginThemes === 'function') {
       this._disposePluginThemes()
@@ -769,6 +985,7 @@ export default {
     document.addEventListener('click', this.hideContextMenu)
     window.addEventListener('blur', this.hideContextMenu)
     document.addEventListener('contextmenu', this.handleGlobalContextMenu, true)
+    document.addEventListener('keydown', this.handleGlobalWebShortcutGuard, true)
     window.addEventListener('keydown', this.handleGlobalWebShortcutGuard, true)
     this._disposePluginThemes = setupPluginThemes(pluginHost)
     // Initialize VueUse shortcut polling and start listening

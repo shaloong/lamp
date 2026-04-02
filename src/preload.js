@@ -50,6 +50,7 @@ function createBrowserFallbackAPI() {
     readTextFile: async () => '',
     getAppDataDir: async () => '',
     getUserPluginsDir: async () => '',
+    searchWorkspace: async () => [],
   }
 }
 
@@ -258,6 +259,18 @@ function initElectronAPI() {
 
     // 获取用户插件目录
     getUserPluginsDir: () => invoke('get_user_plugins_dir'),
+
+    // ==================== 搜索操作 ====================
+    searchWorkspace: (workspacePath, query, options) =>
+      invoke('search_workspace', {
+        workspacePath,
+        query,
+        options: {
+          caseSensitive: !!options?.caseSensitive,
+          wholeWord: !!options?.wholeWord,
+          maxResults: options?.maxResults || 1000,
+        },
+      }),
   };
   
   console.log('API initialized for Tauri');

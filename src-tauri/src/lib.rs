@@ -663,6 +663,432 @@ fn get_user_plugins_dir(app: AppHandle) -> Result<String, String> {
     Ok(dir.to_string_lossy().to_string())
 }
 
+// ==================== 搜索操作 ====================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SearchMatch {
+    #[serde(rename = "lineNumber")]
+    line_number: usize,
+    line: String,
+    #[serde(rename = "matchStart")]
+    match_start: usize,
+    #[serde(rename = "matchEnd")]
+    match_end: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct FileSearchResult {
+    path: String,
+    name: String,
+    matches: Vec<SearchMatch>,
+}
+
+fn default_max_results() -> usize { 1000 }
+
+#[derive(Debug, Clone, Deserialize)]
+struct SearchOptions {
+    #[serde(rename = "caseSensitive", default)]
+    case_sensitive: bool,
+    #[serde(rename = "wholeWord", default)]
+    whole_word: bool,
+    #[serde(rename = "maxResults", default = "default_max_results")]
+    max_results: usize,
+}
+
+fn strip_html_tags(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut in_tag = false;
+    for ch in input.chars() {
+        match ch {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if !in_tag => out.push(ch),
+            _ => {}
+        }
+    }
+    out
+}
+
+fn decode_basic_html_entities(input: &str) -> String {
+    input
+        .replace("&nbsp;", " ")
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+}
+
+fn strip_markdown_formatting(input: &str) -> String {
+    let mut line = input.trim_start().to_string();
+
+    // Headings, blockquotes, list bullets and ordered list prefixes.
+    while line.starts_with('#') {
+        line = line[1..].trim_start().to_string();
+    }
+    while line.starts_with('>') {
+        line = line[1..].trim_start().to_string();
+    }
+    for bullet in ["- ", "* ", "+ "] {
+        if line.starts_with(bullet) {
+            line = line[2..].trim_start().to_string();
+            break;
+        }
+    }
+    if let Some(dot_idx) = line.find(". ") {
+        if line[..dot_idx].chars().all(|c| c.is_ascii_digit()) {
+            line = line[dot_idx + 2..].trim_start().to_string();
+        }
+    }
+
+    // Link/image wrappers and common markdown markers.
+    line = line.replace("![](", "").replace("[", "").replace("](", " ").replace(")", "");
+    line = line.replace("**", "").replace("__", "").replace('*', "").replace('_', "");
+    line = line.replace('`', "").replace("~~", "");
+    line
+}
+
+fn to_rendered_line(file_name: &str, line: &str) -> String {
+    let lower = file_name.to_lowercase();
+    if lower.ends_with(".html")
+        || lower.ends_with(".htm")
+        || lower.ends_with(".lmph")
+        || lower.ends_with(".lampsave")
+    {
+        return decode_basic_html_entities(&strip_html_tags(line));
+    }
+    if lower.ends_with(".md") {
+        return strip_markdown_formatting(&decode_basic_html_entities(&strip_html_tags(line)));
+    }
+    decode_basic_html_entities(line)
+}
+
+fn is_html_like_file(file_name: &str) -> bool {
+    let lower = file_name.to_lowercase();
+    lower.ends_with(".html")
+        || lower.ends_with(".htm")
+        || lower.ends_with(".lmph")
+        || lower.ends_with(".lampsave")
+}
+
+fn is_block_like_html_tag(tag_name: &str) -> bool {
+    matches!(
+        tag_name,
+        "p"
+            | "h1"
+            | "h2"
+            | "h3"
+            | "h4"
+            | "h5"
+            | "h6"
+            | "li"
+            | "blockquote"
+            | "pre"
+            | "div"
+            | "section"
+            | "article"
+            | "br"
+            | "hr"
+    )
+}
+
+fn parse_html_tag(raw_tag: &str) -> Option<(String, bool, bool)> {
+    let trimmed = raw_tag.trim();
+    if trimmed.is_empty() || trimmed.starts_with('!') || trimmed.starts_with('?') {
+        return None;
+    }
+
+    let is_closing = trimmed.starts_with('/');
+    let body = if is_closing {
+        trimmed[1..].trim_start()
+    } else {
+        trimmed
+    };
+    let name: String = body
+        .chars()
+        .take_while(|c| c.is_ascii_alphanumeric())
+        .collect::<String>()
+        .to_lowercase();
+    if name.is_empty() {
+        return None;
+    }
+    let is_self_closing = body.trim_end().ends_with('/');
+    Some((name, is_closing, is_self_closing))
+}
+
+fn to_rendered_lines_with_source(file_name: &str, content: &str) -> Vec<(usize, String)> {
+    if is_html_like_file(file_name) {
+        let mut out = Vec::new();
+        let mut current = String::new();
+        let mut rendered_line_number = 1usize;
+        let mut in_tag = false;
+        let mut tag_buf = String::new();
+
+        let flush_current = |out: &mut Vec<(usize, String)>,
+                             current: &mut String,
+                             rendered_line_number: &mut usize,
+                             advance_if_empty: bool| {
+            let rendered = decode_basic_html_entities(current.trim()).trim().to_string();
+            if !rendered.is_empty() {
+                out.push((*rendered_line_number, rendered));
+                *rendered_line_number += 1;
+            } else if advance_if_empty {
+                *rendered_line_number += 1;
+            }
+            current.clear();
+        };
+
+        for ch in content.chars() {
+            if in_tag {
+                if ch == '>' {
+                    if let Some((name, is_closing, is_self_closing)) = parse_html_tag(&tag_buf) {
+                        if is_block_like_html_tag(&name) {
+                            if !is_closing {
+                                flush_current(
+                                    &mut out,
+                                    &mut current,
+                                    &mut rendered_line_number,
+                                    false,
+                                );
+                            }
+                            if is_closing || is_self_closing || name == "br" || name == "hr" {
+                                flush_current(
+                                    &mut out,
+                                    &mut current,
+                                    &mut rendered_line_number,
+                                    true,
+                                );
+                            }
+                        }
+                    }
+                    tag_buf.clear();
+                    in_tag = false;
+                } else {
+                    tag_buf.push(ch);
+                }
+                continue;
+            }
+
+            match ch {
+                '<' => {
+                    in_tag = true;
+                    tag_buf.clear();
+                }
+                '\n' => {
+                    if !current.is_empty() && !current.ends_with(' ') {
+                        current.push(' ');
+                    }
+                }
+                _ => {
+                    current.push(ch);
+                }
+            }
+        }
+
+        flush_current(&mut out, &mut current, &mut rendered_line_number, false);
+        return out;
+    }
+
+    content
+        .lines()
+        .enumerate()
+        .map(|(idx, line)| (idx + 1, to_rendered_line(file_name, line)))
+        .collect()
+}
+
+#[tauri::command]
+async fn search_workspace(
+    workspace_path: String,
+    query: String,
+    options: SearchOptions,
+) -> Result<Vec<FileSearchResult>, String> {
+    if query.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let normalized = workspace_path.replace('\\', "/");
+    let path = PathBuf::from(&normalized);
+
+    if !path.exists() || !path.is_dir() {
+        return Err(format!("Invalid workspace path: {}", normalized));
+    }
+
+    let max_results = options.max_results.max(1).min(10000);
+    let mut total_matches = 0;
+
+    fn search_file(
+        file_path: &PathBuf,
+        query_str: &str,
+        case_sensitive: bool,
+        whole_word: bool,
+        max_results: usize,
+        total_matches: &mut usize,
+    ) -> Option<FileSearchResult> {
+        if *total_matches >= max_results {
+            return None;
+        }
+
+        let content = match fs::read_to_string(file_path) {
+            Ok(c) => c,
+            Err(_) => return None,
+        };
+
+        let file_name = file_path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+
+        let rendered_lines = to_rendered_lines_with_source(&file_name, &content);
+
+        let rendered_query = to_rendered_line(&file_name, query_str).trim().to_string();
+        if rendered_query.is_empty() {
+            return None;
+        }
+
+        // Always use lowercase for searching, but track positions in original
+        let query_needle = if case_sensitive {
+            rendered_query
+        } else {
+            rendered_query.to_lowercase()
+        };
+
+        let mut matches = Vec::new();
+
+        for (source_line_number, rendered_line) in rendered_lines.iter() {
+            if *total_matches >= max_results {
+                break;
+            }
+
+            let line = rendered_line.trim_end().to_string();
+            if line.is_empty() {
+                continue;
+            }
+            let search_line = if case_sensitive {
+                line.clone()
+            } else {
+                line.to_lowercase()
+            };
+
+            let mut start = 0;
+            while let Some(pos) = search_line[start..].find(&query_needle) {
+                let abs_pos = start + pos;
+                let match_end_byte = abs_pos + query_needle.len();
+                let next_step = search_line[abs_pos..]
+                    .chars()
+                    .next()
+                    .map(|c| c.len_utf8())
+                    .unwrap_or(1);
+
+                if whole_word {
+                    let before_ok = abs_pos == 0
+                        || !search_line[..abs_pos]
+                            .chars()
+                            .next_back()
+                            .map(|c| c.is_alphanumeric())
+                            .unwrap_or(false);
+                    let after_ok = match_end_byte >= search_line.len()
+                        || !search_line[match_end_byte..]
+                            .chars()
+                            .next()
+                            .map(|c| c.is_alphanumeric())
+                            .unwrap_or(false);
+
+                    if !before_ok || !after_ok {
+                        start = abs_pos + next_step;
+                        continue;
+                    }
+                }
+
+                let match_start = search_line[..abs_pos].chars().count();
+                let match_end = search_line[..match_end_byte].chars().count();
+
+                matches.push(SearchMatch {
+                    line_number: *source_line_number,
+                    line: line.clone(),
+                    match_start,
+                    match_end,
+                });
+                *total_matches += 1;
+                start = abs_pos + next_step;
+            }
+        }
+
+        if matches.is_empty() {
+            return None;
+        }
+
+        let path_str = file_path.to_string_lossy().replace('\\', "/");
+
+        Some(FileSearchResult {
+            path: path_str,
+            name: file_name,
+            matches,
+        })
+    }
+
+    fn traverse_and_search(
+        dir: &PathBuf,
+        query_lower: &str,
+        case_sensitive: bool,
+        whole_word: bool,
+        max_results: usize,
+        total_matches: &mut usize,
+    ) -> Vec<FileSearchResult> {
+        let mut results = Vec::new();
+
+        let entries = match fs::read_dir(dir) {
+            Ok(e) => e,
+            Err(_) => return results,
+        };
+
+        for entry in entries.flatten() {
+            if *total_matches >= max_results {
+                break;
+            }
+
+            let path = entry.path();
+
+            if path.is_dir() {
+                let name: String = entry.file_name().to_string_lossy().into_owned();
+                if name.starts_with('.') {
+                    continue;
+                }
+                results.extend(traverse_and_search(
+                    &path,
+                    query_lower,
+                    case_sensitive,
+                    whole_word,
+                    max_results,
+                    total_matches,
+                ));
+            } else if path.is_file() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if is_supported_file(&name) {
+                    if let Some(result) =
+                        search_file(&path, query_lower, case_sensitive, whole_word, max_results, total_matches)
+                    {
+                        results.push(result);
+                    }
+                }
+            }
+        }
+
+        results
+    }
+
+    let query_lower = if options.case_sensitive {
+        query.clone()
+    } else {
+        query.to_lowercase()
+    };
+    let mut results = traverse_and_search(&path, &query_lower, options.case_sensitive, options.whole_word, max_results, &mut total_matches);
+
+    // Sort by number of matches descending
+    results.sort_by(|a, b| b.matches.len().cmp(&a.matches.len()));
+
+    Ok(results)
+}
+
 // ==================== 应用入口 ====================
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -707,6 +1133,8 @@ pub fn run() {
             read_text_file,
             get_app_data_dir,
             get_user_plugins_dir,
+            // 搜索
+            search_workspace,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
