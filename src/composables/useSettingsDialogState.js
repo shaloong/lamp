@@ -50,9 +50,7 @@ export function useSettingsDialogState(props, emit) {
   })
 
   const activeTab = ref('general')
-  const submitting = ref(false)
   const hydratingSettings = ref(false)
-  const savedLanguage = ref('zh-CN') // Track original language when dialog opens
 
   const form = ref({
     language: 'zh-CN',
@@ -95,10 +93,6 @@ export function useSettingsDialogState(props, emit) {
   const activeSection = computed(() => {
     const item = allNavItems.value.find(n => n.id === activeTab.value)
     return item?.type === 'plugin' ? item.section : null
-  })
-
-  const isBuiltInTab = computed(() => {
-    return navItems.some(n => n.id === activeTab.value)
   })
 
   function resolveLabel(label) {
@@ -145,6 +139,44 @@ export function useSettingsDialogState(props, emit) {
     }
   })
 
+  async function saveGeneralSettings() {
+    if (hydratingSettings.value) return
+    try {
+      const api = requireLampAPI('settings save')
+      const generalPayload = JSON.parse(JSON.stringify(form.value))
+      await api.saveGeneralSettings(generalPayload)
+    } catch (error) {
+      console.error('Failed to save general settings', error)
+    }
+  }
+
+  async function saveAiSettings() {
+    if (hydratingSettings.value) return
+    try {
+      const api = requireLampAPI('settings save')
+      await api.saveAiSettings({
+        provider: aiForm.value.provider,
+        baseUrl: normalizeBaseUrl(aiForm.value.baseUrl),
+        apiKey: aiForm.value.apiKey,
+        model: aiForm.value.model,
+      })
+    } catch (error) {
+      console.error('Failed to save AI settings', error)
+    }
+  }
+
+  // Auto-save general settings when any field changes
+  watch(() => form.value, () => {
+    // Language: apply locale immediately
+    setCurrentLocale(form.value.language)
+    saveGeneralSettings()
+  }, { deep: true })
+
+  // Auto-save AI settings when any field changes
+  watch(() => aiForm.value, () => {
+    saveAiSettings()
+  }, { deep: true })
+
   async function loadSettings() {
     try {
       hydratingSettings.value = true
@@ -167,7 +199,6 @@ export function useSettingsDialogState(props, emit) {
         restoreOnStart,
         openLastWorkspace,
       }
-      savedLanguage.value = language // Save original language for potential rollback
 
       const aiProvider = ai?.provider || 'deepseek'
       const aiBaseUrl = ai?.baseUrl ?? ai?.base_url ?? ''
@@ -189,44 +220,10 @@ export function useSettingsDialogState(props, emit) {
     }
   }
 
-  async function handleSave() {
-    if (submitting.value) return
-    submitting.value = true
-    try {
-      const api = requireLampAPI('settings save')
-      const generalPayload = JSON.parse(JSON.stringify(form.value))
-      await api.saveGeneralSettings(generalPayload)
-      await api.saveAiSettings({
-        provider: aiForm.value.provider,
-        baseUrl: normalizeBaseUrl(aiForm.value.baseUrl),
-        apiKey: aiForm.value.apiKey,
-        model: aiForm.value.model,
-      })
-      // Update global locale only after successful save
-      if (form.value.language !== savedLanguage.value) {
-        setCurrentLocale(form.value.language)
-      }
-      visible.value = false
-    } catch (error) {
-      console.error('Failed to save settings', error)
-    } finally {
-      submitting.value = false
-    }
-  }
-
-  function handleClose() {
-    // Restore original language if it was modified but not saved
-    if (form.value.language !== savedLanguage.value) {
-      setCurrentLocale(savedLanguage.value)
-    }
-    visible.value = false
-  }
-
   return {
     pluginHost,
     visible,
     activeTab,
-    submitting,
     form,
     providers,
     aiForm,
@@ -236,13 +233,10 @@ export function useSettingsDialogState(props, emit) {
     navItems,
     allNavItems,
     activeSection,
-    isBuiltInTab,
     resolveLabel,
     resolvePluginName,
     getPluginValue,
     handlePluginSettingChange,
-    handleSave,
-    handleClose,
     t,
   }
 }

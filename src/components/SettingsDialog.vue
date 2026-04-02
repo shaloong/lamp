@@ -48,14 +48,6 @@
         </div>
       </div>
 
-      <DialogFooter>
-        <Button variant="secondary" @click="handleClose">
-          {{ isBuiltInTab ? t('common.cancel') : t('common.close') }}
-        </Button>
-        <Button v-if="isBuiltInTab" :disabled="submitting" @click="handleSave">
-          {{ submitting ? t('common.saving') : t('common.save') }}
-        </Button>
-      </DialogFooter>
       <DialogClose class="absolute right-4 top-4" />
     </DialogContent>
   </Dialog>
@@ -73,10 +65,8 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
 import { Settings, Bot, Puzzle, Keyboard, ExternalLink, Edit3 } from 'lucide-vue-next'
 
 const navIconMap = {
@@ -102,7 +92,6 @@ const {
   t,
   visible,
   activeTab,
-  submitting,
   form,
   providers,
   aiForm,
@@ -112,13 +101,10 @@ const {
   navItems,
   allNavItems,
   activeSection,
-  isBuiltInTab,
   resolveLabel,
   resolvePluginName,
   getPluginValue,
   handlePluginSettingChange,
-  handleSave,
-  handleClose,
 } = useSettingsDialogState(props, emit)
 
 function getNavIcon(icon) {
