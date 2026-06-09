@@ -301,10 +301,48 @@ export interface AISettings {
   model: string;
 }
 
+/** Represents an AI-generated suggestion awaiting user confirmation */
+export interface AISuggestion {
+  /** Human-readable label of the action, e.g. "润色" */
+  actionLabel: string;
+  /** The AI-generated content to be applied */
+  content: string;
+  /** Whether to replace the original selection (polish/expand/summarize) or append after it (continue) */
+  insertMode: 'replace' | 'append';
+  /** Start position of the original selection in the document */
+  from: number;
+  /** End position of the original selection in the document */
+  to: number;
+}
+
 export interface LampAIAPI {
   chat(systemPrompt: string, userMessage: string): Promise<string>;
   getSettings(): Promise<AISettings>;
   saveSettings(settings: AISettings): Promise<void>;
+  /** Mark an AI operation as started — shows a loading overlay */
+  startLoading(actionLabel: string): void;
+  /** Mark the current AI operation as finished — hides the loading overlay */
+  stopLoading(): void;
+  /** Whether an AI operation is currently in progress */
+  isLoading(): boolean;
+  /** Set an error message — replaces the loading overlay with an error display */
+  setError(message: string): void;
+  /** Clear any error state (e.g. before starting a new action) */
+  clearError(): void;
+  /**
+   * Show an AI result as a suggestion overlay — the result is NOT applied yet.
+   * The editor state (selection, cursor) is preserved until the user accepts or dismisses.
+   */
+  showSuggestion(suggestion: AISuggestion): void;
+  /** Clear any active suggestion */
+  clearSuggestion(): void;
+  /** Current loading state — reactive, consumed by the UI */
+  readonly loadingState: {
+    readonly isLoading: boolean;
+    readonly actionLabel: string;
+    readonly error: string | null;
+    readonly suggestion: AISuggestion | null;
+  };
 }
 
 export interface LampUIAPI {
@@ -405,7 +443,15 @@ export class PluginContext {
   constructor(
     manifest: LampPluginManifest,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    private host: { events: any; contributions: any; editorInstance: Editor | null; workspace: { isOpen: boolean; rootPath: string; name: string }; storageService: unknown; commandService: unknown }
+    private host: {
+      events: any;
+      contributions: any;
+      editorInstance: Editor | null;
+      workspace: { isOpen: boolean; rootPath: string; name: string };
+      storageService: unknown;
+      commandService: unknown;
+      aiState: { isLoading: boolean; actionLabel: string };
+    }
   ) {
     this.id = manifest.id;
     this.editor    = this._buildEditorAPI();
@@ -475,10 +521,45 @@ export class PluginContext {
   }
 
   private _buildAIAPI(): LampAIAPI {
+    const aiState = this.host.aiState;
     return {
       chat: (systemPrompt, userMessage) => window.electronAPI.ai(systemPrompt, userMessage),
       getSettings: () => window.electronAPI.getAiSettings(),
       saveSettings: (settings) => window.electronAPI.saveAiSettings(settings),
+      startLoading: (actionLabel) => {
+        aiState.isLoading = true;
+        aiState.actionLabel = actionLabel;
+        aiState.error = null;
+        aiState.suggestion = null;
+      },
+      stopLoading: () => {
+        aiState.isLoading = false;
+        aiState.actionLabel = '';
+      },
+      isLoading: () => aiState.isLoading,
+      setError: (message) => {
+        aiState.isLoading = false;
+        aiState.actionLabel = '';
+        aiState.error = message;
+        aiState.suggestion = null;
+      },
+      clearError: () => {
+        aiState.error = null;
+      },
+      showSuggestion: (suggestion) => {
+        aiState.isLoading = false;
+        aiState.actionLabel = '';
+        aiState.suggestion = suggestion;
+      },
+      clearSuggestion: () => {
+        aiState.suggestion = null;
+      },
+      loadingState: {
+        get isLoading() { return aiState.isLoading; },
+        get actionLabel() { return aiState.actionLabel; },
+        get error() { return aiState.error; },
+        get suggestion() { return aiState.suggestion; },
+      },
     };
   }
 
