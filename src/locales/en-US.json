@@ -26,6 +26,38 @@
     "shortcuts": "Shortcuts",
     "plugins": "Plugins"
   },
+  "shortcuts": {
+    "searchPlaceholder": "Search commands or shortcuts...",
+    "builtin": "Built-in",
+    "empty": "No matching shortcuts found",
+    "recording": "Press keys...",
+    "conflict": "Conflict",
+    "reset": "Reset",
+    "resetAll": "Reset All"
+  },
+  "commands": {
+    "app": {
+      "title": "Main Program",
+      "newFile": "New File",
+      "openFile": "Open File",
+      "save": "Save",
+      "saveAs": "Save As",
+      "close": "Close",
+      "undo": "Undo",
+      "redo": "Redo",
+      "cut": "Cut",
+      "copy": "Copy",
+      "paste": "Paste",
+      "selectAll": "Select All",
+      "delete": "Delete",
+      "fullScreen": "Full Screen",
+      "minWindow": "Minimize Window",
+      "maxWindow": "Maximize Window",
+      "closeWindow": "Close Window",
+      "openWorkspace": "Open Workspace",
+      "closeWorkspace": "Close Workspace"
+    }
+  },
   "common": {
     "save": "Save",
     "saving": "Saving...",

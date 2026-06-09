@@ -26,6 +26,39 @@
     "shortcuts": "快捷键",
     "plugins": "插件"
   },
+  "shortcuts": {
+    "searchPlaceholder": "搜索命令或快捷键...",
+    "builtin": "内置",
+    "empty": "没有找到匹配的快捷键",
+    "recording": "请按键...",
+    "conflict": "冲突",
+    "reset": "重置",
+    "resetAll": "重置全部"
+  },
+  "commands": {
+    "app": {
+      "title": "主程序",
+      "newFile": "新建文件",
+      "newWorkspace": "新建工作区",
+      "openFile": "打开文件",
+      "save": "保存",
+      "saveAs": "另存为",
+      "close": "关闭",
+      "undo": "撤销",
+      "redo": "重做",
+      "cut": "剪切",
+      "copy": "复制",
+      "paste": "粘贴",
+      "selectAll": "全选",
+      "delete": "删除",
+      "fullScreen": "全屏",
+      "minWindow": "最小化窗口",
+      "maxWindow": "最大化窗口",
+      "closeWindow": "关闭窗口",
+      "openWorkspace": "打开工作区",
+      "closeWorkspace":"关闭工作区"
+    }
+  },
   "common": {
     "save": "保存",
     "saving": "保存中...",

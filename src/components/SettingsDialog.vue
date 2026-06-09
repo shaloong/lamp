@@ -198,6 +198,11 @@
           </template>
         </section>
 
+        <!-- 快捷键设置 -->
+        <section v-else-if="activeTab === 'shortcuts'" class="settings-section settings-shortcuts">
+          <ShortcutSettings />
+        </section>
+
         <!-- 其他标签 - 预留 -->
         <section v-else class="settings-section settings-placeholder">
           <p style="color: var(--lamp-color-neutral-grey); font-size: 13px; text-align: center; margin-top: 60px">
@@ -225,6 +230,7 @@ import { ref, computed, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { pluginHost } from '@/plugins/index'
 import { i18n } from '@/i18n.js'
+import ShortcutSettings from './ShortcutSettings.vue'
 
 const props = defineProps({
   modelValue: {
@@ -365,8 +371,8 @@ watch(() => aiForm.value.provider, (newProvider) => {
 async function loadSettings() {
   try {
     const [general, ai] = await Promise.all([
-      window.electronAPI.getGeneralSettings(),
-      window.electronAPI.getAiSettings(),
+      window.lampAPI.getGeneralSettings(),
+      window.lampAPI.getAiSettings(),
     ])
     form.value = {
       language: locale.value,
@@ -393,8 +399,8 @@ async function handleSave() {
   submitting.value = true
   try {
     const generalPayload = JSON.parse(JSON.stringify(form.value))
-    await window.electronAPI.saveGeneralSettings(generalPayload)
-    await window.electronAPI.saveAiSettings({
+    await window.lampAPI.saveGeneralSettings(generalPayload)
+    await window.lampAPI.saveAiSettings({
       provider: aiForm.value.provider,
       baseURL: aiForm.value.baseURL,
       apiKey: aiForm.value.apiKey,

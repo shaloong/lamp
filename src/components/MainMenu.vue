@@ -7,13 +7,10 @@ import { pluginHost } from '../plugins/index'
 const { t } = useI18n()
 
 const emit = defineEmits([
-  'newFile', 'openFile', 'saveFile', 'saveFileAs', 'closeWindow',
-  'editUndo', 'editRedo', 'editCut', 'editCopy', 'editPaste',
-  'editSelectAll', 'editDelete',
-  'viewFullScreen',
-  'openWorkspace', 'closeWorkspace',
   'minWindow', 'maxWindow',
 ])
+
+const cmd = pluginHost.commandService
 
 function invokeAction(pluginId, action) {
   const ctx = pluginHost.getContext(pluginId)
@@ -47,8 +44,8 @@ function resolveLabel(label) {
       <!-- 文件菜单 -->
       <el-sub-menu index="file">
         <template #title>{{ t('menu.file') }}</template>
-        <el-menu-item index="file-new" @click="emit('newFile')">{{ t('menu.newFile') }}</el-menu-item>
-        <el-menu-item index="file-open" @click="emit('openFile')">
+        <el-menu-item index="file-new" @click="cmd.execute('app.newFile')">{{ t('menu.newFile') }}</el-menu-item>
+        <el-menu-item index="file-open" @click="cmd.execute('app.openFile')">
           <div class="menu-item__title">{{ t('menu.openFile') }}</div>
           <div class="flex-grow" />
           <div class="menu-item__shortcut">Ctrl+O</div>
@@ -63,51 +60,51 @@ function resolveLabel(label) {
           </el-menu-item>
         </template>
         <el-divider />
-        <el-menu-item index="file-save" @click="emit('saveFile')">
+        <el-menu-item index="file-save" @click="cmd.execute('app.save')">
           <div class="menu-item__title">{{ t('menu.save') }}</div>
           <div class="flex-grow" />
           <div class="menu-item__shortcut">Ctrl+S</div>
         </el-menu-item>
-        <el-menu-item index="file-save-as" @click="emit('saveFileAs')">{{ t('menu.saveAs') }}</el-menu-item>
+        <el-menu-item index="file-save-as" @click="cmd.execute('app.saveAs')">{{ t('menu.saveAs') }}</el-menu-item>
         <el-divider />
-        <el-menu-item index="file-close" @click="emit('closeWindow')">{{ t('menu.close') }}</el-menu-item>
+        <el-menu-item index="file-close" @click="cmd.execute('app.close')">{{ t('menu.close') }}</el-menu-item>
       </el-sub-menu>
 
       <!-- 编辑菜单 -->
       <el-sub-menu index="edit">
         <template #title>{{ t('menu.edit') }}</template>
-        <el-menu-item index="edit-undo" @click="emit('editUndo')">
+        <el-menu-item index="edit-undo" @click="cmd.execute('app.undo')">
           <div class="menu-item__title">{{ t('menu.undo') }}</div>
           <div class="flex-grow" />
           <div class="menu-item__shortcut">Ctrl+Z</div>
         </el-menu-item>
-        <el-menu-item index="edit-redo" @click="emit('editRedo')">
+        <el-menu-item index="edit-redo" @click="cmd.execute('app.redo')">
           <div class="menu-item__title">{{ t('menu.redo') }}</div>
           <div class="flex-grow" />
           <div class="menu-item__shortcut">Ctrl+Y</div>
         </el-menu-item>
         <el-divider />
-        <el-menu-item index="edit-cut" @click="emit('editCut')">
+        <el-menu-item index="edit-cut" @click="cmd.execute('app.cut')">
           <div class="menu-item__title">{{ t('menu.cut') }}</div>
           <div class="flex-grow" />
           <div class="menu-item__shortcut">Ctrl+X</div>
         </el-menu-item>
-        <el-menu-item index="edit-copy" @click="emit('editCopy')">
+        <el-menu-item index="edit-copy" @click="cmd.execute('app.copy')">
           <div class="menu-item__title">{{ t('menu.copy') }}</div>
           <div class="flex-grow" />
           <div class="menu-item__shortcut">Ctrl+C</div>
         </el-menu-item>
-        <el-menu-item index="edit-paste" @click="emit('editPaste')">
+        <el-menu-item index="edit-paste" @click="cmd.execute('app.paste')">
           <div class="menu-item__title">{{ t('menu.paste') }}</div>
           <div class="flex-grow" />
           <div class="menu-item__shortcut">Ctrl+V</div>
         </el-menu-item>
-        <el-menu-item index="edit-select-all" @click="emit('editSelectAll')">
+        <el-menu-item index="edit-select-all" @click="cmd.execute('app.selectAll')">
           <div class="menu-item__title">{{ t('menu.selectAll') }}</div>
           <div class="flex-grow" />
           <div class="menu-item__shortcut">Ctrl+A</div>
         </el-menu-item>
-        <el-menu-item index="edit-delete" @click="emit('editDelete')">
+        <el-menu-item index="edit-delete" @click="cmd.execute('app.delete')">
           <div class="menu-item__title">{{ t('menu.delete') }}</div>
           <div class="flex-grow" />
           <div class="menu-item__shortcut">Del</div>
@@ -126,7 +123,7 @@ function resolveLabel(label) {
       <!-- 视图菜单 -->
       <el-sub-menu index="view">
         <template #title>{{ t('menu.view') }}</template>
-        <el-menu-item index="view-fullscreen" @click="emit('viewFullScreen')">
+        <el-menu-item index="view-fullscreen" @click="cmd.execute('app.fullScreen')">
           <div class="menu-item__title">{{ t('menu.fullScreen') }}</div>
           <div class="flex-grow" />
           <div class="menu-item__shortcut">F11</div>

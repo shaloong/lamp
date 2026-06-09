@@ -4,8 +4,8 @@
       <!-- 核心工具栏：通过插件系统渲染（lamp.core-toolbar） -->
       <template v-for="item in pluginHost.contributions.sortedEditorToolbar" :key="item.id">
         <!-- 下拉菜单类型 -->
-        <ToolbarDropdown v-if="item.type === 'dropdown' && item.children" :label="resolveLabel(item.label)" :children="item.children"
-          :editor="editor" :is-disabled="item.isDisabled ? item.isDisabled(editor) : false" />
+        <ToolbarDropdown v-if="item.type === 'dropdown' && item.children" :label="resolveLabel(item.label)"
+          :children="item.children" :editor="editor" :is-disabled="item.isDisabled ? item.isDisabled(editor) : false" />
         <!-- 普通按钮类型 -->
         <button v-else @click="invokeAction(item.pluginId, item.action)"
           :class="{ 'is-active': item.isActive ? item.isActive(editor) : false }"
@@ -19,7 +19,8 @@
       </template>
     </div>
     <!-- BubbleMenu (来自插件系统，通过 TipTap Vue 组件自动定位) -->
-    <BubbleMenu v-if="editor && pluginHost.contributions.sortedBubbleMenu.length > 0" :editor="editor" :should-show="({ state }) => !state.selection.empty">
+    <BubbleMenu v-if="editor && pluginHost.contributions.sortedBubbleMenu.length > 0" :editor="editor"
+      :should-show="({ state }) => !state.selection.empty">
       <menu class="menu-select">
         <li v-for="item in pluginHost.contributions.sortedBubbleMenu" :key="item.id">
           <button class="button" @click="invokeAction(item.pluginId, item.action)">

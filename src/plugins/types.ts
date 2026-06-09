@@ -348,7 +348,10 @@ export interface LampWorkspaceAPI {
 }
 
 export interface AISettings {
-  baseURL: string;
+  /** Provider name, e.g. "deepseek" */
+  provider: string;
+  /** Base URL of the AI API endpoint */
+  baseUrl: string;
   apiKey: string;
   model: string;
 }
@@ -439,6 +442,13 @@ export interface LampStorageAPI {
   clear(): void;
 }
 
+export interface LampShortcutsAPI {
+  getAll(): Array<{ id: string; label: string; defaultAccelerator?: string; effectiveAccelerator?: string }>;
+  setOverride(commandId: string, accelerator: string | null): void;
+  resetToDefault(commandId: string): void;
+  checkConflict(accelerator: string, excludeId?: string): string | null;
+}
+
 export interface LampEventAPI {
   on<T = unknown>(event: string, handler: (data: T) => void): () => void;
   once<T = unknown>(event: string, handler: (data: T) => void): void;
@@ -507,6 +517,7 @@ export class PluginContext {
   storage: LampStorageAPI;
   event: LampEventAPI;
   i18n: LampI18nAPI;
+  shortcuts: LampShortcutsAPI;
 
   constructor(
     manifest: LampPluginManifest,
@@ -518,7 +529,8 @@ export class PluginContext {
       workspace: { isOpen: boolean; rootPath: string; name: string };
       storageService: unknown;
       commandService: unknown;
-      aiState: { isLoading: boolean; actionLabel: string };
+      shortcutService: unknown;
+      aiState: { isLoading: boolean; actionLabel: string; error: string | null; suggestion: AISuggestion | null };
       i18nService: {
         setLocaleMessages(pluginId: string, locale: string, messages: Record<string, unknown>): void;
       };
@@ -534,6 +546,7 @@ export class PluginContext {
     this.storage   = this._buildStorageAPI();
     this.event     = this._buildEventAPI();
     this.i18n      = this._buildI18nAPI();
+    this.shortcuts = this._buildShortcutsAPI();
   }
 
   private _buildEditorAPI(): LampEditorAPI {
@@ -543,7 +556,7 @@ export class PluginContext {
       getContent: () => getEditor()?.getHTML() ?? '',
       getText: () => getEditor()?.getText() ?? '',
       insertContent: (html) => getEditor()?.chain().focus().insertContent(html).run(),
-      insertContentAtCursor: (html) => getEditor()?.chain().focus().insertContentAt({ at: getEditor()!.state.selection.to }).run(),
+      insertContentAtCursor: (html) => getEditor()?.chain().focus().insertContentAt(getEditor()!.state.selection.to, html).run(),
       deleteSelection: () => getEditor()?.chain().focus().deleteSelection().run(),
       applyMark: (mark, attrs) => getEditor()?.chain().focus().setMark(mark, attrs).run(),
       removeMark: (mark) => getEditor()?.chain().focus().unsetMark(mark).run(),
@@ -561,33 +574,34 @@ export class PluginContext {
 
   private _buildFileAPI(): LampFileAPI {
     return {
-      read: (filePath) => window.electronAPI.openSpecificFile(filePath).then(data => {
-        if (data && data[0] === 1) return data[1] as string;
-        throw new Error(`Failed to read file: ${filePath}`);
-      }),
-      write: (filePath, content) => window.electronAPI.saveInfo(filePath, content),
-      exists: (filePath) => window.electronAPI.hasFile(filePath),
-      delete: (filePath) => window.electronAPI.delFile(filePath),
-      getFolderContent: (folderPath) => window.electronAPI.getFolderContent(folderPath),
-      watch: (folderPath) => window.electronAPI.startWatching(folderPath),
-      unwatch: () => window.electronAPI.stopWatching(),
+      read: (filePath) => window.lampAPI.readTextFile(filePath),
+      write: (filePath, content) => window.lampAPI.saveInfo(filePath, content),
+      exists: (filePath) => window.lampAPI.hasFile(filePath),
+      delete: (filePath) => window.lampAPI.delFile(filePath),
+      getFolderContent: (folderPath) => window.lampAPI.getFolderContent(folderPath),
+      watch: (folderPath) => window.lampAPI.startWatching(folderPath),
+      unwatch: () => window.lampAPI.stopWatching(),
     };
   }
 
   private _buildWorkspaceAPI(): LampWorkspaceAPI {
+    const host = this.host;
     return {
-      get isOpen() { return this._ws().isOpen; },
-      get rootPath() { return this._ws().rootPath; },
-      get name() { return this._ws().name; },
-      _ws: () => this.host.workspace,
+      get isOpen() { return host.workspace.isOpen; },
+      get rootPath() { return host.workspace.rootPath; },
+      get name() { return host.workspace.name; },
       open: async () => {
-        const result = await window.electronAPI.openWorkspace();
+        const result = await window.lampAPI.openWorkspace();
         if (result) {
-          this.host.events.emit('lamp.workspace.opened', { rootPath: result.rootPath, name: result.name });
+          host.workspace.isOpen = true;
+          host.workspace.rootPath = result.rootPath;
+          host.workspace.name = result.name;
+          host.events.emit('lamp.workspace.opened', { rootPath: result.rootPath, name: result.name });
         }
       },
       close: () => {
-        this.host.events.emit('lamp.workspace.closed', {});
+        host.workspace.isOpen = false;
+        host.events.emit('lamp.workspace.closed', {});
       },
     };
   }
@@ -595,9 +609,9 @@ export class PluginContext {
   private _buildAIAPI(): LampAIAPI {
     const aiState = this.host.aiState;
     return {
-      chat: (systemPrompt, userMessage) => window.electronAPI.ai(systemPrompt, userMessage),
-      getSettings: () => window.electronAPI.getAiSettings(),
-      saveSettings: (settings) => window.electronAPI.saveAiSettings(settings),
+      chat: (systemPrompt, userMessage) => window.lampAPI.ai(systemPrompt, userMessage),
+      getSettings: () => window.lampAPI.getAiSettings(),
+      saveSettings: (settings) => window.lampAPI.saveAiSettings(settings),
       startLoading: (actionLabel) => {
         aiState.isLoading = true;
         aiState.actionLabel = actionLabel;
@@ -712,6 +726,21 @@ export class PluginContext {
       setLocaleMessages: (locale, messages) => {
         this.host.i18nService.setLocaleMessages(pid, locale, messages);
       },
+    };
+  }
+
+  private _buildShortcutsAPI(): LampShortcutsAPI {
+    const ss = this.host.shortcutService as {
+      getAll(): Array<{ id: string; label: string; defaultAccelerator?: string; effectiveAccelerator?: string }>;
+      setOverride(commandId: string, accelerator: string | null): void;
+      resetToDefault(commandId: string): void;
+      checkConflict(accelerator: string, excludeId?: string): string | null;
+    };
+    return {
+      getAll: () => ss.getAll(),
+      setOverride: (commandId, accelerator) => ss.setOverride(commandId, accelerator),
+      resetToDefault: (commandId) => ss.resetToDefault(commandId),
+      checkConflict: (accelerator, excludeId) => ss.checkConflict(accelerator, excludeId),
     };
   }
 }

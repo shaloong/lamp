@@ -1,11 +1,7 @@
 <template>
   <div class="app">
     <div class="app-menu">
-      <main-menu @openFile="openFile" @saveFile="fileSave" @saveFileAs="saveFileAs" @editUndo="menuEditUndo"
-        @editRedo="menuEditRedo" @editCut="menuEditCut" @editCopy="menuEditCopy" @editPaste="menuEditPaste"
-        @editSelectAll="menuEditSelectAll" @editDelete="menuEditDelete" @viewFullScreen="viewFullScreen"
-        @minWindow="minWindow" @maxWindow="maxWindow" @closeWindow="closeWindow"
-        @openWorkspace="openWorkspace" @closeWorkspace="closeWorkspace" @newFile="newFile" />
+      <main-menu @minWindow="minWindow" @maxWindow="maxWindow" @closeWindow="closeWindow" />
     </div>
     <div class="app-content">
       <div class="toolbar">
@@ -129,7 +125,8 @@ import { v4 as uuidv4 } from 'uuid';
 import editor from "@/components/Editor.vue";
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useFileStore } from '@/stores/files'
-import { pluginHost } from './plugins/index'
+import { pluginHost } from '@/plugins/index'
+import { useShortcutCenter } from '@/composables/useShortcutCenter'
 import CommandPalette from './components/CommandPalette.vue'
 import SettingsDialog from './components/SettingsDialog.vue'
 import { i18n } from './i18n.js'
@@ -227,44 +224,44 @@ export default {
 
       if (this.activeTab !== null && tab.filePath) {
         // 如果 filePath 不为空，则执行保存操作
-        window.electronAPI.saveInfo(tab.filePath, tab.content);
+        window.lampAPI.saveInfo(tab.filePath, tab.content);
       } else {
         // 否则执行另存为操作
         this.saveFileAs(tabIndex)
       }
     },
     menuEditUndo() {
-      window.electronAPI.menuEditUndo();
+      window.lampAPI.menuEditUndo();
     },
     menuEditRedo() {
-      window.electronAPI.menuEditRedo();
+      window.lampAPI.menuEditRedo();
     },
     menuEditCut() {
-      window.electronAPI.menuEditCut();
+      window.lampAPI.menuEditCut();
     },
     menuEditCopy() {
-      window.electronAPI.menuEditCopy();
+      window.lampAPI.menuEditCopy();
     },
     menuEditPaste() {
-      window.electronAPI.menuEditPaste();
+      window.lampAPI.menuEditPaste();
     },
     menuEditSelectAll() {
-      window.electronAPI.menuEditSelectAll();
+      window.lampAPI.menuEditSelectAll();
     },
     menuEditDelete() {
-      window.electronAPI.menuEditDelete();
+      window.lampAPI.menuEditDelete();
     },
     viewFullScreen() {
-      window.electronAPI.menuViewFullScreen();
+      window.lampAPI.menuViewFullScreen();
     },
     minWindow() {
-      window.electronAPI.minWindow();
+      window.lampAPI.minWindow();
     },
     maxWindow() {
-      window.electronAPI.maxWindow();
+      window.lampAPI.maxWindow();
     },
     closeWindow() {
-      window.electronAPI.closeWindow();
+      window.lampAPI.closeWindow();
     },
 
     openSettingsDialog() {
@@ -279,10 +276,11 @@ export default {
 
     async loadGeneralSettings() {
       try {
-        const settings = await window.electronAPI.getGeneralSettings();
+        const settings = await window.lampAPI.getGeneralSettings();
         // 同步语言到 i18n
         if (settings.language) {
-          i18n.global.locale = settings.language;
+          // 归一化 locale 名称，确保始终匹配 i18n messages 的 key
+          i18n.global.locale = settings.language === 'zh' ? 'zh-CN' : settings.language;
         }
       } catch (error) {
         console.error('Failed to load general settings', error);
@@ -310,7 +308,7 @@ export default {
     // 打开工作区（选择文件夹）
     async openWorkspace() {
       try {
-        const result = await window.electronAPI.openWorkspace()
+        const result = await window.lampAPI.openWorkspace()
         if (result) {
           this.workspaceStore.setWorkspace({
             workspacePath: '',  // 不需要配置文件
@@ -322,7 +320,7 @@ export default {
           if (result.rootPath) {
             this.showDirection(result.rootPath)
             // 开始监视文件夹
-            await window.electronAPI.startWatching(result.rootPath)
+            await window.lampAPI.startWatching(result.rootPath)
           }
           // 清空临时文件
           this.tempFiles = []
@@ -335,7 +333,7 @@ export default {
     // 关闭工作区
     async closeWorkspace() {
       // 停止监视
-      await window.electronAPI.stopWatching()
+      await window.lampAPI.stopWatching()
       this.workspaceStore.clearWorkspace()
       this.fileStore.clearAll()
       this.folderContent = ''
@@ -344,7 +342,7 @@ export default {
 
     // 初始化文件变化监听
     initFileWatcher() {
-      window.electronAPI.onFileChange((event) => {
+      window.lampAPI.onFileChange((event) => {
         console.log('文件变化:', event)
         // 有变化时自动刷新文件树（使用 refresh 模式保留展开状态）
         if (this.workspaceStore.isOpen && this.workspaceStore.rootPath) {
@@ -395,7 +393,7 @@ export default {
       }
 
       if (path !== "") {
-        window.electronAPI.getFolderContent(path).then(result => {
+        window.lampAPI.getFolderContent(path).then(result => {
           this.folderContent = this.convertToTree(result);
 
           // 恢复展开状态
@@ -570,7 +568,7 @@ export default {
         return;
       }
 
-      const resultPath = await window.electronAPI.saveFileAs(tab.title || 'untitled', tab.content || '')
+      const resultPath = await window.lampAPI.saveFileAs(tab.title || 'untitled', tab.content || '')
       if (resultPath !== "") {
         this.tabs[tabIndex].filePath = resultPath
         this.tabs[tabIndex].title = this.tabs[tabIndex].filePath.split('\\').pop()
@@ -583,12 +581,12 @@ export default {
 
     // 检查文件是否存在
     async hasFile(filePath) {
-      return await window.electronAPI.hasFile(filePath)
+      return await window.lampAPI.hasFile(filePath)
     },
 
     // 删除文件
     async delFile(filePath) {
-      const result = await window.electronAPI.delFile(filePath)
+      const result = await window.lampAPI.delFile(filePath)
       if (result === false) {
         console.log("Error: 在删除 " + filePath + " 文件时发生了失败。")
       }
@@ -606,16 +604,16 @@ export default {
     // 监听通道，接收主进程发送的内容
     initIpcRenderers() {
       // 打开文件：监听主进程，被触发后接收文件路径和内容
-      window.electronAPI.openFile((status, path, data) => {
+      window.lampAPI.openFile((status, path, data) => {
         this.openFile(status, path, data);
       });
       // 保存文件：监听主进程，被触发后将路径和内容发送给主进程执行保存操作；若文件路径为空则另存为
-      window.electronAPI.saveFile(() => {
+      window.lampAPI.saveFile(() => {
         if (this.activeTab !== null && this.tabs[this.activeTab].filePath) {
           // 如果 filePath 不为空，则执行保存操作
           const filePath = this.tabs[this.activeTab].filePath;
           const fileContent = this.tabs[this.activeTab].content;
-          window.electronAPI.saveInfo(filePath, fileContent);
+          window.lampAPI.saveInfo(filePath, fileContent);
           const result = this.hasFile(this.tabs[index].filePath + '.lampsave');
           if (result) {
             this.delFile(this.tabs[this.activeTab].filePath + '.lampsave') // 删除自动保存的文件
@@ -635,7 +633,7 @@ export default {
 
       const currentTab = this.tabs[this.activeTab];
       if (currentTab && currentTab.filePath && currentTab.filePath !== '' && currentTab.filePath.split('.').pop() !== 'lampsave') {
-        window.electronAPI.saveInfo(currentTab.filePath + '.lampsave', currentTab.content)
+        window.lampAPI.saveInfo(currentTab.filePath + '.lampsave', currentTab.content)
       }
     },
 
@@ -648,7 +646,7 @@ export default {
       if ((filePath !== '') && (this.tabs.some(tab => tab.filePath === filePath))) {
         this.switchTab(this.tabs.findIndex(tab => tab.filePath === filePath))
       } else {
-        const data = await window.electronAPI.openSpecificFile(filePath)
+        const data = await window.lampAPI.openSpecificFile(filePath)
         if (data && data[0] === 1) {
           const title = filePath.split('\\').pop()
           const { filePath, fileContent } = this.format2html(filePath, data[1]) // 格式转换
@@ -704,24 +702,74 @@ export default {
 
   created() {
     // 等待语言加载完成后再初始化 tab，确保标题语言正确
-    ;(async () => {
+    ; (async () => {
       await this.loadGeneralSettings()
       this.tabs.push({ title: i18n.global.t('app.newLampText'), filePath: '', content: '', id: uuidv4() })
     })()
     this.initIpcRenderers()
     this.initFileWatcher()
     window.addEventListener('resize', this.handleResize)
-    // Ctrl+Shift+P 打开命令面板
-    window.addEventListener('keydown', (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'P') {
-        e.preventDefault();
-        this.dialogCommandPalette = true;
-      }
-    });
+
+    // ── Register all main menu commands with the centralized ShortcutService ──
+    // Router: commandId → bound method on this component instance
+    this._cmdRouter = {
+      'app.newFile': () => this.newFile(),
+      'app.openFile': () => { window.lampAPI.menuFileOpen(); },
+      'app.save': () => this.fileSave(),
+      'app.saveAs': () => this.saveFileAs(),
+      'app.close': () => this.closeWindow(),
+      'app.undo': () => this.menuEditUndo(),
+      'app.redo': () => this.menuEditRedo(),
+      'app.cut': () => this.menuEditCut(),
+      'app.copy': () => this.menuEditCopy(),
+      'app.paste': () => this.menuEditPaste(),
+      'app.selectAll': () => this.menuEditSelectAll(),
+      'app.delete': () => this.menuEditDelete(),
+      'app.fullScreen': () => this.viewFullScreen(),
+      'app.openWorkspace': () => this.openWorkspace(),
+      'app.closeWorkspace': () => this.closeWorkspace(),
+    };
+
+    // Register each command; ShortcutService handles the keydown dispatch
+    for (const [id, handler] of Object.entries(this._cmdRouter)) {
+      const keybinding = {
+        'app.newFile': 'Ctrl+N',
+        'app.openFile': 'Ctrl+O',
+        'app.save': 'Ctrl+S',
+        'app.saveAs': 'Ctrl+Shift+S',
+        'app.close': 'Ctrl+W',
+        'app.undo': 'Ctrl+Z',
+        'app.redo': 'Ctrl+Y',
+        'app.cut': 'Ctrl+X',
+        'app.copy': 'Ctrl+C',
+        'app.paste': 'Ctrl+V',
+        'app.selectAll': 'Ctrl+A',
+        'app.delete': 'Delete',
+        'app.fullScreen': 'F11',
+        'app.openWorkspace': 'Ctrl+Shift+O',
+        'app.closeWorkspace': 'Ctrl+Shift+W',
+      }[id];
+
+      pluginHost.commandService.register('lamp.app', {
+        id,
+        label: `commands.${id}`,
+        keybinding,
+        handler,
+      });
+    }
+
+  },
+
+  beforeUnmount() {
+    // No listener to clean up — App.vue no longer listens for lamp.command.execute
   },
 
   mounted() {
     this.showDirection();
+    // Initialize VueUse shortcut polling and start listening
+    const { register } = useShortcutCenter();
+    pluginHost.shortcutService.setExternalRegister(register);
+    pluginHost.shortcutService.startListening();
   },
 
 };
