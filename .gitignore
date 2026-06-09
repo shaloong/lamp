@@ -26,9 +26,11 @@ dist-ssr
 # Tiptap registry token
 .npmrc
 
-# Claude Code
+# Ai
 .agents/
 .claude/
+CLAUDE.md
+AGENTS.md
 skills-lock.json
 
 # Config files
