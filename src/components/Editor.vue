@@ -187,32 +187,31 @@ export default {
 </script>
 
 <style lang="scss">
-@use "/src/styles/style" as *;
 
 .el-dropdown-link {
   .icon {
-    color: $lamp-color-neutral-dark;
+    color: var(--lamp-color-neutral-dark);
   }
 
   a {
-    color: $lamp-color-neutral-dark;
+    color: var(--lamp-color-neutral-dark);
     font-size: 12px;
     padding: 1px 0 0 0;
 
     &:hover {
-      color: $lamp-color-neutral-dark;
+      color: var(--lamp-color-neutral-dark);
     }
   }
 
   cursor: pointer;
-  color: $lamp-color-neutral-dark;
+  color: var(--lamp-color-neutral-dark);
   display: flex;
   align-items: center;
   padding: 6px 10px;
   border-radius: 8px;
 
   &:hover {
-    background-color: rgba($lamp-color-neutral-grey, 0.2);
+    background-color: var(--lamp-grey-20);
   }
 }
 
@@ -229,12 +228,12 @@ export default {
 
     .icon {
       margin-right: 6px;
-      color: $lamp-color-neutral-dark;
+      color: var(--lamp-color-neutral-dark);
     }
 
     &:hover {
-      background-color: rgba($lamp-color-neutral-grey, 0.2);
-      color: $lamp-color-neutral-dark;
+      background-color: var(--lamp-grey-20);
+      color: var(--lamp-color-neutral-dark);
     }
   }
 }
@@ -244,7 +243,7 @@ export default {
 }
 
 .has-focus {
-  color: $lamp-color-neutral-dark;
+  color: var(--lamp-color-neutral-dark);
 }
 
 /* Basic editor styles */
@@ -329,8 +328,8 @@ div {
         cursor: pointer;
 
         &.is-active {
-          background-color: rgba($lamp-color-primary, 0.2);
-          color: $lamp-color-primary;
+          background-color: var(--lamp-primary-20);
+          color: var(--lamp-color-primary);
         }
       }
     }
@@ -341,7 +340,7 @@ div {
       overflow-y: scroll;
       padding: 0 0 0 15px;
       text-align: left;
-      color: rgba($lamp-color-neutral-grey, 0.5);
+      color: var(--lamp-grey-50);
     }
 
     /* 自定义滚动条样式 */
@@ -354,12 +353,12 @@ div {
     }
 
     .content-area::-webkit-scrollbar-thumb {
-      background: rgba($lamp-color-neutral-grey, 0.4);
+      background: var(--lamp-grey-40);
       border-radius: 6px;
     }
 
     .content-area::-webkit-scrollbar-thumb:hover {
-      background: $lamp-color-neutral-grey;
+      background: var(--lamp-color-neutral-grey);
     }
   }
 }
@@ -370,8 +369,8 @@ menu {
   list-style: none;
   padding: 4px 6px;
   border-radius: 8px;
-  box-shadow: 2px 4px 6px 2px rgba($lamp-color-neutral-grey, 0.15);
-  background-color: $lamp-color-neutral-light;
+  box-shadow: 2px 4px 6px 2px var(--lamp-grey-15);
+  background-color: var(--lamp-color-neutral-light);
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
@@ -382,19 +381,19 @@ menu {
 .menu-select {
   position: absolute;
   z-index: 1000;
-  border: 1px solid rgba($lamp-color-neutral-grey, 0.2);
+  border: 1px solid var(--lamp-grey-20);
 
   .button {
     padding: 4px 8px;
     font-size: 8px !important;
-    color: $lamp-color-neutral-dark;
+    color: var(--lamp-color-neutral-dark);
     background-color: transparent;
     border: none;
     cursor: pointer;
 
     &:hover {
-      background-color: rgba($lamp-color-neutral-grey, 0.2);
-      color: $lamp-color-neutral-dark;
+      background-color: var(--lamp-grey-20);
+      color: var(--lamp-color-neutral-dark);
     }
   }
 }
@@ -405,7 +404,7 @@ menu {
   height: 20px;
   font-size: 12px;
   text-align: left;
-  color: $lamp-color-neutral-grey;
+  color: var(--lamp-color-neutral-grey);
   user-select: none;
 }
 </style>

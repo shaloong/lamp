@@ -1,136 +1,84 @@
-$lamp-color-primary: #006EFF;
-$lamp-color-neutral-light: #FFFFFF;
-$lamp-color-neutral-grey: #8E8E93;
-$lamp-color-neutral-dark: #1C1C1E;
-$lamp-font-size-small: 12px;
-$lamp-font-size-medium: 13px;
-
-:root {
-  font-family: Inter, 'Helvetica Neue', Helvetica, 'PingFang SC',
-  'Hiragino Sans GB', 'Microsoft YaHei', '微软雅黑', Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-
-  color-scheme: light dark;
-  color: $lamp-color-neutral-light;
-  background-color: $lamp-color-neutral-dark;
-
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-a {
-  font-weight: 500;
-  color: $lamp-color-primary;
-  text-decoration: inherit;
-  &:hover {
-    color: rgba($lamp-color-neutral-light,0.1);
-  }
-}
-
-body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
-}
-
+// ============================================================
+// Global element resets
+// ============================================================
 h1 {
   font-size: 3.2em;
   line-height: 1.1;
 }
 
 button {
+  background-color: $lamp-color-neutral-light;
   border-radius: 8px;
   border: none;
   padding: 0.2em 0.2em;
   font-size: 1em;
   font-weight: 500;
   font-family: inherit;
-  background-color: #1a1a1a;
   cursor: pointer;
   transition: background-color 0.25s;
+
   &:hover {
     background-color: rgba($lamp-color-neutral-dark, 0.1);
   }
-  &:focus,
-  &:focus-visible {
-  }
 }
 
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+// ============================================================
+// Lamp button variants
+// ============================================================
 .lamp-btn-primary {
   padding: 0.4em 1em;
   margin: 2px 6px;
-  border-radius: $lamp-font-size-medium;
-  background-color: $lamp-color-primary;
-  color: $lamp-color-neutral-light;
-  font-size: $lamp-font-size-medium;
+  border-radius: 13px;
+  background-color: var(--lamp-color-primary);
+  color: var(--lamp-color-neutral-light);
+  font-size: 13px;
   border: 0;
-  :hover {
-    background-color: rgba($lamp-color-neutral-light, 0.1);
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--lamp-btn-primary-hover);
   }
 }
 
 .lamp-btn-warning {
   padding: 0.4em 1em;
   margin: 2px 6px;
-  border-radius: $lamp-font-size-medium;
+  border-radius: 13px;
   background-color: #f56c6c;
-  color: $lamp-color-neutral-light;
-  font-size: $lamp-font-size-medium;
+  color: var(--lamp-color-neutral-light);
+  font-size: 13px;
   border: 0;
-  :hover {
-    background-color: rgba($lamp-color-neutral-light, 0.1);
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--lamp-btn-warning-hover);
   }
 }
 
 .lamp-btn-inconspicuous {
   padding: 0.4em 1em;
   margin: 2px 6px;
-  border-radius: $lamp-font-size-medium;
-  background-color: $lamp-color-neutral-grey;
-  color: $lamp-color-neutral-light;
-  font-size: $lamp-font-size-medium;
+  border-radius: 13px;
+  background-color: var(--lamp-color-neutral-grey);
+  color: var(--lamp-color-neutral-light);
+  font-size: 13px;
   border: 0;
-  :hover {
-    background-color: rgba($lamp-color-neutral-light, 0.1);
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--lamp-btn-grey-hover);
   }
 }
 
-.card {
-  padding: 2em;
-}
-
-#app {
-  margin: 0;
-  padding: 0;
-  text-align: center;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: $lamp-color-neutral-light;
-  }
-  a:hover {
-    color: $lamp-color-primary;
-  }
-  button {
-    background-color: $lamp-color-neutral-light;
-  }
-}
-
-.icon {
-  width: 1em;
-  height: 1em;
-  vertical-align: -0.15em;
-  fill: currentColor;
-  overflow: hidden;
-}
-
+// ============================================================
+// Lamp dialog (used with el-dialog)
+// ============================================================
 .lamp-dialog {
   border-radius: 26px;
   padding: 1.6em 2em;
@@ -138,10 +86,12 @@ button {
   align-items: center;
   flex-direction: column;
   gap: 20px;
+
   .content-with-split {
-    border-top: 1px solid rgba($lamp-color-neutral-grey,0.4);
+    border-top: 1px solid rgba(142, 142, 147, 0.4);
     padding-top: 20px;
   }
+
   .dialog-footer {
     margin-top: 0.2em;
   }
