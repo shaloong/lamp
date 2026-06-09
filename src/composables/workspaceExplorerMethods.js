@@ -6,19 +6,22 @@ export const workspaceExplorerMethods = {
   },
 
   // 获取父目录
-  getParentDirectory(url) {
-    if (url === "") {
-      return url
+  getParentDirectory(filePath) {
+    if (!filePath) {
+      return filePath
     }
 
-    const path = new URL(url).pathname
-    const parts = path.split('/')
-    parts.shift()
+    // 统一为 /，避免 Windows 路径在 URL 解析下被当成相对路径导致目录错误
+    const normalized = String(filePath).replace(/\\/g, '/')
+    const parts = normalized.split('/').filter(Boolean)
     parts.pop()
+
     if (parts.length === 0) {
       return '/'
     }
-    return parts.join('/') + '/'
+
+    // 保持与后端一致，传递绝对目录路径（不带尾部斜杠）
+    return parts.join('/')
   },
 
   // 打开工作区（选择文件夹）
@@ -65,11 +68,24 @@ export const workspaceExplorerMethods = {
     const api = this.getLampAPI?.()
     if (!api) return
 
+    let refreshTimer = null
+    const debouncedRefresh = () => {
+      if (refreshTimer) clearTimeout(refreshTimer)
+      refreshTimer = setTimeout(() => {
+        refreshTimer = null
+        if (this.workspaceStore.isOpen && this.workspaceStore.rootPath) {
+          this.showDirection(this.workspaceStore.rootPath, 'refresh')
+        }
+      }, 150)
+    }
+
     api.onFileChange((event) => {
-      console.log('文件变化:', event)
-      if (this.workspaceStore.isOpen && this.workspaceStore.rootPath) {
-        this.showDirection(this.workspaceStore.rootPath, 'refresh')
+      // 跳过 .autosave 自动保存文件，不触发树刷新
+      if (event.path && event.path.endsWith('.autosave')) {
+        return
       }
+      console.log('[Lamp] File change:', event.type, event.path)
+      debouncedRefresh()
     })
   },
 
@@ -85,6 +101,8 @@ export const workspaceExplorerMethods = {
       const node = {
         name: item.name,
         path: item.path,
+        isDirectory: item.isDirectory,
+        isSupported: item.isSupported,
       }
       if (item.children && item.children.length > 0) {
         node.children = this.convertToTree(item.children)
@@ -95,15 +113,12 @@ export const workspaceExplorerMethods = {
   },
 
   // 展示目录结构
-  // mode: 'normal' | 'refresh'  - refresh 模式会保留展开状态
-  showDirection(path, mode = 'normal') {
-    if (!this.tabs || this.tabs.length === 0 || !this.tabs[this.activeTab]) {
-      this.folderContent = ""
+  // mode: 'normal' | 'refresh' — refresh 保留展开状态
+  showDirection(_path, mode = 'normal') {
+    // 资源树根始终固定为当前工作区根目录
+    const path = this.workspaceStore?.rootPath
+    if (!path) {
       return
-    }
-
-    if (path === undefined) {
-      path = this.getParentDirectory(this.tabs[this.activeTab].filePath)
     }
 
     let expandedRelativePaths = []
@@ -114,12 +129,17 @@ export const workspaceExplorerMethods = {
     if (path !== "") {
       const api = this.getLampAPI?.()
       if (!api) {
-        this.folderContent = ""
         return
       }
 
       api.getFolderContent(path).then(result => {
         this.folderContent = this.convertToTree(result)
+
+        // normal 模式下自动展开根目录
+        if (mode === 'normal' && this.workspaceStore.rootPath) {
+          this.expandedKeys = [this.workspaceStore.rootPath]
+          this.fileStore.expandedFolders = new Set(this.expandedKeys)
+        }
 
         if (mode === 'refresh' && expandedRelativePaths.length > 0) {
           this.$nextTick(() => {
@@ -127,11 +147,14 @@ export const workspaceExplorerMethods = {
           })
         }
       }).catch(error => {
-        console.error(error)
-        this.folderContent = ""
+        // 仅在路径确实无效时清空；其他错误保留旧树
+        const msg = typeof error === 'string' ? error : error?.message || ''
+        if (msg.includes('does not exist') || msg.includes('Path does not exist')) {
+          this.folderContent = ''
+        } else {
+          console.warn('[Lamp] showDirection failed, keeping existing tree:', error)
+        }
       })
-    } else {
-      this.folderContent = ""
     }
   },
 
@@ -188,6 +211,19 @@ export const workspaceExplorerMethods = {
   handleNodeClick(data) {
     const filePath = data.path
 
+    // 目录：切换展开状态
+    if (data.isDirectory) {
+      this.handleToggleExpand(filePath)
+      return
+    }
+
+    // 不支持的文件格式：静默忽略（已由 UI 区分颜色，用户可感知不可点击）
+    if (!data.isSupported) {
+      console.warn(`[Lamp] Unsupported file format: ${filePath}`)
+      return
+    }
+
+    // 正常文件：加入临时文件区并打开
     if (this.workspaceStore.isOpen) {
       const isInWorkspace = this.fileStore.isFileInWorkspace(filePath, this.workspaceStore.rootPath)
       if (!isInWorkspace) {

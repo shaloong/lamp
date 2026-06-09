@@ -121,9 +121,9 @@ Menu schema source: `src/components/menu/config.js`.
 ### File Formats
 
 - `.lmph` — Lamp native document (HTML content)
-- `.lampsave` — auto-save temp files
-- `.md` — converted to HTML on open
+- `.md` — Markdown (converted to HTML on open, serialized to Markdown on save via `@tiptap/markdown`)
 - `.html`, `.txt` — plain text/HTML
+- Auto-save files stored in app data dir `autosave/` as `.autosave` temp files
 
 ### Styling
 

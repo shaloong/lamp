@@ -24,7 +24,7 @@
                     <div v-show="tempSectionExpanded" class="temp-files-list">
                         <div v-for="file in tempFiles" :key="file.path" class="temp-file-item"
                             @click="$emit('open-temp-file', file)">
-                            <File :size="14" class="temp-file-icon" />
+                            <FileText :size="14" class="temp-file-icon" />
                             <span class="file-name" :title="file.path">
                                 {{ file.name }}
                             </span>
@@ -52,7 +52,7 @@
 <script setup>
 import FileTree from '@/components/FileTree.vue'
 import Button from '@/components/ui/button/Button.vue'
-import { Folder, File, ChevronRight } from 'lucide-vue-next'
+import { Folder, FileText, ChevronRight } from 'lucide-vue-next'
 
 defineProps({
     explorerPanelActive: { type: Boolean, default: false },

@@ -47,6 +47,7 @@
 import { computed } from 'vue'
 import ShortcutSettings from './ShortcutSettings.vue'
 import SettingsGeneralSection from '@/components/settings/SettingsGeneralSection.vue'
+import SettingsEditorSection from '@/components/settings/SettingsEditorSection.vue'
 import SettingsAiSection from '@/components/settings/SettingsAiSection.vue'
 import SettingsPluginsSection from '@/components/settings/SettingsPluginsSection.vue'
 import SettingsPluginDynamicSection from '@/components/settings/SettingsPluginDynamicSection.vue'
@@ -84,12 +85,6 @@ const {
   t,
   visible,
   activeTab,
-  form,
-  providers,
-  aiForm,
-  currentProvider,
-  currentProviderModels,
-  isCustomProvider,
   allNavItems,
   activeNavItem,
   activeSection,
@@ -101,6 +96,7 @@ const {
 
 const builtinSectionComponentMap = {
   general: SettingsGeneralSection,
+  editor: SettingsEditorSection,
   ai: SettingsAiSection,
   plugins: SettingsPluginsSection,
   shortcuts: ShortcutSettings,
@@ -114,17 +110,13 @@ const activeBuiltinComponent = computed(() => {
 const activeBuiltinProps = computed(() => {
   const kind = activeNavItem.value?.section?.kind
   if (kind === 'general') {
-    return { form: form.value, t }
+    return { t }
+  }
+  if (kind === 'editor') {
+    return { t }
   }
   if (kind === 'ai') {
-    return {
-      aiForm: aiForm.value,
-      providers,
-      currentProvider: currentProvider.value,
-      currentProviderModels: currentProviderModels.value,
-      isCustomProvider: isCustomProvider.value,
-      t,
-    }
+    return { t }
   }
   if (kind === 'plugins') {
     return {

@@ -18,6 +18,9 @@ function createBrowserFallbackAPI() {
     openSpecificFile: async () => [-1],
     hasFile: async () => false,
     delFile: async () => false,
+    getAutoSaveDir: async () => '',
+    listAutoSaveFiles: async () => [],
+    clearAutoSaveFiles: async () => {},
     menuEditUndo: () => notAvailable('menuEditUndo'),
     menuEditRedo: () => notAvailable('menuEditRedo'),
     menuEditCut: () => notAvailable('menuEditCut'),
@@ -34,8 +37,11 @@ function createBrowserFallbackAPI() {
       autoSaveInterval: 30,
       restoreOnStart: true,
       openLastWorkspace: false,
+      theme: 'system',
     }),
     saveGeneralSettings: async () => false,
+    getEditorSettings: async () => ({ focusMode: false }),
+    saveEditorSettings: async () => false,
     openFile: () => { },
     saveFile: () => { },
     newFile: () => { },
@@ -47,6 +53,7 @@ function createBrowserFallbackAPI() {
     readTextFile: async () => '',
     getAppDataDir: async () => '',
     getUserPluginsDir: async () => '',
+    searchWorkspace: async () => [],
   }
 }
 
@@ -87,15 +94,14 @@ function initElectronAPI() {
       const result = await open({
         multiple: false,
         filters: [
-          { name: 'All Supported File', extensions: ['lmph', 'html', 'txt', 'md', 'lampsave'] },
+          { name: 'All Supported File', extensions: ['lmph', 'html', 'txt', 'md'] },
           { name: 'Lamp Document', extensions: ['lmph'] },
           { name: 'Web Page', extensions: ['html'] },
           { name: 'Plain Text', extensions: ['txt'] },
           { name: 'Markdown File', extensions: ['md'] },
-          { name: 'Lamp Auto Saved File', extensions: ['lampsave'] },
         ],
       });
-      
+
       // 返回值格式兼容
       if (result) {
         // 读取文件内容并返回
@@ -116,13 +122,14 @@ function initElectronAPI() {
       const path = await save({
         defaultPath: fileName,
         filters: [
-          { name: 'All Supported File', extensions: ['lmph', 'html', 'txt'] },
+          { name: 'All Supported File', extensions: ['lmph', 'md', 'html', 'txt'] },
           { name: 'Lamp Document', extensions: ['lmph'] },
+          { name: 'Markdown File', extensions: ['md'] },
           { name: 'Web Page', extensions: ['html'] },
           { name: 'Plain Text', extensions: ['txt'] },
         ],
       });
-      
+
       if (path) {
         await invoke('save_file_content', { filePath: path, content: data });
         return path;
@@ -141,6 +148,14 @@ function initElectronAPI() {
 
     // 删除文件
     delFile: (filePath) => invoke('delete_file', { filePath }),
+
+    // ==================== 自动保存 ====================
+    // 获取自动保存目录
+    getAutoSaveDir: () => invoke('get_auto_save_dir'),
+    // 列出自动保存文件
+    listAutoSaveFiles: () => invoke('list_auto_save_files'),
+    // 清理自动保存文件
+    clearAutoSaveFiles: () => invoke('clear_auto_save_files'),
 
     // ==================== 编辑操作 ====================
     // 这些需要通过菜单命令实现
@@ -178,6 +193,13 @@ function initElectronAPI() {
       autoSaveInterval: settings.autoSaveInterval,
       restoreOnStart: settings.restoreOnStart,
       openLastWorkspace: settings.openLastWorkspace,
+      theme: settings.theme,
+    }),
+
+    // ==================== 编辑器设置 ====================
+    getEditorSettings: () => invoke('get_editor_settings'),
+    saveEditorSettings: (settings) => invoke('save_editor_settings', {
+      focusMode: settings.focusMode,
     }),
 
     // ==================== 事件监听 ====================
@@ -248,6 +270,18 @@ function initElectronAPI() {
 
     // 获取用户插件目录
     getUserPluginsDir: () => invoke('get_user_plugins_dir'),
+
+    // ==================== 搜索操作 ====================
+    searchWorkspace: (workspacePath, query, options) =>
+      invoke('search_workspace', {
+        workspacePath,
+        query,
+        options: {
+          caseSensitive: !!options?.caseSensitive,
+          wholeWord: !!options?.wholeWord,
+          maxResults: options?.maxResults || 1000,
+        },
+      }),
   };
   
   console.log('API initialized for Tauri');

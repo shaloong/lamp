@@ -14,7 +14,24 @@ import { resolveI18nLabel } from '@/lib/resolveI18nLabel'
 const { t } = useI18n()
 const emit = defineEmits(['minWindow', 'maxWindow', 'closeWindow'])
 
+const props = defineProps({
+  canSave: {
+    type: Boolean,
+    default: false,
+  },
+})
+
 const cmd = pluginHost.commandService
+
+// Menu items that require a file to be open
+const fileDependentCommands = new Set(['app.save', 'app.saveAs', 'app.close'])
+
+function isDisabled(item) {
+  if (item.type === 'command' && fileDependentCommands.has(item.id)) {
+    return !props.canSave
+  }
+  return false
+}
 
 function invokeAction(pluginId, action) {
   const ctx = pluginHost.getContext(pluginId)
@@ -61,7 +78,7 @@ function getCommandAccelerator(commandId) {
           <template v-for="(item, index) in section.items" :key="`${section.id}-${index}`">
             <DropdownMenuSeparator v-if="item.type === 'separator'" />
 
-            <DropdownMenuItem v-else-if="item.type === 'command'" @click="cmd.execute(item.id)">
+            <DropdownMenuItem v-else-if="item.type === 'command'" @click="cmd.execute(item.id)" :disabled="isDisabled(item)">
               <span class="flex-1">{{ t(item.labelKey) }}</span>
               <kbd v-if="getCommandAccelerator(item.id)"
                 class="ml-4 text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
