@@ -43,4 +43,3 @@ release/
 src-tauri/target/
 src-tauri/*.rs.bk
 src-tauri/gen/
-Cargo.lock

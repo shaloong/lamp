@@ -1,0 +1,124 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v1.0.0). Must already exist."
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  PNPM_VERSION: "10"
+
+jobs:
+  # ── Changelog ─────────────────────────────────────────────
+  changelog:
+    runs-on: ubuntu-latest
+    outputs:
+      body: ${{ steps.changelog.outputs.body }}
+      tag: ${{ steps.resolve-tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - id: resolve-tag
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - id: changelog
+        uses: actions/github-script@v8
+        env:
+          TAG: ${{ steps.resolve-tag.outputs.tag }}
+        with:
+          script: |
+            const tag = process.env.TAG;
+            // Find the prior tag as base — walk back to previous semver tag
+            const { data: tags } = await github.rest.repos.listTags({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 50,
+            });
+            const idx = tags.findIndex(t => t.name === tag);
+            const base = idx >= 0 && idx + 1 < tags.length
+              ? tags[idx + 1].name
+              : 'main';
+
+            const { data: commits } = await github.rest.repos.compareCommits({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              base,
+              head: tag,
+            });
+            return commits.commits
+              .map(c => `- ${c.commit.message.split('\n')[0]} (@${c.author?.login || c.commit.author.name})`)
+              .join('\n');
+
+  # ── Build matrix ──────────────────────────────────────────
+  build:
+    needs: changelog
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            deps: |
+              sudo apt-get update
+              sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+
+          - os: macos-latest
+            target: aarch64-apple-darwin
+
+          - os: macos-latest
+            target: x86_64-apple-darwin
+
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.changelog.outputs.tag }}
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: pnpm
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install system deps (Linux)
+        if: runner.os == 'Linux'
+        run: ${{ matrix.deps }}
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build Tauri app
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ needs.changelog.outputs.tag }}
+          releaseName: "Lamp ${{ needs.changelog.outputs.tag }}"
+          releaseBody: ${{ needs.changelog.outputs.body }}
+          releaseDraft: true
+          prerelease: ${{ contains(needs.changelog.outputs.tag, '-') }}
+          args: --target ${{ matrix.target }}
