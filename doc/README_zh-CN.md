@@ -2,35 +2,41 @@
 
 [English](../README.md) | [简体中文](README_zh-CN.md) | [官网](https://www.shaloong.com/lamp/)
 
-Lamp 是一款现代、轻量化、所见即所得的文本编辑工具。
+Lamp 是一款为创作者量身定制的现代化所见即所得编辑器——够轻、够快、够优雅。我们希望你像擦亮神灯一样，自由召唤灵感与想象。
 
-我们想用少量的基础样式（比如加粗、斜体、删除线、多级标题）提供良好的写作体验，而不用过分在意格式设置（比如字号、间距）。它比记事本更强大，比那些强大的文字编辑工具更简洁，集成更多适合作家使用的写作工具。你也完全不用担心收费问题，它是完全免费的，在很长的一段时间内我们不会考虑收费。
+## 亮点特性
 
-感谢提供了各种各样开放源码、包、框架、文档的开发者，没有他们就不会有这个项目。虽然代码不够优美，但是代码做了一些注释，如果有需要你也可以参考这些代码来帮助你的学习和程序开发。
+- **零干扰的写作体验**：精选排版与色彩，减少 UI 噪声，把注意力留给文字。
+- **轻量却不将就**：基于 TipTap 的富文本内核、常用 Markdown 快捷键、自动保存、版本保护与 AI 辅助润色/扩写。
+- **跨平台桌面感觉**：Electron + Vite 构建，一次打包即可投放 Windows/macOS/Linux。
+- **永久免费**：Lamp 将长期以免费方式维护，无须担心订阅和授权。
+- **社区驱动**：感谢所有开源生态的开发者，同时也欢迎你的 Issue、PR 与二次开发。
 
-## 安装
-
-对于 Windows / MacOS / Linux 用户，你可以直接下载发行版本并安装使用。
-
-如果你的系统没有对应的发行版本，你可以尝试下载完整的源码进行编译。
-
-## 开发
-
-推荐使用一条命令同时启动 Vite（1086 端口）与 Electron 外壳：
+## 快速上手
 
 ```bash
+pnpm install
 pnpm run dev:desktop
 ```
 
-如果想手动拆分依旧可以：
+第一条安装依赖，第二条同时启动 Vite（默认 1086 端口）与 Electron 外壳。如果想拆分调试：
 
 1. `pnpm run dev -- --port 1086`
 2. `pnpm run auto-start`
 
 ## 打包发布
 
-执行 `pnpm run dist` 使用 electron-builder 生成标准安装包，用户安装后即可像普通程序一样点击启动 Lamp。
+```bash
+pnpm run build   # 构建 Vite 静态资源
+pnpm run dist    # 交给 electron-builder 生成安装包
+```
+
+electron-builder 会读取 `package.json` 的 `build` 配置，并在 `release/<version>/` 下输出对应平台的产物：Windows NSIS 安装包、macOS DMG、Linux 可分发目录（如需 AppImage/DEB 可自行扩展 target）。
 
 ## AI 配置
 
-在应用内点击 **设置 → AI 接口**，即可填写 `baseURL` 与 `API Key`。这些信息会写入 `config.json` 并在下次启动时自动沿用，无需重复输入。
+进入应用内 **设置 → AI 接口**，填写 `Base URL`、`Model` 与 `API Key`。配置会加密写入 `config.json`，下次启动自动复用。
+
+## 社区与支持
+
+Shaloong 目前仍是一个兴趣驱动的小型工作室，我们会在 [shaloong.com](https://www.shaloong.com/) 分享工具与灵感。欢迎提交 Issue/PR，一起把 Lamp 打磨成写作者得心应手的创作伙伴。

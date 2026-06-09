@@ -60,8 +60,11 @@
       "output": "release/${version}"
     },
     "files": [
-      "dist",
-      "electron"
+      "dist/**/*",
+      "*.cjs",
+      "config.json",
+      "lang/**",
+      "res/**"
     ],
     "nsis": {
       "oneClick": false,
