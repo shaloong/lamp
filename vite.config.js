@@ -20,8 +20,7 @@ export default defineConfig({
         ],
     }),
   ],
-  base:'./',
-  manifest:true,
+  base: '/',
   resolve: {
     alias: {
       '@': resolve(__dirname, './src')
@@ -34,7 +33,17 @@ export default defineConfig({
       },
     },
   },
+  // 开发服务器配置
+  server: {
+    port: 1086,
+    strictPort: true,
+  },
+  build: {
+    target: 'esnext',
+    minify: 'esbuild',
+  },
+  // 清除 Vite 缓存时排除 Tauri
   optimizeDeps: {
-    exclude: ['electron'], // Vite排除预构建Electron
+    exclude: ['@tauri-apps/api'],
   }
 })

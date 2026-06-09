@@ -8,7 +8,7 @@ Lamp 是一款为创作者量身定制的现代化所见即所得编辑器——
 
 - **零干扰的写作体验**：精选排版与色彩，减少 UI 噪声，把注意力留给文字。
 - **轻量却不将就**：基于 TipTap 的富文本内核、常用 Markdown 快捷键、自动保存、版本保护与 AI 辅助润色/扩写。
-- **跨平台桌面感觉**：Electron + Vite 构建，一次打包即可投放 Windows/macOS/Linux。
+- **跨平台桌面感觉**：Tauri + Vite 构建，一次打包即可投放 Windows/macOS/Linux。
 - **永久免费**：Lamp 将长期以免费方式维护，无须担心订阅和授权。
 - **社区驱动**：感谢所有开源生态的开发者，同时也欢迎你的 Issue、PR 与二次开发。
 
@@ -16,26 +16,26 @@ Lamp 是一款为创作者量身定制的现代化所见即所得编辑器——
 
 ```bash
 pnpm install
-pnpm run dev:desktop
+pnpm tauri dev
 ```
 
-第一条安装依赖，第二条同时启动 Vite（默认 1086 端口）与 Electron 外壳。如果想拆分调试：
+第一条安装依赖，第二条同时启动 Vite（默认 1086 端口）与 Tauri 外壳。如果想拆分调试：
 
-1. `pnpm run dev -- --port 1086`
-2. `pnpm run auto-start`
+1. `pnpm dev`
+2. `pnpm tauri dev`
 
 ## 打包发布
 
 ```bash
-pnpm run build   # 构建 Vite 静态资源
-pnpm run dist    # 交给 electron-builder 生成安装包
+pnpm build           # 构建 Vite 静态资源
+pnpm tauri build    # 交给 Tauri 生成安装包
 ```
 
-electron-builder 会读取 `package.json` 的 `build` 配置，并在 `release/<version>/` 下输出对应平台的产物：Windows NSIS 安装包、macOS DMG、Linux 可分发目录（如需 AppImage/DEB 可自行扩展 target）。
+Tauri 会在 `src-tauri/target/release/bundle/` 下输出对应平台的产物：Windows NSIS 安装包、macOS DMG、Linux 可分发目录。
 
 ## AI 配置
 
-进入应用内 **设置 → AI 接口**，填写 `Base URL`、`Model` 与 `API Key`。配置会加密写入 `config.json`，下次启动自动复用。
+进入应用内 **设置 → AI 接口**，填写 `Base URL`、`Model` 与 `API Key`。配置会写入 `config.json`，下次启动自动复用。
 
 ## 社区与支持
 

@@ -164,17 +164,43 @@ export default {
 
   methods: {
     // 主菜单栏操作
-    fileOpen() {
-      window.electronAPI.menuFileOpen();
+    async fileOpen() {
+      const result = await window.electronAPI.menuFileOpen();
+      if (result && result[0] === 0) {
+        // 打开文件成功
+        const path = result[1];
+        const data = result[2];
+        var fileName = path.split('\\').pop(); // 截取文件名
+        const result_format = this.format2html(path, data); // 格式转换
+        if (result_format[0] === '') {
+          // 不支持直接保存的文件修改后缀名
+          fileName = fileName.split('.').slice(0, -1).join('.') + '.lamp'
+        }
+        if ((result_format[0] !== '') && (this.tabs.some(tab => tab.filePath === result_format[0]))) {
+          this.switchTab(this.tabs.findIndex(tab => tab.filePath === result_format[0]))
+        } else {
+          this.tabs.push({ title: fileName, filePath: result_format[0], content: result_format[1] || '', id: uuidv4() }); // 创建标签页
+          this.switchTab(this.tabs.length - 1); // 切换标签页
+        }
+      }
     },
-    fileSave(index = this.activeTab) {
-      if (this.activeTab !== null && this.tabs[index].filePath) {
+    fileSave(index) {
+      // 如果 index 是事件对象或无效值，使用 this.activeTab
+      const tabIndex = (typeof index === 'number') ? index : this.activeTab;
+
+      // 使用可选链确保安全访问
+      const tab = this.tabs?.[tabIndex];
+      if (!tab) {
+        console.warn('No tab available to save');
+        return;
+      }
+
+      if (this.activeTab !== null && tab.filePath) {
         // 如果 filePath 不为空，则执行保存操作
-        const { filePath, content } = this.tabs[index];
-        window.electronAPI.saveInfo(filePath, content);
+        window.electronAPI.saveInfo(tab.filePath, tab.content);
       } else {
         // 否则执行另存为操作
-        this.saveFileAs(index)
+        this.saveFileAs(tabIndex)
       }
     },
     menuEditUndo() {
@@ -265,7 +291,18 @@ export default {
     },
 
     // 展示目录结构
-    showDirection(path = getParentDirectory(this.tabs[this.activeTab].filePath)) {
+    showDirection(path) {
+      // 防御性检查
+      if (!this.tabs || this.tabs.length === 0 || !this.tabs[this.activeTab]) {
+        this.folderContent = "";
+        return;
+      }
+
+      // 如果没有传入 path，则使用默认值
+      if (path === undefined) {
+        path = getParentDirectory(this.tabs[this.activeTab].filePath);
+      }
+
       if (path !== "") {
         window.electronAPI.getFolderContent(path).then(result => {
           this.folderContent = this.convertToTree(result);
@@ -294,12 +331,21 @@ export default {
 
     // 切换标签页
     switchTab(index) {
+      // 防御性检查
+      if (!this.tabs || index < 0 || index >= this.tabs.length) {
+        return;
+      }
       this.activeTab = index;
       this.showDirection();
     },
 
     // 关闭标签
     closeTab(index) {
+      // 防御性检查
+      if (!this.tabs || index < 0 || index >= this.tabs.length) {
+        return;
+      }
+
       // 如果当前标签页数量大于1
       if (this.tabs.length > 1) {
         // 如果删除的标签页是激活的标签页之前的标签页
@@ -322,6 +368,11 @@ export default {
     },
 
     async toggleCloseTab(index) {
+      // 防御性检查
+      if (!this.tabs || index < 0 || index >= this.tabs.length) {
+        return;
+      }
+
       const result = await this.hasFile(this.tabs[index].filePath + '.lampsave');
       if (result) {
         this.dialogConfirmCloseTab = true;
@@ -357,14 +408,24 @@ export default {
     },
 
     // 另存为：向主进程发起文件另存为，主进程保存成功后返回文件保存的路径
-    async saveFileAs(index = this.activeTab) {
-      const resultPath = await window.electronAPI.saveFileAs(this.tabs[index].title, this.tabs[index].content)
+    async saveFileAs(index) {
+      // 如果 index 是事件对象或无效值，使用 this.activeTab
+      const tabIndex = (typeof index === 'number') ? index : this.activeTab;
+
+      // 使用可选链确保安全访问
+      const tab = this.tabs?.[tabIndex];
+      if (!tab) {
+        console.warn('No tab available to save, index:', tabIndex, 'tabs:', this.tabs);
+        return;
+      }
+
+      const resultPath = await window.electronAPI.saveFileAs(tab.title || 'untitled', tab.content || '')
       if (resultPath !== "") {
-        this.tabs[index].filePath = resultPath
-        this.tabs[index].title = this.tabs[index].filePath.split('\\').pop()
-        const result = await this.hasFile(this.tabs[index].filePath + '.lampsave');
+        this.tabs[tabIndex].filePath = resultPath
+        this.tabs[tabIndex].title = this.tabs[tabIndex].filePath.split('\\').pop()
+        const result = await this.hasFile(this.tabs[tabIndex].filePath + '.lampsave');
         if (result) {
-          this.delFile(this.tabs[index].filePath + '.lampsave') // 删除自动保存的文件
+          this.delFile(this.tabs[tabIndex].filePath + '.lampsave') // 删除自动保存的文件
         }
       }
     },
@@ -393,26 +454,6 @@ export default {
 
     // 监听通道，接收主进程发送的内容
     initIpcRenderers() {
-      // 打开文件：接收主进程发送的打开状态、路径、文件内容，在Vue中新建对应标签页
-      window.electronAPI.openFile((status, path, data) => {
-        if (status === 0) {
-          var fileName = path.split('\\').pop(); // 截取文件名
-          const result = this.format2html(path, data); // 格式转换
-          if (result[0] === '') {
-            // 不支持直接保存的文件修改后缀名
-            fileName = fileName.split('.').slice(0, -1).join('.') + '.lamp'
-          }
-          if ((result[0] !== '') && (this.tabs.some(tab => tab.filePath === result[0]))) {
-            this.switchTab(this.tabs.findIndex(tab => tab.filePath === result[0]))
-          } else {
-            this.tabs.push({ title: fileName, filePath: result[0], content: result[1] || '', id: uuidv4() }); // 创建标签页
-            this.switchTab(this.tabs.length - 1); // 切换标签页
-          }
-        } else {
-          console.log("读取失败");
-        }
-      });
-
       // 保存文件：监听主进程，被触发后将路径和内容发送给主进程执行保存操作；若文件路径为空则另存为
       window.electronAPI.saveFile(() => {
         if (this.activeTab !== null && this.tabs[this.activeTab].filePath) {
@@ -432,17 +473,28 @@ export default {
     },
 
     autoSave() {
-      if ((this.tabs[this.activeTab].filePath !== '') && (this.tabs[this.activeTab].filePath.split('.').pop() !== 'lampsave')) {
-        window.electronAPI.saveInfo(this.tabs[this.activeTab].filePath + '.lampsave', this.tabs[this.activeTab].content)
+      // 防御性检查
+      if (!this.tabs || this.tabs.length === 0 || !this.tabs[this.activeTab]) {
+        return;
+      }
+
+      const currentTab = this.tabs[this.activeTab];
+      if (currentTab && currentTab.filePath && currentTab.filePath !== '' && currentTab.filePath.split('.').pop() !== 'lampsave') {
+        window.electronAPI.saveInfo(currentTab.filePath + '.lampsave', currentTab.content)
       }
     },
 
     async openSpecificFile(filePath) {
+      // 防御性检查
+      if (!this.tabs) {
+        return;
+      }
+
       if ((filePath !== '') && (this.tabs.some(tab => tab.filePath === filePath))) {
         this.switchTab(this.tabs.findIndex(tab => tab.filePath === filePath))
       } else {
         const data = await window.electronAPI.openSpecificFile(filePath)
-        if (data[0] === 1) {
+        if (data && data[0] === 1) {
           const title = filePath.split('\\').pop()
           const { filePath, fileContent } = this.format2html(filePath, data[1]) // 格式转换
           this.tabs.push({ title: title, filePath: filePath, content: fileContent, id: uuidv4() });
