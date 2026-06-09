@@ -22,7 +22,6 @@ import { Editor, EditorContent } from '@tiptap/vue-3'
 import TextAlign from "@tiptap/extension-text-align"
 import { pluginHost } from '../plugins/index'
 import { i18n } from '../i18n'
-import { AISuggestExtension } from '../builtins/ai-actions/ext/AISuggestExtension'
 import { resolveI18nLabel } from '@/lib/resolveI18nLabel'
 import AISuggestToolbar from './AISuggestToolbar.vue'
 import EditorToolbar from '@/components/editor/EditorToolbar.vue'
@@ -100,6 +99,17 @@ export default {
   },
 
   mounted() {
+    // Plugin extensions may be either Extension.create(...) instances or constructors.
+    const pluginExtensions = pluginHost.contributions.sortedTipTapExtensions
+      .map((def) => {
+        const ext = def.ExtensionClass
+        if (typeof ext === 'function') {
+          return new ext()
+        }
+        return ext
+      })
+      .filter(Boolean)
+
     this.editor = new Editor({
       editorProps: {
         attributes: {
@@ -118,7 +128,7 @@ export default {
           types: ['heading', 'paragraph'],
           defaultAlignment: 'left',
         }),
-        AISuggestExtension,
+        ...pluginExtensions,
       ],
       content: this.modelValue,
       autofocus: true,

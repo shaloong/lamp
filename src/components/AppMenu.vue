@@ -36,6 +36,10 @@ function resolveLabel(label) {
 function pluginMenuItems(area) {
   return pluginHost.contributions.getMenuItemsBy(area)
 }
+
+function getCommandAccelerator(commandId) {
+  return pluginHost.shortcutService.getEffectiveAccelerator(commandId)
+}
 </script>
 
 <template>
@@ -59,9 +63,9 @@ function pluginMenuItems(area) {
 
             <DropdownMenuItem v-else-if="item.type === 'command'" @click="cmd.execute(item.id)">
               <span class="flex-1">{{ t(item.labelKey) }}</span>
-              <kbd v-if="item.accelerator"
+              <kbd v-if="getCommandAccelerator(item.id)"
                 class="ml-4 text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-                {{ item.accelerator }}
+                {{ getCommandAccelerator(item.id) }}
               </kbd>
             </DropdownMenuItem>
 

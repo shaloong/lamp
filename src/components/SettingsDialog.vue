@@ -3,6 +3,7 @@
     <DialogContent class="max-h-[85vh]" style="max-width: 48rem" @pointer-down-outside="() => { }">
       <DialogHeader>
         <DialogTitle>{{ t('settings.title') }}</DialogTitle>
+        <DialogDescription class="sr-only">{{ t('settings.title') }}</DialogDescription>
       </DialogHeader>
 
       <div class="settings-layout">
@@ -21,47 +22,29 @@
 
         <!-- 右侧内容 -->
         <div class="settings-content">
-          <SettingsGeneralSection v-if="activeTab === 'general'" :form="form" :t="t" />
+          <component v-if="activeBuiltinComponent" :is="activeBuiltinComponent" :key="activeTab"
+            v-bind="activeBuiltinProps" />
 
-          <SettingsAiSection v-else-if="activeTab === 'ai'" :ai-form="aiForm" :providers="providers"
-            :current-provider="currentProvider" :current-provider-models="currentProviderModels"
-            :is-custom-provider="isCustomProvider" :t="t" />
-
-          <SettingsPluginsSection v-else-if="activeTab === 'plugins'" :plugin-host="pluginHost"
-            :resolve-plugin-name="resolvePluginName" :t="t" />
-
-          <SettingsPluginDynamicSection v-else-if="activeSection" :active-section="activeSection"
-            :resolve-label="resolveLabel" :get-plugin-value="getPluginValue"
+          <SettingsPluginDynamicSection v-else-if="activeNavItem?.type === 'plugin' && activeSection"
+            :active-section="activeSection" :resolve-label="resolveLabel" :get-plugin-value="getPluginValue"
             :handle-plugin-setting-change="handlePluginSettingChange" />
-
-          <!-- 快捷键设置 -->
-          <section v-else-if="activeTab === 'shortcuts'" class="settings-section settings-shortcuts">
-            <ShortcutSettings />
-          </section>
 
           <!-- 其他标签 - 预留 -->
           <section v-else class="settings-section settings-placeholder">
             <p style="color: var(--muted-foreground); font-size: 13px; text-align: center; margin-top: 60px">
-              {{navItems.find(n => n.id === activeTab)?.label || activeTab}} — Coming soon
+              {{ activeNavItem?.label || activeTab }} — Coming soon
             </p>
           </section>
         </div>
       </div>
 
-      <DialogFooter>
-        <Button variant="secondary" @click="handleClose">
-          {{ isBuiltInTab ? t('common.cancel') : t('common.close') }}
-        </Button>
-        <Button v-if="isBuiltInTab" :disabled="submitting" @click="handleSave">
-          {{ submitting ? t('common.saving') : t('common.save') }}
-        </Button>
-      </DialogFooter>
       <DialogClose class="absolute right-4 top-4" />
     </DialogContent>
   </Dialog>
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import ShortcutSettings from './ShortcutSettings.vue'
 import SettingsGeneralSection from '@/components/settings/SettingsGeneralSection.vue'
 import SettingsAiSection from '@/components/settings/SettingsAiSection.vue'
@@ -73,10 +56,9 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
+  DialogDescription,
   DialogClose,
 } from '@/components/ui/dialog'
-import { Button } from '@/components/ui/button'
 import { Settings, Bot, Puzzle, Keyboard, ExternalLink, Edit3 } from 'lucide-vue-next'
 
 const navIconMap = {
@@ -102,24 +84,57 @@ const {
   t,
   visible,
   activeTab,
-  submitting,
   form,
   providers,
   aiForm,
   currentProvider,
   currentProviderModels,
   isCustomProvider,
-  navItems,
   allNavItems,
+  activeNavItem,
   activeSection,
-  isBuiltInTab,
   resolveLabel,
   resolvePluginName,
   getPluginValue,
   handlePluginSettingChange,
-  handleSave,
-  handleClose,
 } = useSettingsDialogState(props, emit)
+
+const builtinSectionComponentMap = {
+  general: SettingsGeneralSection,
+  ai: SettingsAiSection,
+  plugins: SettingsPluginsSection,
+  shortcuts: ShortcutSettings,
+}
+
+const activeBuiltinComponent = computed(() => {
+  if (activeNavItem.value?.type !== 'builtin') return null
+  return builtinSectionComponentMap[activeNavItem.value.section?.kind] || null
+})
+
+const activeBuiltinProps = computed(() => {
+  const kind = activeNavItem.value?.section?.kind
+  if (kind === 'general') {
+    return { form: form.value, t }
+  }
+  if (kind === 'ai') {
+    return {
+      aiForm: aiForm.value,
+      providers,
+      currentProvider: currentProvider.value,
+      currentProviderModels: currentProviderModels.value,
+      isCustomProvider: isCustomProvider.value,
+      t,
+    }
+  }
+  if (kind === 'plugins') {
+    return {
+      pluginHost,
+      resolvePluginName,
+      t,
+    }
+  }
+  return {}
+})
 
 function getNavIcon(icon) {
   return navIconMap[icon] || Settings

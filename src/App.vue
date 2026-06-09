@@ -12,7 +12,7 @@
         @node-click="handleNodeClick" @toggle-expand="handleToggleExpand" @contextmenu="onSidebarContextMenu" />
       <div class="editor flex flex-col h-full">
         <!-- 编辑器选项卡组 -->
-        <div class="editor-tabs" @contextmenu="onTabBarContextMenu">
+        <div v-if="tabs.length > 0" class="editor-tabs" @contextmenu="onTabBarContextMenu">
           <!-- 编辑器选项卡 -->
           <div class="editor-tab h-5.5 pt-2 pr-2.5 pb-1 pl-3.5 box-content" v-for="(tab, index) in tabs" :key="index"
             @click="switchTab(index)" @contextmenu.stop.prevent="onTabContextMenu(index, $event)"
@@ -25,9 +25,12 @@
             <span class="active-indicator" v-show="activeTab === index"></span>
           </div>
         </div>
-        <!-- 编辑器 -->
-        <Editor v-for="(item, index) in tabs" v-show="item.id === tabs[activeTab].id" @update:modelValue="autoSave"
+        <!-- 编辑器内容 -->
+        <Editor v-for="(item, index) in tabs" :key="item.id" v-show="activeTab === index" @update:modelValue="autoSave"
           v-model="item.content" />
+        <!-- 启动页面 -->
+        <StartPage v-if="tabs.length === 0" class="flex-1" :recentFiles="recentFiles" @new-file="newFile"
+          @open-file="openFileDialog" @open-workspace="openWorkspace" @open-recent="openSpecificFile" />
       </div>
     </div>
     <div class="mask">
@@ -67,13 +70,16 @@
 <script>
 import { defineAsyncComponent } from 'vue'
 import Editor from './components/Editor.vue'
+import StartPage from './components/StartPage.vue'
 import { marked } from "marked";
 import { v4 as uuidv4 } from 'uuid';
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useFileStore } from '@/stores/files'
 import { pluginHost } from '@/plugins/index'
 import { useShortcutCenter } from '@/composables/useShortcutCenter'
+import { setupPluginThemes } from '@/composables/usePluginThemes'
 import { workspaceExplorerMethods } from '@/composables/workspaceExplorerMethods'
+import { getLampAPI } from '@/lib/lampApi'
 const CommandPalette = defineAsyncComponent(() => import('./components/CommandPalette.vue'))
 const SettingsDialog = defineAsyncComponent(() => import('./components/SettingsDialog.vue'))
 import AppMenu from './components/AppMenu.vue'
@@ -90,6 +96,7 @@ import { i18n } from './i18n.js'
 export default {
   components: {
     Editor,
+    StartPage,
     CommandPalette,
     SettingsDialog,
     AppMenu,
@@ -108,7 +115,7 @@ export default {
     return {
       explorerPanelActive: false,
       tabs: [],
-      activeTab: 0,
+      activeTab: -1, // -1 表示没有活跃的标签页
       folderContent: "",
       toolViewHeight: 400,
       dialogConfirmCloseTab: false,
@@ -118,6 +125,7 @@ export default {
       pluginHost,
       // 工作区相关
       tempFiles: [],
+      recentFiles: [],
       tempSectionExpanded: true,
       expandedKeys: [],
       treeRefreshKey: 0,
@@ -154,12 +162,41 @@ export default {
       return name && name.includes('.') ? i18n.global.t(name) : name;
     },
 
+    getLampAPI() {
+      return getLampAPI();
+    },
+
     openFile(status, path, data) {
       // Main process opens file dialog and sends back the result via IPC
       if (status === 1 && path) {
         const title = path.split('\\').pop();
         const [fp, fileContent] = this.format2html(path, data);
         this.tabs.push({ title, filePath: fp, content: fileContent, id: uuidv4() });
+        this.activeTab = this.tabs.length - 1;
+      }
+    },
+
+    async openFileDialog() {
+      const api = this.getLampAPI();
+      if (!api || typeof api.menuFileOpen !== 'function') {
+        console.warn('lampAPI.menuFileOpen is unavailable');
+        return;
+      }
+
+      try {
+        const result = await api.menuFileOpen();
+        // menuFileOpen returns [0, path, content] on success
+        if (Array.isArray(result) && result[0] === 0 && result[1]) {
+          this.openFile(1, result[1], result[2] || '');
+          return;
+        }
+
+        // Compatibility: some environments may return [1, path, content]
+        if (Array.isArray(result) && result[0] === 1 && result[1]) {
+          this.openFile(1, result[1], result[2] || '');
+        }
+      } catch (error) {
+        console.error('Failed to open file dialog', error);
       }
     },
 
@@ -176,44 +213,68 @@ export default {
 
       if (this.activeTab !== null && tab.filePath) {
         // 如果 filePath 不为空，则执行保存操作
-        window.lampAPI.saveInfo(tab.filePath, tab.content);
+        const api = this.getLampAPI();
+        if (!api) return;
+        api.saveInfo(tab.filePath, tab.content);
       } else {
         // 否则执行另存为操作
         this.saveFileAs(tabIndex)
       }
     },
     menuEditUndo() {
-      window.lampAPI.menuEditUndo();
+      const api = this.getLampAPI();
+      if (!api) return;
+      api.menuEditUndo();
     },
     menuEditRedo() {
-      window.lampAPI.menuEditRedo();
+      const api = this.getLampAPI();
+      if (!api) return;
+      api.menuEditRedo();
     },
     menuEditCut() {
-      window.lampAPI.menuEditCut();
+      const api = this.getLampAPI();
+      if (!api) return;
+      api.menuEditCut();
     },
     menuEditCopy() {
-      window.lampAPI.menuEditCopy();
+      const api = this.getLampAPI();
+      if (!api) return;
+      api.menuEditCopy();
     },
     menuEditPaste() {
-      window.lampAPI.menuEditPaste();
+      const api = this.getLampAPI();
+      if (!api) return;
+      api.menuEditPaste();
     },
     menuEditSelectAll() {
-      window.lampAPI.menuEditSelectAll();
+      const api = this.getLampAPI();
+      if (!api) return;
+      api.menuEditSelectAll();
     },
     menuEditDelete() {
-      window.lampAPI.menuEditDelete();
+      const api = this.getLampAPI();
+      if (!api) return;
+      api.menuEditDelete();
     },
     viewFullScreen() {
-      window.lampAPI.menuViewFullScreen();
+      const api = this.getLampAPI();
+      if (!api) return;
+      api.menuViewFullScreen();
     },
     minWindow() {
-      window.lampAPI.minWindow();
+      const api = this.getLampAPI();
+      if (!api) return;
+      api.minWindow();
     },
     maxWindow() {
-      window.lampAPI.maxWindow();
+      const api = this.getLampAPI();
+      if (!api) return;
+      api.maxWindow();
     },
     closeWindow() {
-      window.lampAPI.closeWindow();
+      const api = this.getLampAPI();
+      if (!api) return;
+      api.closeWindow();
     },
 
     openSettingsDialog() {
@@ -228,11 +289,19 @@ export default {
 
     async loadGeneralSettings() {
       try {
-        const settings = await window.lampAPI.getGeneralSettings();
+        const api = this.getLampAPI();
+        if (!api) return;
+        const settings = await api.getGeneralSettings();
         // 同步语言到 i18n
         if (settings.language) {
           // 归一化 locale 名称，确保始终匹配 i18n messages 的 key
-          i18n.global.locale = settings.language === 'zh' ? 'zh-CN' : settings.language;
+          const nextLocale = settings.language === 'zh' ? 'zh-CN' : settings.language;
+          const globalLocale = i18n.global.locale;
+          if (typeof globalLocale === 'string') {
+            i18n.global.locale = nextLocale;
+          } else if (globalLocale && typeof globalLocale === 'object' && 'value' in globalLocale) {
+            globalLocale.value = nextLocale;
+          }
         }
       } catch (error) {
         console.error('Failed to load general settings', error);
@@ -274,22 +343,21 @@ export default {
         return;
       }
 
-      // 如果当前标签页数量大于1
-      if (this.tabs.length > 1) {
-        // 如果删除的标签页是激活的标签页之前的标签页
-        if (index < this.activeTab) {
-          this.activeTab -= 1;
-        } else if (index === this.activeTab) {
-          // 如果删除的是当前激活的标签页，则将 activeTab 设置为前一个标签页的索引
-          if (this.activeTab !== 0) {
-            this.activeTab -= 1
-          }
+      // 调整 activeTab 以适配删除后的标签页列表
+      if (index < this.activeTab) {
+        this.activeTab -= 1;
+      } else if (index === this.activeTab) {
+        // 删除的是当前激活的标签页
+        if (this.tabs.length === 1) {
+          // 最后一个标签页被删除，设置 activeTab 为 -1 表示没有标签页
+          this.activeTab = -1;
+        } else if (this.activeTab >= this.tabs.length - 1) {
+          // 删除的是最后一个标签页，激活前一个
+          this.activeTab = this.tabs.length - 2;
         }
-      } else {
-        // 如果当前标签页数量为1，则先添加一个新的标签页，并将 activeTab 设置为0
-        this.tabs.push({ title: i18n.global.t('app.newLampText'), filePath: '', content: '', id: uuidv4() });
-        this.activeTab = 0;
+        // 否则保持 activeTab 不变（指向新的下一个标签页）
       }
+
       // 删除指定索引的标签页
       this.tabs.splice(index, 1);
       this.$emit('close-tab', index) // 更新父组件，避免显示问题
@@ -347,7 +415,10 @@ export default {
         return;
       }
 
-      const resultPath = await window.lampAPI.saveFileAs(tab.title || 'untitled', tab.content || '')
+      const api = this.getLampAPI();
+      if (!api) return;
+
+      const resultPath = await api.saveFileAs(tab.title || 'untitled', tab.content || '')
       if (resultPath !== "") {
         this.tabs[tabIndex].filePath = resultPath
         this.tabs[tabIndex].title = this.tabs[tabIndex].filePath.split('\\').pop()
@@ -360,12 +431,16 @@ export default {
 
     // 检查文件是否存在
     async hasFile(filePath) {
-      return await window.lampAPI.hasFile(filePath)
+      const api = this.getLampAPI();
+      if (!api) return false;
+      return await api.hasFile(filePath)
     },
 
     // 删除文件
     async delFile(filePath) {
-      const result = await window.lampAPI.delFile(filePath)
+      const api = this.getLampAPI();
+      if (!api) return false;
+      const result = await api.delFile(filePath)
       if (result === false) {
         console.log("Error: 在删除 " + filePath + " 文件时发生了失败。")
       }
@@ -382,17 +457,23 @@ export default {
 
     // 监听通道，接收主进程发送的内容
     initIpcRenderers() {
+      const api = this.getLampAPI();
+      if (!api) {
+        console.warn('lampAPI is unavailable, IPC renderers are not initialized');
+        return;
+      }
       // 打开文件：监听主进程，被触发后接收文件路径和内容
-      window.lampAPI.openFile((status, path, data) => {
+      api.openFile((status, path, data) => {
         this.openFile(status, path, data);
       });
       // 保存文件：监听主进程，被触发后将路径和内容发送给主进程执行保存操作；若文件路径为空则另存为
-      window.lampAPI.saveFile(() => {
-        if (this.activeTab !== null && this.tabs[this.activeTab].filePath) {
+      api.saveFile(() => {
+        const hasActiveTab = this.activeTab >= 0 && this.activeTab < this.tabs.length;
+        if (hasActiveTab && this.tabs[this.activeTab].filePath) {
           // 如果 filePath 不为空，则执行保存操作
           const filePath = this.tabs[this.activeTab].filePath;
           const fileContent = this.tabs[this.activeTab].content;
-          window.lampAPI.saveInfo(filePath, fileContent);
+          api.saveInfo(filePath, fileContent);
           const result = this.hasFile(this.tabs[this.activeTab].filePath + '.lampsave');
           if (result) {
             this.delFile(this.tabs[this.activeTab].filePath + '.lampsave') // 删除自动保存的文件
@@ -405,14 +486,16 @@ export default {
     },
 
     autoSave() {
-      // 防御性检查
-      if (!this.tabs || this.tabs.length === 0 || !this.tabs[this.activeTab]) {
+      // 防御性检查：当没有标签页或 activeTab 无效时，不执行自动保存
+      if (!this.tabs || this.tabs.length === 0 || this.activeTab < 0 || this.activeTab >= this.tabs.length) {
         return;
       }
 
       const currentTab = this.tabs[this.activeTab];
       if (currentTab && currentTab.filePath && currentTab.filePath !== '' && currentTab.filePath.split('.').pop() !== 'lampsave') {
-        window.lampAPI.saveInfo(currentTab.filePath + '.lampsave', currentTab.content)
+        const api = this.getLampAPI();
+        if (!api) return;
+        api.saveInfo(currentTab.filePath + '.lampsave', currentTab.content)
       }
     },
 
@@ -425,11 +508,14 @@ export default {
       if ((filePath !== '') && (this.tabs.some(tab => tab.filePath === filePath))) {
         this.switchTab(this.tabs.findIndex(tab => tab.filePath === filePath))
       } else {
-        const data = await window.lampAPI.openSpecificFile(filePath)
+        const api = this.getLampAPI();
+        if (!api) return;
+        const data = await api.openSpecificFile(filePath)
         if (data && data[0] === 1) {
           const title = filePath.split('\\').pop()
-          const { filePath, fileContent } = this.format2html(filePath, data[1]) // 格式转换
-          this.tabs.push({ title: title, filePath: filePath, content: fileContent, id: uuidv4() });
+          const [normalizedPath, fileContent] = this.format2html(filePath, data[1]) // 格式转换
+          this.tabs.push({ title, filePath: normalizedPath, content: fileContent, id: uuidv4() });
+          this.activeTab = this.tabs.length - 1;
         }
       }
     },
@@ -502,7 +588,7 @@ export default {
       this.showContextMenu(event, [
         {
           id: 'toggle-explorer',
-          label: this.$t('app.openWorkspace') || '资源管理器',
+          label: this.$t('app.explorer') || '资源管理器',
           checked: this.sidebarButtonVisibility.explorer,
           action: () => this.toggleSidebarButton('explorer'),
         },
@@ -577,10 +663,10 @@ export default {
   },
 
   created() {
-    // 等待语言加载完成后再初始化 tab，确保标题语言正确
+    // 等待语言加载完成后再初始化，确保翻译正确
     ; (async () => {
       await this.loadGeneralSettings()
-      this.tabs.push({ title: i18n.global.t('app.newLampText'), filePath: '', content: '', id: uuidv4() })
+      // 不自动创建初始标签页，让用户从空状态开始
     })()
     this.initIpcRenderers()
     this.initFileWatcher()
@@ -591,7 +677,7 @@ export default {
     // Router: commandId → bound method on this component instance
     this._cmdRouter = {
       'app.newFile': () => this.newFile(),
-      'app.openFile': () => { window.lampAPI.menuFileOpen(); },
+      'app.openFile': () => this.openFileDialog(),
       'app.save': () => this.fileSave(),
       'app.saveAs': () => this.saveFileAs(),
       'app.close': () => this.closeWindow(),
@@ -643,6 +729,10 @@ export default {
     window.removeEventListener('blur', this.hideContextMenu)
     document.removeEventListener('contextmenu', this.handleGlobalContextMenu, true)
     window.removeEventListener('keydown', this.handleGlobalWebShortcutGuard, true)
+    if (typeof this._disposePluginThemes === 'function') {
+      this._disposePluginThemes()
+      this._disposePluginThemes = null
+    }
   },
 
   mounted() {
@@ -651,6 +741,7 @@ export default {
     window.addEventListener('blur', this.hideContextMenu)
     document.addEventListener('contextmenu', this.handleGlobalContextMenu, true)
     window.addEventListener('keydown', this.handleGlobalWebShortcutGuard, true)
+    this._disposePluginThemes = setupPluginThemes(pluginHost)
     // Initialize VueUse shortcut polling and start listening
     const { register } = useShortcutCenter();
     pluginHost.shortcutService.setExternalRegister(register);

@@ -1,25 +1,42 @@
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, isRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { pluginHost } from '@/plugins/index'
-import { AI_PROVIDERS, BUILTIN_NAV_ITEMS } from '@/components/settings/config'
+import { AI_PROVIDERS, BUILTIN_SETTINGS_SECTIONS } from '@/components/settings/config'
 import { resolveI18nLabel } from '@/lib/resolveI18nLabel'
 import { i18n } from '@/i18n'
+import { requireLampAPI } from '@/lib/lampApi'
 
 export function useSettingsDialogState(props, emit) {
   const { t, locale } = useI18n()
 
   function getCurrentLocale() {
+    const globalLocale = i18n.global.locale
+    if (typeof globalLocale === 'string') return globalLocale
+    if (globalLocale && typeof globalLocale === 'object' && 'value' in globalLocale) {
+      return globalLocale.value
+    }
     return typeof locale === 'string' ? locale : locale?.value
   }
 
   function setCurrentLocale(lang) {
-    if (typeof locale === 'string') {
-      // legacy mode: update locale on app-level i18n instance
+    const globalLocale = i18n.global.locale
+    
+    // Try to set via ref first (Vue 3 composition mode)
+    if (isRef(globalLocale)) {
+      globalLocale.value = lang
+      return
+    }
+    
+    // Fall back to direct assignment
+    if (typeof globalLocale === 'string') {
       i18n.global.locale = lang
       return
     }
-    if (locale && typeof locale === 'object' && 'value' in locale) {
+    
+    // Try composable locale
+    if (isRef(locale)) {
       locale.value = lang
+      return
     }
   }
 
@@ -32,8 +49,8 @@ export function useSettingsDialogState(props, emit) {
     set: (v) => emit('update:modelValue', v),
   })
 
-  const activeTab = ref('general')
-  const submitting = ref(false)
+  const activeTab = ref('builtin:general')
+  const hydratingSettings = ref(false)
 
   const form = ref({
     language: 'zh-CN',
@@ -46,7 +63,7 @@ export function useSettingsDialogState(props, emit) {
   const providers = AI_PROVIDERS
   const aiForm = ref({ provider: 'deepseek', baseUrl: '', apiKey: '', model: '' })
 
-  const navItems = BUILTIN_NAV_ITEMS
+  const builtinSections = BUILTIN_SETTINGS_SECTIONS
 
   const currentProvider = computed(() => {
     return providers.find(p => p.id === aiForm.value.provider) || providers[providers.length - 1]
@@ -56,9 +73,19 @@ export function useSettingsDialogState(props, emit) {
   const isCustomProvider = computed(() => aiForm.value.provider === 'custom')
 
   const allNavItems = computed(() => {
-    const builtins = navItems.map(item => ({
-      ...item,
+    const builtins = builtinSections.map(item => ({
+      id: `builtin:${item.id}`,
+      sectionId: item.id,
+      icon: item.icon,
+      priority: item.priority,
+      type: 'builtin',
       label: t(item.labelKey),
+      section: {
+        id: item.id,
+        label: t(item.labelKey),
+        type: 'builtin',
+        kind: item.id,
+      },
     }))
 
     const pluginSections = pluginHost.contributions.sortedSettings.map(section => ({
@@ -73,13 +100,19 @@ export function useSettingsDialogState(props, emit) {
     return [...builtins, ...pluginSections].sort((a, b) => (b.priority ?? 50) - (a.priority ?? 50))
   })
 
-  const activeSection = computed(() => {
-    const item = allNavItems.value.find(n => n.id === activeTab.value)
-    return item?.type === 'plugin' ? item.section : null
+  watch(allNavItems, (items) => {
+    if (!items.length) return
+    if (!items.some(item => item.id === activeTab.value)) {
+      activeTab.value = items[0].id
+    }
+  }, { immediate: true })
+
+  const activeNavItem = computed(() => {
+    return allNavItems.value.find(n => n.id === activeTab.value) || null
   })
 
-  const isBuiltInTab = computed(() => {
-    return navItems.some(n => n.id === activeTab.value)
+  const activeSection = computed(() => {
+    return activeNavItem.value?.section || null
   })
 
   function resolveLabel(label) {
@@ -112,13 +145,10 @@ export function useSettingsDialogState(props, emit) {
     if (val) {
       loadSettings()
     }
-  })
-
-  watch(() => form.value.language, (lang) => {
-    setCurrentLocale(lang)
-  })
+  }, { immediate: true })
 
   watch(() => aiForm.value.provider, (newProvider) => {
+    if (hydratingSettings.value) return
     const p = providers.find(item => item.id === newProvider)
     if (p && p.id !== 'custom') {
       aiForm.value.baseUrl = p.baseUrl
@@ -129,77 +159,104 @@ export function useSettingsDialogState(props, emit) {
     }
   })
 
-  async function loadSettings() {
+  async function saveGeneralSettings() {
+    if (hydratingSettings.value) return
     try {
-      const [general, ai] = await Promise.all([
-        window.lampAPI.getGeneralSettings(),
-        window.lampAPI.getAiSettings(),
-      ])
-      form.value = {
-        language: general.language || getCurrentLocale() || 'zh-CN',
-        autoSave: general.autoSave ?? true,
-        autoSaveInterval: general.autoSaveInterval || 30,
-        restoreOnStart: general.restoreOnStart ?? true,
-        openLastWorkspace: general.openLastWorkspace ?? false,
-      }
-      const savedProvider = ai.provider || 'deepseek'
-      const provider = providers.find(item => item.id === savedProvider) || providers[0]
-      aiForm.value = {
-        provider: savedProvider,
-        baseUrl: savedProvider === 'custom' ? (ai.baseUrl || '') : (provider.baseUrl || ai.baseUrl || ''),
-        apiKey: ai.apiKey || '',
-        model: ai.model || (provider.models[0]?.value || ''),
-      }
+      const api = requireLampAPI('settings save')
+      const generalPayload = JSON.parse(JSON.stringify(form.value))
+      await api.saveGeneralSettings(generalPayload)
     } catch (error) {
-      console.error('Failed to load settings', error)
+      console.error('Failed to save general settings', error)
     }
   }
 
-  async function handleSave() {
-    if (submitting.value) return
-    submitting.value = true
+  async function saveAiSettings() {
+    if (hydratingSettings.value) return
     try {
-      const generalPayload = JSON.parse(JSON.stringify(form.value))
-      await window.lampAPI.saveGeneralSettings(generalPayload)
-      await window.lampAPI.saveAiSettings({
+      const api = requireLampAPI('settings save')
+      await api.saveAiSettings({
         provider: aiForm.value.provider,
         baseUrl: normalizeBaseUrl(aiForm.value.baseUrl),
         apiKey: aiForm.value.apiKey,
         model: aiForm.value.model,
       })
-      visible.value = false
     } catch (error) {
-      console.error('Failed to save settings', error)
-    } finally {
-      submitting.value = false
+      console.error('Failed to save AI settings', error)
     }
   }
 
-  function handleClose() {
-    visible.value = false
+  // Auto-save general settings when any field changes
+  watch(() => form.value, () => {
+    // Language: apply locale immediately
+    setCurrentLocale(form.value.language)
+    saveGeneralSettings()
+  }, { deep: true })
+
+  // Auto-save AI settings when any field changes
+  watch(() => aiForm.value, () => {
+    saveAiSettings()
+  }, { deep: true })
+
+  async function loadSettings() {
+    try {
+      hydratingSettings.value = true
+      const api = requireLampAPI('settings load')
+      const [general, ai] = await Promise.all([
+        api.getGeneralSettings(),
+        api.getAiSettings(),
+      ])
+
+      const language = general?.language || getCurrentLocale() || 'zh-CN'
+      const autoSave = general?.autoSave ?? general?.auto_save ?? true
+      const autoSaveInterval = general?.autoSaveInterval ?? general?.auto_save_interval ?? 30
+      const restoreOnStart = general?.restoreOnStart ?? general?.restore_on_start ?? true
+      const openLastWorkspace = general?.openLastWorkspace ?? general?.open_last_workspace ?? false
+
+      form.value = {
+        language,
+        autoSave,
+        autoSaveInterval,
+        restoreOnStart,
+        openLastWorkspace,
+      }
+
+      const aiProvider = ai?.provider || 'deepseek'
+      const aiBaseUrl = ai?.baseUrl ?? ai?.base_url ?? ''
+      const aiApiKey = ai?.apiKey ?? ai?.api_key ?? ''
+      const aiModel = ai?.model || ''
+
+      const savedProvider = aiProvider
+      const provider = providers.find(item => item.id === savedProvider) || providers[0]
+      aiForm.value = {
+        provider: savedProvider,
+        baseUrl: savedProvider === 'custom' ? aiBaseUrl : (provider.baseUrl || aiBaseUrl || ''),
+        apiKey: aiApiKey,
+        model: aiModel || (provider.models[0]?.value || ''),
+      }
+    } catch (error) {
+      console.error('Failed to load settings', error)
+    } finally {
+      hydratingSettings.value = false
+    }
   }
 
   return {
     pluginHost,
     visible,
     activeTab,
-    submitting,
     form,
     providers,
     aiForm,
     currentProvider,
     currentProviderModels,
     isCustomProvider,
-    navItems,
     allNavItems,
+    activeNavItem,
     activeSection,
-    isBuiltInTab,
     resolveLabel,
     resolvePluginName,
     getPluginValue,
     handlePluginSettingChange,
-    handleSave,
-    handleClose,
     t,
   }
 }
