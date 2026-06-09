@@ -29,11 +29,13 @@ The dev server runs on port 1086 with `strictPort: true` — nothing else can us
 
 ### Plugin System (Core Architecture)
 
-The plugin system is central to Lamp's design. All extensibility goes through it.
+The plugin system is central to Lamp's design. All extensibility goes through it. Plugins and the main application are **fully independent** — neither should directly reference the other's internals.
+
+**Core principle**: The main application only consumes plugin contributions through the `pluginHost.contributions` registry. Plugins only reference the main app through the `PluginContext` API (`ctx.editor`, `ctx.ai`, etc.). Even built-in plugins live in `src/builtins/` and must not scatter their code or data into main app files.
 
 ```
 PluginHost (src/plugins/index.ts — singleton)
-├── Built-in plugins (loaded synchronously)
+├── Built-in plugins (loaded synchronously, in src/builtins/)
 │   ├── lamp.core-toolbar   — Editor formatting toolbar
 │   └── lamp.ai-actions      — AI writing assistant
 ├── Workspace plugins        — <workspace>/.lamp/plugins/
@@ -46,7 +48,7 @@ PluginHost (src/plugins/index.ts — singleton)
 2. `onActivate(ctx)` — async startup
 3. `onDeactivate()` — cleanup
 
-**Contribution points:**
+**Contribution points** (the only bridge between plugin and app):
 
 - `editorToolbar` — toolbar buttons
 - `bubbleMenu` — text selection popup
@@ -54,8 +56,9 @@ PluginHost (src/plugins/index.ts — singleton)
 - `sidebarPanels` — side panel views
 - `statusBarItems` — status bar items
 - `aiActions` — AI-powered actions
+- `settings` — plugin settings sections and items
 
-**PluginContext API** (`ctx`):
+**PluginContext API** (`ctx` — plugin → main app):
 
 - `ctx.editor` — read/write editor content
 - `ctx.file` — file operations
@@ -65,8 +68,11 @@ PluginHost (src/plugins/index.ts — singleton)
 - `ctx.commands` — register commands
 - `ctx.storage` — per-plugin persistent storage
 - `ctx.event` — event bus
+- `ctx.i18n` — plugin's own locale messages (see below)
 
-**Adding a new feature**: Consider whether it belongs in a plugin. Built-in plugins live in `src/builtins/`.
+**Plugin i18n**: Each plugin owns its own locale messages. Plugins should NOT write keys into `src/locales/`. For built-in plugins, messages are collected in `src/builtins/<plugin>/index.ts` under the `messages` export, then registered via `pluginHost.i18nService.addBuiltinMessages()` in `src/builtins/index.ts`. Dynamic plugins use `ctx.i18n.setLocaleMessages()` at runtime.
+
+**Adding a new feature**: Always ask — does this belong in a plugin or the main app? If it's a plugin feature (even for a built-in plugin), it must live entirely in `src/builtins/<plugin>/`. The main app's role is only to declare a contribution point and consume the contributions registry.
 
 ### State Management (Pinia)
 

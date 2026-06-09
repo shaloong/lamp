@@ -17,6 +17,7 @@ import type {
   FileHandlerContribution,
   ThemeContribution,
   TipTapExtensionDefinition,
+  PluginSettingsSection,
 } from './types';
 
 // Registry maps: contribution id (with plugin namespace) → item
@@ -32,6 +33,7 @@ export class ContributionRegistry {
   private _fileHandlers    = reactive(new Map<string, FileHandlerContribution>()) as ReactiveContributionMap<FileHandlerContribution>;
   private _themes         = reactive(new Map<string, ThemeContribution>()) as ReactiveContributionMap<ThemeContribution>;
   private _tipTapExtensions = reactive(new Map<string, TipTapExtensionDefinition>()) as ReactiveContributionMap<TipTapExtensionDefinition>;
+  private _settings       = reactive(new Map<string, PluginSettingsSection>()) as ReactiveContributionMap<PluginSettingsSection>;
 
   /**
    * Register a plugin's contributions. Later registrations with the same
@@ -46,6 +48,7 @@ export class ContributionRegistry {
     this._mergeMap(this._aiActions,       pluginId, contribs.aiActions);
     this._mergeMap(this._fileHandlers,    pluginId, contribs.fileHandlers);
     this._mergeMap(this._themes,           pluginId, contribs.themes);
+    this._mergeSettings(pluginId, contribs.settings);
 
     if (contribs.tipTapExtensions) {
       for (const ext of contribs.tipTapExtensions) {
@@ -62,6 +65,7 @@ export class ContributionRegistry {
       this._editorToolbar, this._bubbleMenu, this._menuItems,
       this._sidebarPanels, this._statusBarItems, this._aiActions,
       this._fileHandlers, this._themes, this._tipTapExtensions,
+      this._settings,
     ];
     for (const map of allMaps) {
       for (const key of [...map.keys()]) {
@@ -110,6 +114,10 @@ export class ContributionRegistry {
     return Array.from(this._tipTapExtensions.values());
   }
 
+  get sortedSettings(): PluginSettingsSection[] {
+    return this._sort(this._settings, 'priority');
+  }
+
   // ─── Menu items by 'where' group ──────────────────────────
 
   getMenuItemsBy(where: string): MenuItem[] {
@@ -127,6 +135,7 @@ export class ContributionRegistry {
   get fileHandlersMap()  { return this._fileHandlers; }
   get themesMap()        { return this._themes; }
   get tipTapExtensionsMap(){ return this._tipTapExtensions; }
+  get settingsMap() { return this._settings; }
 
   // ─── Helpers ─────────────────────────────────────────────
 
@@ -140,6 +149,17 @@ export class ContributionRegistry {
       // Key is namespaced to prevent collisions
       // Also attach pluginId on the item so consumers don't need to parse it
       map.set(`${pluginId}:${item.id}`, { ...item, pluginId } as unknown as T);
+    }
+  }
+
+  private _mergeSettings(pluginId: string, sections?: PluginSettingsSection[]): void {
+    if (!sections) return;
+    for (const section of sections) {
+      this._settings.set(`${pluginId}:${section.id}`, {
+        ...section,
+        pluginId,
+        items: section.items.map(item => ({ ...item, pluginId })),
+      });
     }
   }
 

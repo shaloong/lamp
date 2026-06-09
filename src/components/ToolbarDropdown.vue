@@ -19,7 +19,7 @@
         <svg v-if="child.icon" class="icon" aria-hidden="true">
           <use :xlink:href="child.icon"></use>
         </svg>
-        <span>{{ child.label }}</span>
+        <span>{{ resolveLabel(child.label) }}</span>
         <span v-if="child.keybinding" class="keybinding">{{ child.keybinding }}</span>
       </button>
     </div>
@@ -29,6 +29,7 @@
 <script lang="ts">
 import type { Editor } from '@tiptap/core';
 import type { DropdownItem } from '../plugins/types';
+import { i18n } from '../i18n';
 
 export default {
   name: 'ToolbarDropdown',
@@ -97,6 +98,12 @@ export default {
         console.error('[ToolbarDropdown] Child action error:', err);
       }
       this.isOpen = false;
+    },
+    /**
+     * Resolve a label that may be either a plain string or an i18n key.
+     */
+    resolveLabel(label: string): string {
+      return label && label.includes('.') ? i18n.global.t(label) : label;
     },
   },
 };

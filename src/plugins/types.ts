@@ -107,6 +107,54 @@ export interface PluginContributions {
 
   /** TipTap extensions — registered via lamp.editor.registerTipTapExtension() */
   tipTapExtensions?: TipTapExtensionDefinition[];
+
+  /** Settings sections and items contributed by this plugin */
+  settings?: PluginSettingsSection[];
+}
+
+/**
+ * A settings section contributed by a plugin.
+ * Appears as a top-level tab (if priority > built-in tabs) or grouped under a label.
+ */
+export interface PluginSettingsSection {
+  /** Unique id within the plugin, e.g. "prompts" */
+  id: string;
+  /** i18n key or plain string for the section label */
+  label: string;
+  /** Priority for ordering (higher = earlier). Built-in tabs are priority 100. */
+  priority?: number;
+  /** Setting items in this section */
+  items: PluginSettingsItem[];
+}
+
+/** A single setting item within a plugin's settings section */
+export interface PluginSettingsItem {
+  /** Unique id within the plugin */
+  id: string;
+  /** i18n key or plain string for the label */
+  label: string;
+  /** i18n key or plain string for the description */
+  description?: string;
+  /** Item type determines the rendered control */
+  type: 'text' | 'textarea' | 'select' | 'toggle' | 'component';
+  /** Default value when no saved value exists */
+  defaultValue?: unknown;
+  /** Current value — read from ctx.storage; set automatically by the host */
+  value?: unknown;
+  /** For type="select": array of options */
+  options?: Array<{ value: string; label: string }>;
+  /** For type="component": path to a Vue 3 SFC relative to plugin root */
+  component?: string;
+  /**
+   * Called when the user changes the value.
+   * Receives the new value; persists it via ctx.storage automatically unless you override.
+   */
+  onChange?: (value: unknown) => void | Promise<void>;
+  /**
+   * Override the default storage behavior. If true, onChange is responsible for persistence.
+   * Default: false (host auto-saves to ctx.storage).
+   */
+  manualPersist?: boolean;
 }
 
 export interface EditorToolbarItem {
@@ -202,7 +250,10 @@ export interface StatusBarItem {
 
 export interface AIActionContribution {
   id: string;
-  label: string; // e.g. "润色"
+  /** i18n key for the label, e.g. "ai.polish". Resolved at render time. */
+  label: string;
+  /** i18n key for the in-progress label shown while loading, e.g. "ai.polishing" */
+  loadingLabel?: string;
   description?: string;
   icon?: string;
   /** The AI prompt template. `{selection}` is replaced with the selected text. */
@@ -251,6 +302,7 @@ export interface LampHostAPI {
   commands: LampCommandsAPI;
   storage: LampStorageAPI;
   event: LampEventAPI;
+  i18n: LampI18nAPI;
 }
 
 export interface LampEditorAPI {
@@ -394,6 +446,21 @@ export interface LampEventAPI {
   emit<T = unknown>(event: string, data?: T): void;
 }
 
+/** Locale messages contributed by a plugin — keyed by locale id, e.g. "zh-CN" or "en-US" */
+export interface PluginLocaleMessages {
+  [locale: string]: Record<string, unknown>;
+}
+
+export interface LampI18nAPI {
+  /**
+   * Register or merge locale messages for this plugin.
+   * The messages are merged under the plugin's namespace: `plugins.<id-with-dashes>.<key>`.
+   * Example: calling setLocaleMessages('zh-CN', { polish: '润色' }) for plugin 'lamp.ai-actions'
+   * makes it accessible as `t('plugins.lamp-ai-actions.polish')`.
+   */
+  setLocaleMessages(locale: string, messages: Record<string, unknown>): void;
+}
+
 // ─── Standard Host Events ───────────────────────────────────
 
 export type HostEvent =
@@ -439,6 +506,7 @@ export class PluginContext {
   commands: LampCommandsAPI;
   storage: LampStorageAPI;
   event: LampEventAPI;
+  i18n: LampI18nAPI;
 
   constructor(
     manifest: LampPluginManifest,
@@ -451,6 +519,9 @@ export class PluginContext {
       storageService: unknown;
       commandService: unknown;
       aiState: { isLoading: boolean; actionLabel: string };
+      i18nService: {
+        setLocaleMessages(pluginId: string, locale: string, messages: Record<string, unknown>): void;
+      };
     }
   ) {
     this.id = manifest.id;
@@ -462,6 +533,7 @@ export class PluginContext {
     this.commands  = this._buildCommandsAPI();
     this.storage   = this._buildStorageAPI();
     this.event     = this._buildEventAPI();
+    this.i18n      = this._buildI18nAPI();
   }
 
   private _buildEditorAPI(): LampEditorAPI {
@@ -631,6 +703,15 @@ export class PluginContext {
       once:   <T>(event, handler) => eb.once<T>(event, handler),
       off:    (event, handler)    => eb.off(event, handler),
       emit:   <T>(event, data)    => eb.emit<T>(event, data),
+    };
+  }
+
+  private _buildI18nAPI(): LampI18nAPI {
+    const pid = this.id;
+    return {
+      setLocaleMessages: (locale, messages) => {
+        this.host.i18nService.setLocaleMessages(pid, locale, messages);
+      },
     };
   }
 }

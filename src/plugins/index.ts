@@ -85,6 +85,113 @@ class StorageService {
   }
 }
 
+// ─── I18n Service ─────────────────────────────────────────────
+
+/**
+ * Centralized i18n message registration for plugins.
+ * Built-in messages are collected before app.use(i18n).
+ * Dynamic (workspace/user) plugins register via ctx.i18n.setLocaleMessages().
+ */
+class I18nService {
+  /**
+   * Built-in messages collected before Vue mounts.
+   * Structure: { 'zh-CN': { 'plugins.lamp-ai-actions': { polish: '润色' } }, ... }
+   */
+  private builtinMessages: Record<string, Record<string, Record<string, unknown>>> = {};
+
+  /**
+   * Merge built-in messages into i18n before app.use(i18n).
+   * Called from main.js before mounting the Vue app.
+   */
+  /**
+   * Merge builtin plugin messages into an i18n instance AFTER it has been created.
+   * Storage keys include the namespace prefix (e.g. 'plugins.lamp-ai-actions.ai.polish').
+   * We strip that prefix so the remainder ('ai.polish') lands in the correct
+   * nesting depth, merging with the existing locale file messages
+   * (e.g. { ai: { polish: '...' } }).
+   */
+  mergeBuiltinMessagesInto(i18nInstance: ReturnType<typeof import('vue-i18n')['createI18n']>): void {
+    // vue-i18n v11 Composition API: global.messages is a ComputedRef.
+    // Access .value to get the raw messages object, then mutate in place.
+    const allMessages = i18nInstance.global.messages.value as Record<string, Record<string, unknown>>;
+    if (!allMessages) return;
+
+    for (const [locale, namespaceMap] of Object.entries(this.builtinMessages)) {
+      const localeMsgs = allMessages[locale];
+      if (!localeMsgs) continue;
+
+      for (const [ns, flatMessages] of Object.entries(namespaceMap)) {
+        // ns = 'plugins.lamp-ai-actions', split at first dot:
+        // top = 'plugins', rest = 'lamp-ai-actions.name'
+        const dotIdx = ns.indexOf('.');
+        const top = ns.slice(0, dotIdx);
+        const rest = ns.slice(dotIdx + 1);
+        if (!localeMsgs[top]) localeMsgs[top] = {};
+
+        for (const [flatKey, value] of Object.entries(flatMessages as Record<string, unknown>)) {
+          // fullKey = 'plugins.lamp-ai-actions.name', remainder = 'name'
+          const remainder = flatKey.slice(ns.length + 1);
+          const parts = [rest, ...remainder.split('.')];
+          let cur = localeMsgs[top] as Record<string, unknown>;
+          for (let i = 0; i < parts.length - 1; i++) {
+            if (!cur[parts[i]]) cur[parts[i]] = {};
+            cur = cur[parts[i]] as Record<string, unknown>;
+          }
+          cur[parts[parts.length - 1]] = value;
+        }
+      }
+    }
+  }
+
+  /**
+   * Collect built-in messages (called from builtins/index.ts before Vue mounts).
+   * Stored as flat dot-notation keys (e.g. 'plugins.lamp-ai-actions.ai.polish')
+   * so mergeBuiltinMessagesInto can place them at the correct path in the root messages object.
+   * @param pluginId e.g. 'lamp.ai-actions'
+   * @param locale e.g. 'zh-CN'
+   * @param messages e.g. { 'ai.polish': '润色', 'ai.polishing': '润色中...' }
+   */
+  addBuiltinMessages(pluginId: string, locale: string, messages: Record<string, unknown>): void {
+    const ns = this._pluginNamespace(pluginId); // e.g. 'plugins.lamp-ai-actions'
+    if (!this.builtinMessages[locale]) {
+      this.builtinMessages[locale] = {};
+    }
+    if (!this.builtinMessages[locale][ns]) {
+      this.builtinMessages[locale][ns] = {};
+    }
+    for (const [key, value] of Object.entries(messages)) {
+      // key is already the full dot-notation path (e.g. 'ai.polish');
+      // prepend namespace to form the storage key.
+      const flatKey = `${ns}.${key}`; // e.g. 'plugins.lamp-ai-actions.ai.polish'
+      (this.builtinMessages[locale][ns] as Record<string, unknown>)[flatKey] = value;
+    }
+  }
+
+  /**
+   * Register messages for a dynamic plugin (called from ctx.i18n.setLocaleMessages).
+   */
+  setLocaleMessages(pluginId: string, locale: string, messages: Record<string, unknown>): void {
+    const { i18n } = window.__lamp_app__ ?? {};
+    if (!i18n) {
+      console.warn(`[I18nService] Cannot register messages for plugin "${pluginId}" — app not mounted yet.`);
+      return;
+    }
+    const ns = this._pluginNamespace(pluginId);
+    if (!i18n.global.messages[locale]) {
+      i18n.global.messages[locale] = {};
+    }
+    i18n.global.messages[locale][ns] = {
+      ...(i18n.global.messages[locale][ns] as Record<string, unknown> || {}),
+      ...messages,
+    };
+  }
+
+  /** Convert plugin id 'lamp.ai-actions' → 'plugins.lamp-ai-actions' */
+  private _pluginNamespace(pluginId: string): string {
+    return 'plugins.' + pluginId.replace(/\./g, '-');
+  }
+}
+
 // ─── Command Service ────────────────────────────────────────
 
 class CommandService {
@@ -168,6 +275,9 @@ export class PluginHost {
 
   /** Command service for plugins */
   readonly commandService = new CommandService();
+
+  /** I18n service — for built-in messages collected before Vue mounts */
+  readonly i18nService = new I18nService();
 
   /** All loaded plugin descriptors (read-only) */
   get plugins() { return readonly(this._loaded); }
@@ -304,6 +414,7 @@ export class PluginHost {
       storageService: this.storageService,
       commandService: this.commandService,
       aiState: this.aiState,
+      i18nService: this.i18nService,
     });
 
     const module = await this._loader.loadModule(manifest, basePath);
@@ -358,6 +469,7 @@ export class PluginHost {
       storageService: this.storageService,
       commandService: this.commandService,
       aiState: this.aiState,
+      i18nService: this.i18nService,
     });
 
     // Activate dependencies first
@@ -507,6 +619,7 @@ export class PluginHost {
       storageService: this.storageService,
       commandService: this.commandService,
       aiState: this.aiState,
+      i18nService: this.i18nService,
     });
 
     const plugin = this._builtinModules.get(manifest.id) as LampPlugin | undefined;
