@@ -1,41 +1,15 @@
 <template>
-  <div class="editor-area">
-    <div class="toolbar-area" v-if="editor">
-      <!-- 核心工具栏：通过插件系统渲染（lamp.core-toolbar） -->
-      <template v-for="item in pluginHost.contributions.sortedEditorToolbar" :key="item.id">
-        <!-- 下拉菜单类型 -->
-        <ToolbarDropdown
-          v-if="item.type === 'dropdown' && item.children"
-          :label="item.label"
-          :children="item.children"
-          :editor="editor"
-          :is-disabled="item.isDisabled ? item.isDisabled(editor) : false"
-        />
-        <!-- 普通按钮类型 -->
-        <button
-          v-else
-          @click="invokeAction(item.pluginId, item.action)"
-          :class="{ 'is-active': item.isActive ? item.isActive(editor) : false }"
-          :disabled="item.isDisabled ? item.isDisabled(editor) : false"
-          :title="item.label + (item.keybinding ? ' (' + item.keybinding + ')' : '')"
-        >
-          <svg v-if="item.icon" class="icon" aria-hidden="true">
-            <use :xlink:href="item.icon"></use>
-          </svg>
-          <span v-else class="btn-label">{{ item.label }}</span>
-        </button>
-      </template>
+  <div class="editor-area h-full">
+    <div class="editor-body h-full">
+      <EditorToolbar :editor="editor" :resolve-label="resolveLabel" :invoke-action="invokeAction" />
+      <EditorBubbleMenu :editor="editor" :resolve-label="resolveLabel" :invoke-action="invokeAction" />
+      <editor-content :editor="editor" class="content-area" />
+      <div class="character-count" v-if="editor">
+        {{ getCharacterCount() }} 个字符
+      </div>
     </div>
-    <!-- 气泡菜单（来自插件系统，无内容时不显示） -->
-    <menu class="menu-select" v-if="pluginHost.contributions.sortedBubbleMenu.length > 0">
-      <li v-for="item in pluginHost.contributions.sortedBubbleMenu" :key="item.id">
-        <button @click="invokeAction(item.pluginId, item.action)">{{ item.label }}</button>
-      </li>
-    </menu>
-    <editor-content :editor="editor" class="content-area" />
-    <div class="character-count" v-if="editor">
-      {{ getCharacterCount() }} 个字符
-    </div>
+    <AISuggestToolbar :editor="editor" />
+    <EditorAiDialog :resolve-label="resolveLabel" />
   </div>
 </template>
 
@@ -45,15 +19,23 @@ import Typography from '@tiptap/extension-typography'
 import Highlight from '@tiptap/extension-highlight'
 import Focus from '@tiptap/extension-focus'
 import { Editor, EditorContent } from '@tiptap/vue-3'
-import BubbleMenu from "@tiptap/extension-bubble-menu"
 import TextAlign from "@tiptap/extension-text-align"
 import { pluginHost } from '../plugins/index'
-import ToolbarDropdown from './ToolbarDropdown.vue'
+import { i18n } from '../i18n'
+import { AISuggestExtension } from '../builtins/ai-actions/ext/AISuggestExtension'
+import { resolveI18nLabel } from '@/lib/resolveI18nLabel'
+import AISuggestToolbar from './AISuggestToolbar.vue'
+import EditorToolbar from '@/components/editor/EditorToolbar.vue'
+import EditorBubbleMenu from '@/components/editor/EditorBubbleMenu.vue'
+import EditorAiDialog from '@/components/editor/EditorAiDialog.vue'
 
 export default {
   components: {
     EditorContent,
-    ToolbarDropdown,
+    EditorToolbar,
+    EditorBubbleMenu,
+    EditorAiDialog,
+    AISuggestToolbar,
   },
 
   props: {
@@ -68,16 +50,26 @@ export default {
       const text = this.editor.getText();
       return text.length;
     },
+    /**
+     * Resolve a label that may be either a plain string or an i18n key.
+     * Keys containing a dot (e.g. "ai.polish", "editor.bold") are resolved via t();
+     * plain strings are returned as-is.
+     */
+    resolveLabel(label) {
+      return resolveI18nLabel(i18n.global.t, label);
+    },
     // pluginHost.contributions 中的 action 以 editor 为参数
     invokeAction(pluginId, action) {
-      if (!this.editor) return
+      if (!this.editor) return;
       try {
-        const result = action(this.editor)
+        const result = action(this.editor);
         if (result instanceof Promise) {
-          result.catch(err => console.error(`[Editor] Plugin action failed (${pluginId}):`, err))
+          result.catch(err => {
+            pluginHost.aiState.error = err instanceof Error ? err.message : String(err);
+          });
         }
       } catch (err) {
-        console.error(`[Editor] Plugin action error (${pluginId}):`, err)
+        pluginHost.aiState.error = err instanceof Error ? err.message : String(err);
       }
     },
   },
@@ -93,17 +85,17 @@ export default {
 
   watch: {
     modelValue(value) {
-      // HTML
       const isSame = this.editor.getHTML() === value
-
-      // JSON
-      // const isSame = JSON.stringify(this.editor.getJSON()) === JSON.stringify(value)
-
-      if (isSame) {
-        return
-      }
-
+      if (isSame) return
       this.editor.commands.setContent(value, false)
+    },
+    // Bridge: pluginHost.aiState.suggestion → TipTap decoration
+    'pluginHost.aiState.suggestion': {
+      handler(s) {
+        if (!this.editor) return;
+        this.editor.commands.setAISuggestion(s);
+      },
+      deep: true,
     },
   },
 
@@ -111,7 +103,7 @@ export default {
     this.editor = new Editor({
       editorProps: {
         attributes: {
-          style: 'width:100%; height:calc(100% - 20px); outline:none;',
+          style: 'width:100%; height:100%; outline:none;',
         },
       },
       extensions: [
@@ -126,54 +118,12 @@ export default {
           types: ['heading', 'paragraph'],
           defaultAlignment: 'left',
         }),
-        BubbleMenu.configure({
-          pluginKey: 'selectMenu',
-          element: document.querySelector('.menu-select'),
-          shouldShow: ({ editor, view, state, oldState, from, to }) => {
-            // 只有当有选中内容时才显示菜单
-            return from !== to;
-          },
-        }),
-        // BubbleMenu.configure({
-        //   pluginKey: 'slashMenu',
-        //   element: document.querySelector('.menu-slash'),
-        //   shouldShow: ({ editor, view, state, oldState, from, to }) => {
-        //     const { doc, selection } = state;
-        //     const { $cursor } = selection;
-        //
-        //     // Check if the selection is a cursor and the text at the cursor position is a slash
-        //     if ($cursor) {
-        //       const posBeforeCursor = $cursor.pos - 1;
-        //       const charBeforeCursor = doc.textBetween(posBeforeCursor, posBeforeCursor + 1);
-        //       if (charBeforeCursor === '/') {
-        //         // If there is no old state or the old state is undefined
-        //         if (!oldState) {
-        //           return true; // Show the menu
-        //         }
-        //
-        //         // If the document has changed since the last update
-        //         if (!oldState.doc.eq(doc)) {
-        //           // Check if a new slash has been inserted
-        //           const oldCharBeforeCursor = oldState.doc.textBetween(posBeforeCursor, posBeforeCursor + 1);
-        //           if (charBeforeCursor !== oldCharBeforeCursor) {
-        //             return true; // Show the menu
-        //           }
-        //         }
-        //       }
-        //     }
-        //
-        //     return false; // Hide the menu
-        //   },
-        // }),
+        AISuggestExtension,
       ],
       content: this.modelValue,
       autofocus: true,
       onUpdate: () => {
-        // HTML
         this.$emit('update:modelValue', this.editor.getHTML())
-
-        // JSON
-        // this.$emit('update:modelValue', this.editor.getJSON())
       },
     })
     pluginHost.setEditorInstance(this.editor)
@@ -186,226 +136,213 @@ export default {
 }
 </script>
 
-<style lang="scss">
-@use "/src/styles/style" as *;
-
-.el-dropdown-link {
-  .icon {
-    color: $lamp-color-neutral-dark;
-  }
-
-  a {
-    color: $lamp-color-neutral-dark;
-    font-size: 12px;
-    padding: 1px 0 0 0;
-
-    &:hover {
-      color: $lamp-color-neutral-dark;
-    }
-  }
-
-  cursor: pointer;
-  color: $lamp-color-neutral-dark;
-  display: flex;
-  align-items: center;
-  padding: 6px 10px;
-  border-radius: 8px;
-
-  &:hover {
-    background-color: rgba($lamp-color-neutral-grey, 0.2);
-  }
-}
-
-.el-dropdown-menu {
-  -webkit-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
-  user-select: none;
-
-  .el-dropdown-menu__item {
-    display: flex;
-    align-items: center;
-    padding: 6px 10px;
-
-    .icon {
-      margin-right: 6px;
-      color: $lamp-color-neutral-dark;
-    }
-
-    &:hover {
-      background-color: rgba($lamp-color-neutral-grey, 0.2);
-      color: $lamp-color-neutral-dark;
-    }
-  }
-}
-
+<style>
 :focus-visible {
   outline: none;
 }
 
 .has-focus {
-  color: $lamp-color-neutral-dark;
+  color: var(--foreground);
 }
 
 /* Basic editor styles */
-.tiptap {
-  >*+* {
-    margin-top: 0.75em;
-  }
-
-  ul,
-  ol {
-    padding: 0 1rem;
-  }
-
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6 {
-    line-height: 1.1;
-  }
-
-  code {
-    background-color: rgba(#616161, 0.1);
-    color: #616161;
-  }
-
-  pre {
-    background: #0D0D0D;
-    color: #FFF;
-    font-family: 'JetBrainsMono', monospace;
-    padding: 0.75rem 1rem;
-    border-radius: 0.5rem;
-
-    code {
-      color: inherit;
-      padding: 0;
-      background: none;
-      font-size: 0.8rem;
-    }
-  }
-
-  img {
-    max-width: 100%;
-    height: auto;
-  }
-
-  blockquote {
-    padding-left: 1rem;
-    border-left: 2px solid rgba(#0D0D0D, 0.1);
-  }
-
-  hr {
-    border: none;
-    border-top: 2px solid rgba(#0D0D0D, 0.1);
-    margin: 2rem 0;
-  }
-
-  em {
-    font-synthesis: style;
-  }
+.tiptap>*+* {
+  margin-top: 0.75em;
 }
 
-div {
-  .editor-area {
-    display: grid;
-    grid-template-rows: auto 1fr 20px;
-    overflow: hidden;
-
-    .toolbar-area {
-      grid-row: 1;
-      margin: 1px 0;
-      -webkit-user-select: none;
-      -moz-user-select: none;
-      -ms-user-select: none;
-      user-select: none;
-
-      >button {
-        padding: 5px 10px 5px 10px;
-        color: #333;
-        font-size: 14px;
-        cursor: pointer;
-
-        &.is-active {
-          background-color: rgba($lamp-color-primary, 0.2);
-          color: $lamp-color-primary;
-        }
-      }
-    }
-
-    .content-area {
-      grid-row: 2;
-      overflow-x: hidden;
-      overflow-y: scroll;
-      padding: 0 0 0 15px;
-      text-align: left;
-      color: rgba($lamp-color-neutral-grey, 0.5);
-    }
-
-    /* 自定义滚动条样式 */
-    .content-area::-webkit-scrollbar {
-      width: 6px;
-    }
-
-    .content-area::-webkit-scrollbar-track {
-      background-color: transparent;
-    }
-
-    .content-area::-webkit-scrollbar-thumb {
-      background: rgba($lamp-color-neutral-grey, 0.4);
-      border-radius: 6px;
-    }
-
-    .content-area::-webkit-scrollbar-thumb:hover {
-      background: $lamp-color-neutral-grey;
-    }
-  }
+.tiptap ul,
+.tiptap ol {
+  padding: 0 1rem;
 }
 
-menu {
+.tiptap h1,
+.tiptap h2,
+.tiptap h3,
+.tiptap h4,
+.tiptap h5,
+.tiptap h6 {
+  line-height: 1.1;
+}
+
+.tiptap code {
+  background-color: rgba(97, 97, 97, 0.1);
+  color: #616161;
+}
+
+.tiptap pre {
+  background: #0D0D0D;
+  color: #FFF;
+  font-family: 'JetBrainsMono', monospace;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+}
+
+.tiptap pre code {
+  color: inherit;
+  padding: 0;
+  background: none;
+  font-size: 0.8rem;
+}
+
+.tiptap img {
+  max-width: 100%;
+  height: auto;
+}
+
+.tiptap blockquote {
+  padding-left: 1rem;
+  border-left: 2px solid rgba(13, 13, 13, 0.1);
+}
+
+.tiptap hr {
+  border: none;
+  border-top: 2px solid rgba(13, 13, 13, 0.1);
+  margin: 2rem 0;
+}
+
+.tiptap em {
+  font-synthesis: style;
+}
+
+.toolbar-area {
+  flex-shrink: 0;
+  margin: 1px 0;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  text-align: center;
+}
+
+.toolbar-area>button {
+  padding: 5px 10px;
+  color: #333;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.toolbar-area>button.is-active {
+  background-color: var(--accent);
+  color: var(--primary);
+}
+
+.content-area {
+  height: calc(100% - 55px);
+  flex-grow: 1;
+  overflow-y: scroll;
+  min-height: 0;
+  padding: 0 0 0 15px;
+  color: var(--muted-foreground);
+  box-sizing: border-box;
+}
+
+.character-count {
+  background-color: var(--muted);
+  position: absolute;
+  bottom: 0;
+  height: 29px;
+  width: 100%;
+  font-size: 12px;
+  text-align: left;
+  color: var(--muted-foreground);
+  padding: 4px 12px 4px 12px;
+  user-select: none;
+  box-sizing: border-box;
+  border-top: 1px solid var(--border);
+}
+
+/* Scrollbar */
+.content-area::-webkit-scrollbar {
+  width: 6px;
+}
+
+.content-area::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+.content-area::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 6px;
+}
+
+.content-area::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
+}
+
+/* Bubble menu */
+.menu-select {
   display: flex;
   flex-direction: column;
   list-style: none;
   padding: 4px 6px;
   border-radius: 8px;
-  box-shadow: 2px 4px 6px 2px rgba($lamp-color-neutral-grey, 0.15);
-  background-color: $lamp-color-neutral-light;
+  background-color: var(--muted);
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
   gap: 4px;
+  border: 1px solid var(--border);
 }
 
-.menu-select {
-  position: absolute;
-  z-index: 1000;
-  border: 1px solid rgba($lamp-color-neutral-grey, 0.2);
-
-  .button {
-    padding: 4px 8px;
-    font-size: 8px !important;
-    color: $lamp-color-neutral-dark;
-    background-color: transparent;
-    border: none;
-    cursor: pointer;
-
-    &:hover {
-      background-color: rgba($lamp-color-neutral-grey, 0.2);
-      color: $lamp-color-neutral-dark;
-    }
-  }
+.menu-select .button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  font-size: 14px;
+  color: var(--foreground);
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
 }
 
-.character-count {
-  grid-row: 3;
-  padding-left: 12px;
-  height: 20px;
-  font-size: 12px;
-  text-align: left;
-  color: $lamp-color-neutral-grey;
-  user-select: none;
+.menu-select .button .icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--foreground);
+}
+
+.menu-select .button .label {
+  white-space: nowrap;
+}
+
+.menu-select .button:hover {
+  background-color: var(--muted);
+  color: var(--foreground);
+}
+
+/* ── AI Inline Ghost Text ────────────────────────────────────── */
+
+.ai-suggest-inline {
+  pointer-events: none !important;
+  color: var(--primary) !important;
+  font-style: italic !important;
+  background: rgba(0, 110, 255, 0.08) !important;
+  border-bottom: 2.5px dotted var(--primary) !important;
+  border-radius: 2px !important;
+  cursor: text !important;
+  padding: 1px 2px !important;
+}
+
+/* ── AI To-Be-Replaced Original Text ──────────────────────────── */
+
+.ai-suggest-replace {
+  text-decoration: line-through !important;
+  background: oklch(0.577 0.245 27.325 / 0.08) !important;
+  color: var(--destructive) !important;
+  border-radius: 2px !important;
+}
+
+/* Transition */
+.ai-loading-enter-active,
+.ai-loading-leave-active {
+  transition: opacity 0.15s ease;
+}
+
+.ai-loading-enter-from,
+.ai-loading-leave-to {
+  opacity: 0;
 }
 </style>

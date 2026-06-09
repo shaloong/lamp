@@ -107,12 +107,60 @@ export interface PluginContributions {
 
   /** TipTap extensions — registered via lamp.editor.registerTipTapExtension() */
   tipTapExtensions?: TipTapExtensionDefinition[];
+
+  /** Settings sections and items contributed by this plugin */
+  settings?: PluginSettingsSection[];
+}
+
+/**
+ * A settings section contributed by a plugin.
+ * Appears as a top-level tab (if priority > built-in tabs) or grouped under a label.
+ */
+export interface PluginSettingsSection {
+  /** Unique id within the plugin, e.g. "prompts" */
+  id: string;
+  /** i18n key or plain string for the section label */
+  label: string;
+  /** Priority for ordering (higher = earlier). Built-in tabs are priority 100. */
+  priority?: number;
+  /** Setting items in this section */
+  items: PluginSettingsItem[];
+}
+
+/** A single setting item within a plugin's settings section */
+export interface PluginSettingsItem {
+  /** Unique id within the plugin */
+  id: string;
+  /** i18n key or plain string for the label */
+  label: string;
+  /** i18n key or plain string for the description */
+  description?: string;
+  /** Item type determines the rendered control */
+  type: 'text' | 'textarea' | 'select' | 'toggle' | 'component';
+  /** Default value when no saved value exists */
+  defaultValue?: unknown;
+  /** Current value — read from ctx.storage; set automatically by the host */
+  value?: unknown;
+  /** For type="select": array of options */
+  options?: Array<{ value: string; label: string }>;
+  /** For type="component": path to a Vue 3 SFC relative to plugin root */
+  component?: string;
+  /**
+   * Called when the user changes the value.
+   * Receives the new value; persists it via ctx.storage automatically unless you override.
+   */
+  onChange?: (value: unknown) => void | Promise<void>;
+  /**
+   * Override the default storage behavior. If true, onChange is responsible for persistence.
+   * Default: false (host auto-saves to ctx.storage).
+   */
+  manualPersist?: boolean;
 }
 
 export interface EditorToolbarItem {
   id: string;
   label: string;
-  icon?: string; // iconfont id e.g. "#icon-bold"
+  icon?: string; // Lucide icon component name e.g. "Bold"
   /** Supply a Vue component for custom rendering */
   component?: string; // path relative to plugin root
   /** Shortcut displayed next to the label */
@@ -179,7 +227,7 @@ export interface MenuItem {
 export interface SidebarPanelContribution {
   id: string;
   title: string;
-  icon?: string; // iconfont id
+  icon?: string; // Lucide icon component name
   /** Path to a Vue 3 SFC, relative to plugin root */
   component: string;
   /** Z-order when multiple panels are open (default 0) */
@@ -202,7 +250,10 @@ export interface StatusBarItem {
 
 export interface AIActionContribution {
   id: string;
-  label: string; // e.g. "润色"
+  /** i18n key for the label, e.g. "ai.polish". Resolved at render time. */
+  label: string;
+  /** i18n key for the in-progress label shown while loading, e.g. "ai.polishing" */
+  loadingLabel?: string;
   description?: string;
   icon?: string;
   /** The AI prompt template. `{selection}` is replaced with the selected text. */
@@ -251,6 +302,7 @@ export interface LampHostAPI {
   commands: LampCommandsAPI;
   storage: LampStorageAPI;
   event: LampEventAPI;
+  i18n: LampI18nAPI;
 }
 
 export interface LampEditorAPI {
@@ -296,15 +348,56 @@ export interface LampWorkspaceAPI {
 }
 
 export interface AISettings {
-  baseURL: string;
+  /** Provider name, e.g. "deepseek" */
+  provider: string;
+  /** Base URL of the AI API endpoint */
+  baseUrl: string;
   apiKey: string;
   model: string;
+}
+
+/** Represents an AI-generated suggestion awaiting user confirmation */
+export interface AISuggestion {
+  /** Human-readable label of the action, e.g. "润色" */
+  actionLabel: string;
+  /** The AI-generated content to be applied */
+  content: string;
+  /** Whether to replace the original selection (polish/expand/summarize) or append after it (continue) */
+  insertMode: 'replace' | 'append';
+  /** Start position of the original selection in the document */
+  from: number;
+  /** End position of the original selection in the document */
+  to: number;
 }
 
 export interface LampAIAPI {
   chat(systemPrompt: string, userMessage: string): Promise<string>;
   getSettings(): Promise<AISettings>;
   saveSettings(settings: AISettings): Promise<void>;
+  /** Mark an AI operation as started — shows a loading overlay */
+  startLoading(actionLabel: string): void;
+  /** Mark the current AI operation as finished — hides the loading overlay */
+  stopLoading(): void;
+  /** Whether an AI operation is currently in progress */
+  isLoading(): boolean;
+  /** Set an error message — replaces the loading overlay with an error display */
+  setError(message: string): void;
+  /** Clear any error state (e.g. before starting a new action) */
+  clearError(): void;
+  /**
+   * Show an AI result as a suggestion overlay — the result is NOT applied yet.
+   * The editor state (selection, cursor) is preserved until the user accepts or dismisses.
+   */
+  showSuggestion(suggestion: AISuggestion): void;
+  /** Clear any active suggestion */
+  clearSuggestion(): void;
+  /** Current loading state — reactive, consumed by the UI */
+  readonly loadingState: {
+    readonly isLoading: boolean;
+    readonly actionLabel: string;
+    readonly error: string | null;
+    readonly suggestion: AISuggestion | null;
+  };
 }
 
 export interface LampUIAPI {
@@ -349,11 +442,33 @@ export interface LampStorageAPI {
   clear(): void;
 }
 
+export interface LampShortcutsAPI {
+  getAll(): Array<{ id: string; label: string; defaultAccelerator?: string; effectiveAccelerator?: string }>;
+  setOverride(commandId: string, accelerator: string | null): void;
+  resetToDefault(commandId: string): void;
+  checkConflict(accelerator: string, excludeId?: string): string | null;
+}
+
 export interface LampEventAPI {
   on<T = unknown>(event: string, handler: (data: T) => void): () => void;
   once<T = unknown>(event: string, handler: (data: T) => void): void;
   off(event: string, handler: (data: unknown) => void): void;
   emit<T = unknown>(event: string, data?: T): void;
+}
+
+/** Locale messages contributed by a plugin — keyed by locale id, e.g. "zh-CN" or "en-US" */
+export interface PluginLocaleMessages {
+  [locale: string]: Record<string, unknown>;
+}
+
+export interface LampI18nAPI {
+  /**
+   * Register or merge locale messages for this plugin.
+   * The messages are merged under the plugin's namespace: `plugins.<id-with-dashes>.<key>`.
+   * Example: calling setLocaleMessages('zh-CN', { polish: '润色' }) for plugin 'lamp.ai-actions'
+   * makes it accessible as `t('plugins.lamp-ai-actions.polish')`.
+   */
+  setLocaleMessages(locale: string, messages: Record<string, unknown>): void;
 }
 
 // ─── Standard Host Events ───────────────────────────────────
@@ -401,11 +516,25 @@ export class PluginContext {
   commands: LampCommandsAPI;
   storage: LampStorageAPI;
   event: LampEventAPI;
+  i18n: LampI18nAPI;
+  shortcuts: LampShortcutsAPI;
 
   constructor(
     manifest: LampPluginManifest,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    private host: { events: any; contributions: any; editorInstance: Editor | null; workspace: { isOpen: boolean; rootPath: string; name: string }; storageService: unknown; commandService: unknown }
+    private host: {
+      events: any;
+      contributions: any;
+      editorInstance: Editor | null;
+      workspace: { isOpen: boolean; rootPath: string; name: string };
+      storageService: unknown;
+      commandService: unknown;
+      shortcutService: unknown;
+      aiState: { isLoading: boolean; actionLabel: string; error: string | null; suggestion: AISuggestion | null };
+      i18nService: {
+        setLocaleMessages(pluginId: string, locale: string, messages: Record<string, unknown>): void;
+      };
+    }
   ) {
     this.id = manifest.id;
     this.editor    = this._buildEditorAPI();
@@ -416,6 +545,8 @@ export class PluginContext {
     this.commands  = this._buildCommandsAPI();
     this.storage   = this._buildStorageAPI();
     this.event     = this._buildEventAPI();
+    this.i18n      = this._buildI18nAPI();
+    this.shortcuts = this._buildShortcutsAPI();
   }
 
   private _buildEditorAPI(): LampEditorAPI {
@@ -425,7 +556,7 @@ export class PluginContext {
       getContent: () => getEditor()?.getHTML() ?? '',
       getText: () => getEditor()?.getText() ?? '',
       insertContent: (html) => getEditor()?.chain().focus().insertContent(html).run(),
-      insertContentAtCursor: (html) => getEditor()?.chain().focus().insertContentAt({ at: getEditor()!.state.selection.to }).run(),
+      insertContentAtCursor: (html) => getEditor()?.chain().focus().insertContentAt(getEditor()!.state.selection.to, html).run(),
       deleteSelection: () => getEditor()?.chain().focus().deleteSelection().run(),
       applyMark: (mark, attrs) => getEditor()?.chain().focus().setMark(mark, attrs).run(),
       removeMark: (mark) => getEditor()?.chain().focus().unsetMark(mark).run(),
@@ -443,42 +574,78 @@ export class PluginContext {
 
   private _buildFileAPI(): LampFileAPI {
     return {
-      read: (filePath) => window.electronAPI.openSpecificFile(filePath).then(data => {
-        if (data && data[0] === 1) return data[1] as string;
-        throw new Error(`Failed to read file: ${filePath}`);
-      }),
-      write: (filePath, content) => window.electronAPI.saveInfo(filePath, content),
-      exists: (filePath) => window.electronAPI.hasFile(filePath),
-      delete: (filePath) => window.electronAPI.delFile(filePath),
-      getFolderContent: (folderPath) => window.electronAPI.getFolderContent(folderPath),
-      watch: (folderPath) => window.electronAPI.startWatching(folderPath),
-      unwatch: () => window.electronAPI.stopWatching(),
+      read: (filePath) => window.lampAPI.readTextFile(filePath),
+      write: (filePath, content) => window.lampAPI.saveInfo(filePath, content),
+      exists: (filePath) => window.lampAPI.hasFile(filePath),
+      delete: (filePath) => window.lampAPI.delFile(filePath),
+      getFolderContent: (folderPath) => window.lampAPI.getFolderContent(folderPath),
+      watch: (folderPath) => window.lampAPI.startWatching(folderPath),
+      unwatch: () => window.lampAPI.stopWatching(),
     };
   }
 
   private _buildWorkspaceAPI(): LampWorkspaceAPI {
+    const host = this.host;
     return {
-      get isOpen() { return this._ws().isOpen; },
-      get rootPath() { return this._ws().rootPath; },
-      get name() { return this._ws().name; },
-      _ws: () => this.host.workspace,
+      get isOpen() { return host.workspace.isOpen; },
+      get rootPath() { return host.workspace.rootPath; },
+      get name() { return host.workspace.name; },
       open: async () => {
-        const result = await window.electronAPI.openWorkspace();
+        const result = await window.lampAPI.openWorkspace();
         if (result) {
-          this.host.events.emit('lamp.workspace.opened', { rootPath: result.rootPath, name: result.name });
+          host.workspace.isOpen = true;
+          host.workspace.rootPath = result.rootPath;
+          host.workspace.name = result.name;
+          host.events.emit('lamp.workspace.opened', { rootPath: result.rootPath, name: result.name });
         }
       },
       close: () => {
-        this.host.events.emit('lamp.workspace.closed', {});
+        host.workspace.isOpen = false;
+        host.events.emit('lamp.workspace.closed', {});
       },
     };
   }
 
   private _buildAIAPI(): LampAIAPI {
+    const aiState = this.host.aiState;
     return {
-      chat: (systemPrompt, userMessage) => window.electronAPI.ai(systemPrompt, userMessage),
-      getSettings: () => window.electronAPI.getAiSettings(),
-      saveSettings: (settings) => window.electronAPI.saveAiSettings(settings),
+      chat: (systemPrompt, userMessage) => window.lampAPI.ai(systemPrompt, userMessage),
+      getSettings: () => window.lampAPI.getAiSettings(),
+      saveSettings: (settings) => window.lampAPI.saveAiSettings(settings),
+      startLoading: (actionLabel) => {
+        aiState.isLoading = true;
+        aiState.actionLabel = actionLabel;
+        aiState.error = null;
+        aiState.suggestion = null;
+      },
+      stopLoading: () => {
+        aiState.isLoading = false;
+        aiState.actionLabel = '';
+      },
+      isLoading: () => aiState.isLoading,
+      setError: (message) => {
+        aiState.isLoading = false;
+        aiState.actionLabel = '';
+        aiState.error = message;
+        aiState.suggestion = null;
+      },
+      clearError: () => {
+        aiState.error = null;
+      },
+      showSuggestion: (suggestion) => {
+        aiState.isLoading = false;
+        aiState.actionLabel = '';
+        aiState.suggestion = suggestion;
+      },
+      clearSuggestion: () => {
+        aiState.suggestion = null;
+      },
+      loadingState: {
+        get isLoading() { return aiState.isLoading; },
+        get actionLabel() { return aiState.actionLabel; },
+        get error() { return aiState.error; },
+        get suggestion() { return aiState.suggestion; },
+      },
     };
   }
 
@@ -550,6 +717,30 @@ export class PluginContext {
       once:   <T>(event, handler) => eb.once<T>(event, handler),
       off:    (event, handler)    => eb.off(event, handler),
       emit:   <T>(event, data)    => eb.emit<T>(event, data),
+    };
+  }
+
+  private _buildI18nAPI(): LampI18nAPI {
+    const pid = this.id;
+    return {
+      setLocaleMessages: (locale, messages) => {
+        this.host.i18nService.setLocaleMessages(pid, locale, messages);
+      },
+    };
+  }
+
+  private _buildShortcutsAPI(): LampShortcutsAPI {
+    const ss = this.host.shortcutService as {
+      getAll(): Array<{ id: string; label: string; defaultAccelerator?: string; effectiveAccelerator?: string }>;
+      setOverride(commandId: string, accelerator: string | null): void;
+      resetToDefault(commandId: string): void;
+      checkConflict(accelerator: string, excludeId?: string): string | null;
+    };
+    return {
+      getAll: () => ss.getAll(),
+      setOverride: (commandId, accelerator) => ss.setOverride(commandId, accelerator),
+      resetToDefault: (commandId) => ss.resetToDefault(commandId),
+      checkConflict: (accelerator, excludeId) => ss.checkConflict(accelerator, excludeId),
     };
   }
 }

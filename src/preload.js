@@ -13,7 +13,7 @@ function initElectronAPI() {
   const { open, save } = window.__TAURI__.dialog;
 
   // 暴露全局 API 到渲染进程
-  window.electronAPI = {
+  window.lampAPI = {
     // ==================== 窗口操作 ====================
     // 窗口最小化
     minWindow: () => invoke('minimize_window'),
@@ -99,11 +99,30 @@ function initElectronAPI() {
 
     // ==================== AI 功能 ====================
     ai: (prompt, message) => invoke('ai_chat', { prompt, message }),
-    getAiSettings: () => invoke('get_ai_settings'),
+    getAiSettings: async () => {
+      const cfg = await invoke('get_ai_settings');
+      return {
+        provider: cfg.provider,
+        baseUrl: cfg.base_url,
+        apiKey: cfg.api_key,
+        model: cfg.model,
+      };
+    },
     saveAiSettings: (settings) => invoke('save_ai_settings', {
-      baseUrl: settings.baseURL,
-      apiKey: settings.apiKey,
-      model: settings.model,
+      provider: settings.provider,
+      baseUrl: settings.baseUrl || '',
+      apiKey: settings.apiKey || '',
+      model: settings.model || '',
+    }),
+
+    // ==================== 通用设置 ====================
+    getGeneralSettings: () => invoke('get_general_settings'),
+    saveGeneralSettings: (settings) => invoke('save_general_settings', {
+      language: settings.language,
+      autoSave: settings.autoSave,
+      autoSaveInterval: settings.autoSaveInterval,
+      restoreOnStart: settings.restoreOnStart,
+      openLastWorkspace: settings.openLastWorkspace,
     }),
 
     // ==================== 事件监听 ====================
