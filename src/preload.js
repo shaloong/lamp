@@ -127,6 +127,53 @@ function initElectronAPI() {
         callback(event.payload);
       });
     },
+
+    // ==================== 工作区操作 ====================
+    // 打开工作区（选择文件夹）
+    openWorkspace: async () => {
+      const result = await open({
+        multiple: false,
+        directory: true,  // 选择文件夹
+      });
+
+      if (result) {
+        // 直接返回文件夹路径作为工作区
+        return {
+          name: result.split(/[/\\]/).pop(),  // 文件夹名称
+          rootPath: result,  // 文件夹路径
+        };
+      }
+      return null;
+    },
+
+    // 检查文件是否在工作区内
+    isFileInDirectory: async (filePath, dirPath) => {
+      return await invoke('is_file_in_directory', { filePath, dirPath });
+    },
+
+    // ==================== 文件监视 ====================
+    // 开始监视文件夹
+    startWatching: (folderPath) => invoke('start_watching', { folderPath }),
+
+    // 停止监视
+    stopWatching: () => invoke('stop_watching'),
+
+    // 监听文件变化事件
+    onFileChange: (callback) => {
+      listen('file-change', (event) => {
+        callback(event.payload);
+      });
+    },
+
+    // ==================== 插件操作 ====================
+    // 读取文本文件（供插件加载器使用）
+    readTextFile: (filePath) => invoke('read_text_file', { filePath }),
+
+    // 获取应用数据目录
+    getAppDataDir: () => invoke('get_app_data_dir'),
+
+    // 获取用户插件目录
+    getUserPluginsDir: () => invoke('get_user_plugins_dir'),
   };
   
   console.log('API initialized for Tauri');
