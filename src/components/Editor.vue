@@ -3,7 +3,7 @@
     <div class="editor-body h-full">
       <EditorToolbar :editor="editor" :resolve-label="resolveLabel" :invoke-action="invokeAction" />
       <EditorBubbleMenu :editor="editor" :resolve-label="resolveLabel" :invoke-action="invokeAction" />
-      <editor-content :editor="editor" class="content-area" />
+      <editor-content :editor="editor" :class="editorContentClass" />
       <div class="character-count" v-if="editor">
         {{ getCharacterCount() }} 个字符
       </div>
@@ -20,10 +20,11 @@ import Highlight from '@tiptap/extension-highlight'
 import Focus from '@tiptap/extension-focus'
 import { Editor, EditorContent } from '@tiptap/vue-3'
 import TextAlign from "@tiptap/extension-text-align"
+import { Markdown } from '@tiptap/markdown'
 import { pluginHost } from '../plugins/index'
 import { i18n } from '../i18n'
-import { AISuggestExtension } from '../builtins/ai-actions/ext/AISuggestExtension'
 import { resolveI18nLabel } from '@/lib/resolveI18nLabel'
+import { useSettingsStore } from '@/stores/settings'
 import AISuggestToolbar from './AISuggestToolbar.vue'
 import EditorToolbar from '@/components/editor/EditorToolbar.vue'
 import EditorBubbleMenu from '@/components/editor/EditorBubbleMenu.vue'
@@ -46,6 +47,64 @@ export default {
   },
 
   methods: {
+    initEditor() {
+      if (this.editor) {
+        this.editor.destroy();
+        this.editor = null;
+      }
+
+      // Plugin extensions may be either Extension.create(...) instances or constructors.
+      const pluginExtensions = pluginHost.contributions.sortedTipTapExtensions
+        .map((def) => {
+          const ext = def.ExtensionClass
+          if (typeof ext === "function") {
+            return new ext()
+          }
+          return ext
+        })
+        .filter(Boolean)
+
+      const extensions = [
+        Focus.configure({
+          className: "has-focus",
+          mode: "all",
+        }),
+        StarterKit,
+        Typography,
+        Highlight,
+        TextAlign.configure({
+          types: ["heading", "paragraph"],
+          defaultAlignment: "left",
+        }),
+        Markdown.configure({
+          html: true,
+          tightLists: true,
+          tightListClass: "tight",
+          bulletListMarker: "-",
+          linkify: false,
+          breaks: false,
+          transformPastedText: true,
+          transformCopiedText: false,
+        }),
+        ...pluginExtensions,
+      ]
+
+      this.editor = new Editor({
+        editorProps: {
+          attributes: {
+            style: "width:100%; height:100%; outline:none;",
+          },
+        },
+        extensions,
+        content: this.modelValue,
+        autofocus: true,
+        onUpdate: () => {
+          this.$emit("update:modelValue", this.editor.getHTML())
+        },
+      })
+      pluginHost.setEditorInstance(this.editor)
+    },
+
     getCharacterCount() {
       const text = this.editor.getText();
       return text.length;
@@ -72,6 +131,51 @@ export default {
         pluginHost.aiState.error = err instanceof Error ? err.message : String(err);
       }
     },
+
+    getDocumentSearchMatches(query, options = {}) {
+      if (!this.editor || !query) return [];
+      const caseSensitive = !!options.caseSensitive;
+      const wholeWord = !!options.wholeWord;
+      const needle = caseSensitive ? query : query.toLowerCase();
+      if (!needle) return [];
+
+      const matches = [];
+      this.editor.state.doc.descendants((node, pos) => {
+        if (!node.isText || !node.text) return;
+        const text = node.text;
+        const source = caseSensitive ? text : text.toLowerCase();
+        let start = 0;
+        while (start <= source.length) {
+          const idx = source.indexOf(needle, start);
+          if (idx === -1) break;
+          const end = idx + needle.length;
+          if (wholeWord) {
+            const before = idx > 0 ? source[idx - 1] : '';
+            const after = end < source.length ? source[end] : '';
+            const beforeOk = !before || !/[\p{L}\p{N}_]/u.test(before);
+            const afterOk = !after || !/[\p{L}\p{N}_]/u.test(after);
+            if (!beforeOk || !afterOk) {
+              start = idx + 1;
+              continue;
+            }
+          }
+          matches.push({ from: pos + idx, to: pos + end });
+          start = idx + 1;
+        }
+      });
+      return matches;
+    },
+
+    setDocumentSearchSelection(match) {
+      if (!this.editor || !match) return;
+      this.editor.chain().focus().setTextSelection({ from: match.from, to: match.to }).run();
+    },
+
+    replaceDocumentSearchMatch(match, newText) {
+      if (!this.editor || !match) return false;
+      this.editor.chain().focus().insertContentAt({ from: match.from, to: match.to }, newText).run();
+      return true;
+    },
   },
 
   emits: ['update:modelValue'],
@@ -81,6 +185,12 @@ export default {
       editor: null,
       pluginHost,
     }
+  },
+
+  computed: {
+    editorContentClass() {
+      return useSettingsStore().focusMode ? 'content-area focus-mode' : 'content-area'
+    },
   },
 
   watch: {
@@ -100,38 +210,15 @@ export default {
   },
 
   mounted() {
-    this.editor = new Editor({
-      editorProps: {
-        attributes: {
-          style: 'width:100%; height:100%; outline:none;',
-        },
-      },
-      extensions: [
-        Focus.configure({
-          className: 'has-focus',
-          mode: 'all',
-        }),
-        StarterKit,
-        Typography,
-        Highlight,
-        TextAlign.configure({
-          types: ['heading', 'paragraph'],
-          defaultAlignment: 'left',
-        }),
-        AISuggestExtension,
-      ],
-      content: this.modelValue,
-      autofocus: true,
-      onUpdate: () => {
-        this.$emit('update:modelValue', this.editor.getHTML())
-      },
-    })
-    pluginHost.setEditorInstance(this.editor)
+    this.initEditor();
   },
 
   beforeUnmount() {
     pluginHost.setEditorInstance(null)
-    this.editor.destroy()
+    if (this.editor) {
+      this.editor.destroy();
+      this.editor = null;
+    }
   },
 }
 </script>
@@ -205,25 +292,48 @@ export default {
 }
 
 .toolbar-area {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   flex-shrink: 0;
   margin: 1px 0;
+  padding: 0 2px;
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
-  text-align: center;
 }
 
 .toolbar-area>button {
-  padding: 5px 10px;
-  color: #333;
+  padding: 4px 8px;
+  color: var(--muted-foreground);
   font-size: 14px;
   cursor: pointer;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.toolbar-area>button:hover:not(:disabled) {
+  color: var(--accent-foreground);
+  background-color: color-mix(in oklab, var(--foreground) 9%, transparent);
+}
+
+.toolbar-area>button:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--ring) 55%, transparent);
+  outline-offset: 1px;
+}
+
+.toolbar-area>button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .toolbar-area>button.is-active {
-  background-color: var(--accent);
-  color: var(--primary);
+  background-color: color-mix(in oklab, var(--foreground) 14%, transparent);
+  color: var(--foreground);
 }
 
 .content-area {
@@ -232,8 +342,12 @@ export default {
   overflow-y: scroll;
   min-height: 0;
   padding: 0 0 0 15px;
-  color: var(--muted-foreground);
   box-sizing: border-box;
+  color: var(--foreground);
+}
+
+.focus-mode {
+  color: var(--muted-foreground);
 }
 
 .character-count {
@@ -276,30 +390,32 @@ export default {
   list-style: none;
   padding: 4px 6px;
   border-radius: 8px;
-  background-color: var(--muted);
+  background-color: var(--popover);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 20px color-mix(in oklab, var(--foreground) 18%, transparent);
   -webkit-user-select: none;
   -moz-user-select: none;
   -ms-user-select: none;
   user-select: none;
-  gap: 4px;
-  border: 1px solid var(--border);
+  gap: 6px;
 }
 
 .menu-select .button {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  font-size: 14px;
+  gap: 6px;
+  padding: 6px 8px;
+  font-size: 13px;
   color: var(--foreground);
   background-color: transparent;
   border: none;
+  border-radius: 4px;
   cursor: pointer;
 }
 
 .menu-select .button .icon {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   flex-shrink: 0;
   color: var(--foreground);
 }
@@ -309,8 +425,8 @@ export default {
 }
 
 .menu-select .button:hover {
-  background-color: var(--muted);
-  color: var(--foreground);
+  background-color: color-mix(in oklab, var(--foreground) 10%, transparent);
+  color: var(--accent-foreground);
 }
 
 /* ── AI Inline Ghost Text ────────────────────────────────────── */

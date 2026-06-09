@@ -1,5 +1,7 @@
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { pluginHost } from '@/plugins/index'
+import { i18n } from '@/i18n'
+import { resolveI18nLabel } from '@/lib/resolveI18nLabel'
 
 export function useAISuggestToolbar(editorRef) {
   const top = ref(0)
@@ -21,7 +23,7 @@ export function useAISuggestToolbar(editorRef) {
       return
     }
 
-    currentLabel.value = suggestion.actionLabel
+    currentLabel.value = resolveI18nLabel(i18n.global.t, suggestion.actionLabel)
     try {
       const coords = editor.view.coordsAtPos(suggestion.to)
       top.value = coords.top - 10
@@ -47,12 +49,28 @@ export function useAISuggestToolbar(editorRef) {
   }
 
   let detachEditorUpdate = null
+  let boundEditor = null
+
+  const unbindEditorUpdate = () => {
+    if (typeof detachEditorUpdate === 'function') {
+      detachEditorUpdate()
+      detachEditorUpdate = null
+    }
+    if (boundEditor?.off) {
+      boundEditor.off('update', updatePosition)
+    }
+    boundEditor = null
+  }
 
   const bindEditorUpdate = (editor) => {
-    detachEditorUpdate?.()
-    detachEditorUpdate = null
+    unbindEditorUpdate()
     if (!editor) return
-    detachEditorUpdate = editor.on('update', updatePosition)
+    const maybeDetach = editor.on('update', updatePosition)
+    if (typeof maybeDetach === 'function') {
+      detachEditorUpdate = maybeDetach
+      return
+    }
+    boundEditor = editor
   }
 
   const stopEditorWatch = watch(editorRef, bindEditorUpdate, { immediate: true })
@@ -72,7 +90,7 @@ export function useAISuggestToolbar(editorRef) {
   onBeforeUnmount(() => {
     stopEditorWatch()
     stopSuggestionWatch()
-    detachEditorUpdate?.()
+    unbindEditorUpdate()
   })
 
   return {

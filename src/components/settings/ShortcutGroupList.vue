@@ -17,26 +17,17 @@
                         <template v-if="recordingId === item.id">
                             <span class="recording-hint">{{ t('shortcuts.recording') }}</span>
                             <button class="cancel-btn" @click.stop="$emit('cancel-recording')">
-                                <svg viewBox="0 0 1024 1024" fill="currentColor" width="14" height="14">
-                                    <path
-                                        d="M810.7 273.4L691.6 392.5l119.1 119.1-119.1 119.1L691.6 630.7l119.1-119.1L691.6 392.5l119.1-119.1z" />
-                                </svg>
+                                <X :size="14" />
                             </button>
                         </template>
 
                         <template v-else-if="conflictId === item.id">
                             <span class="conflict-hint">
-                                <svg viewBox="0 0 1024 1024" fill="currentColor" width="12" height="12">
-                                    <path
-                                        d="M512 85.3L85.3 512l426.7 426.7L896 576 469.3 149.3 896 85.3 832 21.3 512 341.3 192 21.3z" />
-                                </svg>
+                                <AlertTriangle :size="12" />
                                 {{ t('shortcuts.conflict') }}
                             </span>
                             <button class="cancel-btn" @click.stop="$emit('clear-conflict')">
-                                <svg viewBox="0 0 1024 1024" fill="currentColor" width="14" height="14">
-                                    <path
-                                        d="M810.7 273.4L691.6 392.5l119.1 119.1-119.1 119.1L691.6 630.7l119.1-119.1L691.6 392.5l119.1-119.1z" />
-                                </svg>
+                                <X :size="14" />
                             </button>
                         </template>
 
@@ -44,10 +35,7 @@
                             <kbd class="shortcut-key">{{ item.effectiveAccelerator || '—' }}</kbd>
                             <button class="reset-btn" :title="t('shortcuts.reset')"
                                 @click.stop="$emit('reset-shortcut', item.id)">
-                                <svg viewBox="0 0 1024 1024" fill="currentColor" width="12" height="12">
-                                    <path
-                                        d="M512 170.7c-188.2 0-341.3 153.2-341.3 341.3S323.8 853.3 512 853.3 853.3 700.2 853.3 512 700.2 170.7 512 170.7zM512 768c-141.4 0-256-114.6-256-256S370.6 256 512 256s256 114.6 256 256-114.6 256-256 256zM298.7 554.7L213.3 640l85.4 85.3 85.3-85.3L469.3 640 384 554.7l-85.3-85.3z" />
-                                </svg>
+                                <RotateCcw :size="12" />
                             </button>
                         </template>
                     </div>
@@ -58,6 +46,8 @@
 </template>
 
 <script setup>
+import { AlertTriangle, RotateCcw, X } from 'lucide-vue-next'
+
 defineProps({
     groups: { type: Array, required: true },
     recordingId: { type: String, default: null },
@@ -92,7 +82,7 @@ defineEmits(['start-recording', 'cancel-recording', 'clear-conflict', 'reset-sho
 .group-items {
     display: flex;
     flex-direction: column;
-    border: 1px solid oklch(0 0 0 / 0.15);
+    border: 1px solid var(--border);
     border-radius: 8px;
     overflow: hidden;
 }
@@ -103,7 +93,7 @@ defineEmits(['start-recording', 'cancel-recording', 'clear-conflict', 'reset-sho
     justify-content: space-between;
     padding: 10px 12px;
     gap: 12px;
-    border-bottom: 1px solid oklch(0 0 0 / 0.08);
+    border-bottom: 1px solid var(--border);
     cursor: pointer;
     transition: background-color 0.12s;
 
@@ -112,17 +102,17 @@ defineEmits(['start-recording', 'cancel-recording', 'clear-conflict', 'reset-sho
     }
 
     &:hover {
-        background-color: oklch(0 0 0 / 0.05);
+        background-color: color-mix(in oklab, var(--foreground) 6%, transparent);
     }
 
     &.is-recording {
-        background-color: rgba(64, 158, 255, 0.08);
-        outline: 1px solid var(--primary);
+        background-color: color-mix(in oklab, var(--primary) 12%, transparent);
+        outline: 1px solid color-mix(in oklab, var(--primary) 70%, transparent);
     }
 
     &.has-conflict {
-        background-color: rgba(245, 108, 108, 0.06);
-        outline: 1px solid #f56c6c;
+        background-color: color-mix(in oklab, var(--destructive) 11%, transparent);
+        outline: 1px solid color-mix(in oklab, var(--destructive) 70%, transparent);
     }
 }
 
@@ -152,9 +142,9 @@ defineEmits(['start-recording', 'cancel-recording', 'clear-conflict', 'reset-sho
 .shortcut-key {
     display: inline-block;
     padding: 3px 8px;
-    border: 1px solid oklch(0 0 0 / 0.15);
+    border: 1px solid var(--border);
     border-radius: 4px;
-    background: oklch(0 0 0 / 0.05);
+    background: var(--muted);
     font-size: 11px;
     font-family: inherit;
     color: var(--foreground);
@@ -175,7 +165,7 @@ defineEmits(['start-recording', 'cancel-recording', 'clear-conflict', 'reset-sho
     align-items: center;
     gap: 4px;
     font-size: 12px;
-    color: #f56c6c;
+    color: var(--destructive);
 }
 
 .cancel-btn,
@@ -189,9 +179,11 @@ defineEmits(['start-recording', 'cancel-recording', 'clear-conflict', 'reset-sho
     border-radius: 4px;
     background: transparent;
     cursor: pointer;
+    color: var(--muted-foreground);
 
     &:hover {
-        background-color: oklch(0 0 0 / 0.08);
+        background-color: color-mix(in oklab, var(--foreground) 8%, transparent);
+        color: var(--foreground);
     }
 }
 

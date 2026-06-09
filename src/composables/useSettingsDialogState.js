@@ -1,44 +1,80 @@
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, isRef } from 'vue'
+import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { pluginHost } from '@/plugins/index'
-import { AI_PROVIDERS, BUILTIN_NAV_ITEMS } from '@/components/settings/config'
+import { AI_PROVIDERS, BUILTIN_SETTINGS_SECTIONS } from '@/components/settings/config'
 import { resolveI18nLabel } from '@/lib/resolveI18nLabel'
+import { i18n } from '@/i18n'
+import { requireLampAPI } from '@/lib/lampApi'
+import { useSettingsStore } from '@/stores/settings'
 
 export function useSettingsDialogState(props, emit) {
+  const settingsStore = useSettingsStore()
   const { t, locale } = useI18n()
+
+  function getCurrentLocale() {
+    const globalLocale = i18n.global.locale
+    if (typeof globalLocale === 'string') return globalLocale
+    if (globalLocale && typeof globalLocale === 'object' && 'value' in globalLocale) {
+      return globalLocale.value
+    }
+    return typeof locale === 'string' ? locale : locale?.value
+  }
+
+  function setCurrentLocale(lang) {
+    const globalLocale = i18n.global.locale
+    
+    // Try to set via ref first (Vue 3 composition mode)
+    if (isRef(globalLocale)) {
+      globalLocale.value = lang
+      return
+    }
+    
+    // Fall back to direct assignment
+    if (typeof globalLocale === 'string') {
+      i18n.global.locale = lang
+      return
+    }
+    
+    // Try composable locale
+    if (isRef(locale)) {
+      locale.value = lang
+      return
+    }
+  }
+
+  function normalizeBaseUrl(url) {
+    return String(url || '').trim().replace(/\/+$/, '')
+  }
 
   const visible = computed({
     get: () => props.modelValue,
     set: (v) => emit('update:modelValue', v),
   })
 
-  const activeTab = ref('general')
-  const submitting = ref(false)
+  const activeTab = ref('builtin:general')
+  const hydratingSettings = ref(false)
 
-  const form = ref({
-    language: 'zh-CN',
-    autoSave: true,
-    autoSaveInterval: 30,
-    restoreOnStart: true,
-    openLastWorkspace: false,
-  })
+  // 从 store 获取响应式引用
+  const { language, aiProvider } = storeToRefs(settingsStore)
 
   const providers = AI_PROVIDERS
-  const aiForm = ref({ provider: 'deepseek', baseURL: '', apiKey: '', model: '' })
-
-  const navItems = BUILTIN_NAV_ITEMS
-
-  const currentProvider = computed(() => {
-    return providers.find(p => p.id === aiForm.value.provider) || providers[providers.length - 1]
-  })
-
-  const currentProviderModels = computed(() => currentProvider.value?.models || [])
-  const isCustomProvider = computed(() => aiForm.value.provider === 'custom')
+  const builtinSections = BUILTIN_SETTINGS_SECTIONS
 
   const allNavItems = computed(() => {
-    const builtins = navItems.map(item => ({
-      ...item,
+    const builtins = builtinSections.map(item => ({
+      id: `builtin:${item.id}`,
+      sectionId: item.id,
+      icon: item.icon,
+      priority: item.priority,
+      type: 'builtin',
       label: t(item.labelKey),
+      section: {
+        id: item.id,
+        label: t(item.labelKey),
+        type: 'builtin',
+        kind: item.id,
+      },
     }))
 
     const pluginSections = pluginHost.contributions.sortedSettings.map(section => ({
@@ -53,13 +89,19 @@ export function useSettingsDialogState(props, emit) {
     return [...builtins, ...pluginSections].sort((a, b) => (b.priority ?? 50) - (a.priority ?? 50))
   })
 
-  const activeSection = computed(() => {
-    const item = allNavItems.value.find(n => n.id === activeTab.value)
-    return item?.type === 'plugin' ? item.section : null
+  watch(allNavItems, (items) => {
+    if (!items.length) return
+    if (!items.some(item => item.id === activeTab.value)) {
+      activeTab.value = items[0].id
+    }
+  }, { immediate: true })
+
+  const activeNavItem = computed(() => {
+    return allNavItems.value.find(n => n.id === activeTab.value) || null
   })
 
-  const isBuiltInTab = computed(() => {
-    return navItems.some(n => n.id === activeTab.value)
+  const activeSection = computed(() => {
+    return activeNavItem.value?.section || null
   })
 
   function resolveLabel(label) {
@@ -92,94 +134,142 @@ export function useSettingsDialogState(props, emit) {
     if (val) {
       loadSettings()
     }
-  })
+  }, { immediate: true })
 
-  watch(() => form.value.language, (lang) => {
-    locale.value = lang
-  })
-
-  watch(() => aiForm.value.provider, (newProvider) => {
+  watch(aiProvider, (newProvider) => {
+    if (hydratingSettings.value) return
     const p = providers.find(item => item.id === newProvider)
     if (p && p.id !== 'custom') {
-      aiForm.value.baseURL = p.baseUrl
-      aiForm.value.model = p.models[0]?.value || ''
+      settingsStore.setAiSettings({
+        baseUrl: p.baseUrl,
+        model: p.models[0]?.value || '',
+      })
     } else {
-      aiForm.value.baseURL = ''
-      aiForm.value.model = ''
+      settingsStore.setAiSettings({
+        baseUrl: '',
+        model: '',
+      })
     }
   })
+
+  async function saveGeneralSettings() {
+    if (hydratingSettings.value) return
+    try {
+      const api = requireLampAPI('settings save')
+      await api.saveGeneralSettings(settingsStore.generalSettings)
+    } catch (error) {
+      console.error('Failed to save general settings', error)
+    }
+  }
+
+  async function saveEditorSettings() {
+    if (hydratingSettings.value) return
+    try {
+      const api = requireLampAPI('settings save')
+      await api.saveEditorSettings(settingsStore.editorSettings)
+    } catch (error) {
+      console.error('Failed to save editor settings', error)
+    }
+  }
+
+  async function saveAiSettings() {
+    if (hydratingSettings.value) return
+    try {
+      const api = requireLampAPI('settings save')
+      const settings = settingsStore.aiSettings
+      await api.saveAiSettings({
+        ...settings,
+        baseUrl: normalizeBaseUrl(settings.baseUrl),
+      })
+    } catch (error) {
+      console.error('Failed to save AI settings', error)
+    }
+  }
+
+  // Auto-save general settings when any field changes
+  watch(
+    () => settingsStore.generalSettings,
+    () => {
+      // Language: apply locale immediately
+      setCurrentLocale(language.value)
+      saveGeneralSettings()
+    },
+    { deep: true }
+  )
+
+  // Auto-save editor settings when any field changes
+  watch(
+    () => settingsStore.editorSettings,
+    () => {
+      saveEditorSettings()
+    },
+    { deep: true }
+  )
+
+  // Auto-save AI settings when any field changes
+  watch(
+    () => settingsStore.aiSettings,
+    () => {
+      saveAiSettings()
+    },
+    { deep: true }
+  )
 
   async function loadSettings() {
     try {
-      const [general, ai] = await Promise.all([
-        window.lampAPI.getGeneralSettings(),
-        window.lampAPI.getAiSettings(),
+      hydratingSettings.value = true
+      const api = requireLampAPI('settings load')
+      const [general, editor, ai] = await Promise.all([
+        api.getGeneralSettings(),
+        api.getEditorSettings(),
+        api.getAiSettings(),
       ])
-      form.value = {
-        language: locale.value,
-        autoSave: general.autoSave ?? true,
-        autoSaveInterval: general.autoSaveInterval || 30,
-        restoreOnStart: general.restoreOnStart ?? true,
-        openLastWorkspace: general.openLastWorkspace ?? false,
-      }
-      const savedProvider = ai.provider || 'deepseek'
+
+      // 更新 store 中的通用设置
+      settingsStore.setGeneralSettings({
+        language: general?.language || getCurrentLocale() || 'zh-CN',
+        autoSave: general?.autoSave ?? general?.auto_save ?? true,
+        autoSaveInterval: general?.autoSaveInterval ?? general?.auto_save_interval ?? 30,
+        restoreOnStart: general?.restoreOnStart ?? general?.restore_on_start ?? true,
+        openLastWorkspace: general?.openLastWorkspace ?? general?.open_last_workspace ?? false,
+      })
+
+      // 更新 store 中的编辑器设置
+      settingsStore.setEditorSettings({
+        focusMode: editor?.focusMode ?? editor?.focus_mode ?? false,
+      })
+
+      // 更新 store 中的 AI 设置
+      const savedProvider = ai?.provider || 'deepseek'
       const provider = providers.find(item => item.id === savedProvider) || providers[0]
-      aiForm.value = {
+      const aiBaseUrlVal = ai?.baseUrl ?? ai?.base_url ?? ''
+      const aiApiKeyVal = ai?.apiKey ?? ai?.api_key ?? ''
+      const aiModelVal = ai?.model || ''
+
+      settingsStore.setAiSettings({
         provider: savedProvider,
-        baseURL: savedProvider === 'custom' ? (ai.base_url || '') : (provider.baseUrl || ai.base_url || ''),
-        apiKey: ai.api_key || '',
-        model: ai.model || (provider.models[0]?.value || ''),
-      }
+        baseUrl: savedProvider === 'custom' ? aiBaseUrlVal : (provider.baseUrl || aiBaseUrlVal || ''),
+        apiKey: aiApiKeyVal,
+        model: aiModelVal || (provider.models[0]?.value || ''),
+      })
     } catch (error) {
       console.error('Failed to load settings', error)
-    }
-  }
-
-  async function handleSave() {
-    if (submitting.value) return
-    submitting.value = true
-    try {
-      const generalPayload = JSON.parse(JSON.stringify(form.value))
-      await window.lampAPI.saveGeneralSettings(generalPayload)
-      await window.lampAPI.saveAiSettings({
-        provider: aiForm.value.provider,
-        baseURL: aiForm.value.baseURL,
-        apiKey: aiForm.value.apiKey,
-        model: aiForm.value.model,
-      })
-      visible.value = false
-    } catch (error) {
-      console.error('Failed to save settings', error)
     } finally {
-      submitting.value = false
+      hydratingSettings.value = false
     }
-  }
-
-  function handleClose() {
-    visible.value = false
   }
 
   return {
     pluginHost,
     visible,
     activeTab,
-    submitting,
-    form,
-    providers,
-    aiForm,
-    currentProvider,
-    currentProviderModels,
-    isCustomProvider,
-    navItems,
     allNavItems,
+    activeNavItem,
     activeSection,
-    isBuiltInTab,
     resolveLabel,
     resolvePluginName,
     getPluginValue,
     handlePluginSettingChange,
-    handleSave,
-    handleClose,
     t,
   }
 }

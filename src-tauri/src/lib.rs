@@ -38,6 +38,18 @@ pub struct GeneralSettings {
     pub restore_on_start: bool,
     #[serde(rename = "openLastWorkspace", default)]
     pub open_last_workspace: bool,
+    #[serde(rename = "theme", default = "default_theme")]
+    pub theme: String,
+}
+
+fn default_theme() -> String {
+    "system".to_string()
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EditorSettings {
+    #[serde(rename = "focusMode", default)]
+    pub focus_mode: bool,
 }
 
 fn default_auto_save_interval() -> u32 {
@@ -52,6 +64,15 @@ impl Default for GeneralSettings {
             auto_save_interval: 30,
             restore_on_start: true,
             open_last_workspace: false,
+            theme: default_theme(),
+        }
+    }
+}
+
+impl Default for EditorSettings {
+    fn default() -> Self {
+        Self {
+            focus_mode: false,
         }
     }
 }
@@ -62,6 +83,8 @@ pub struct AppConfig {
     pub general: GeneralSettings,
     #[serde(rename = "ai", default)]
     pub ai_config: AIConfig,
+    #[serde(rename = "editor", default)]
+    pub editor: EditorSettings,
 }
 
 pub struct ConfigState(pub Mutex<AppConfig>);
@@ -132,9 +155,17 @@ async fn start_watching(
                 };
 
                 for path in event.paths {
+                    let path_str = path.to_string_lossy();
+
+                    // Skip .autosave auto-save files at the source to prevent tree flicker.
+                    if path_str.ends_with(".autosave") {
+                        continue;
+                    }
+
                     let change_event = FileChangeEvent {
                         event_type: event_type.to_string(),
-                        path: path.to_string_lossy().to_string(),
+                        // Normalize to forward slashes for consistent path matching in JS.
+                        path: path_str.replace('\\', "/"),
                     };
                     let _ = app_handle.emit("file-change", change_event);
                 }
@@ -144,10 +175,11 @@ async fn start_watching(
     )
     .map_err(|e| e.to_string())?;
 
-    // 开始监视指定文件夹
+    // Normalize to forward slashes for consistent comparison with tree node paths.
+    let decoded_folder_path = folder_path.replace('\\', "/");
     watcher
         .watch(
-            PathBuf::from(&folder_path).as_path(),
+            PathBuf::from(&decoded_folder_path).as_path(),
             RecursiveMode::Recursive,
         )
         .map_err(|e| e.to_string())?;
@@ -159,7 +191,7 @@ async fn start_watching(
     }
     {
         let mut wp = state.watch_path.lock().map_err(|e| e.to_string())?;
-        *wp = Some(folder_path);
+        *wp = Some(decoded_folder_path);
     }
 
     log::info!("Started watching folder");
@@ -207,6 +239,7 @@ fn load_config() -> AppConfig {
             api_key: String::new(),
             model: "deepseek-chat".to_string(),
         },
+        editor: EditorSettings::default(),
     }
 }
 
@@ -359,6 +392,7 @@ fn save_general_settings(
     auto_save_interval: u32,
     restore_on_start: bool,
     open_last_workspace: bool,
+    theme: String,
 ) -> Result<bool, String> {
     let mut config = config_state.0.lock().map_err(|e| e.to_string())?;
     config.general = GeneralSettings {
@@ -367,12 +401,46 @@ fn save_general_settings(
         auto_save_interval,
         restore_on_start,
         open_last_workspace,
+        theme: theme.trim().to_string(),
     };
     save_config(&config)?;
     Ok(true)
 }
 
+#[tauri::command]
+fn get_editor_settings(config_state: State<'_, ConfigState>) -> Result<EditorSettings, String> {
+    let config = config_state.0.lock().map_err(|e| e.to_string())?;
+    Ok(config.editor.clone())
+}
+
+#[tauri::command]
+fn save_editor_settings(
+    config_state: State<'_, ConfigState>,
+    focus_mode: bool,
+) -> Result<bool, String> {
+    let mut config = config_state.0.lock().map_err(|e| e.to_string())?;
+    config.editor = EditorSettings { focus_mode };
+    save_config(&config)?;
+    Ok(true)
+}
+
 // ==================== 文件操作 ====================
+
+fn supported_extensions() -> &'static [&'static str] {
+    &["lmph", "md", "html", "htm", "txt", "text"]
+}
+
+fn is_supported_file(name: &str) -> bool {
+    let name_lower = name.to_lowercase();
+    // Has an extension and it matches
+    if let Some(dot_pos) = name_lower.rfind('.') {
+        let ext = &name_lower[dot_pos + 1..];
+        supported_extensions().contains(&ext)
+    } else {
+        // No extension — treat as unsupported
+        false
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 struct FileInfo {
@@ -380,32 +448,44 @@ struct FileInfo {
     path: String,
     #[serde(rename = "isDirectory")]
     is_directory: bool,
+    #[serde(rename = "isSupported")]
+    is_supported: bool,
     children: Option<Vec<FileInfo>>,
 }
 
 #[tauri::command]
 async fn get_folder_content(folder_path: String) -> Result<Vec<FileInfo>, String> {
-    let path = PathBuf::from(&folder_path);
+    // Normalize to forward slashes for consistent path comparison in JS.
+    let normalized = folder_path.replace('\\', "/");
+    let path = PathBuf::from(&normalized);
 
     if !path.exists() {
-        return Err(format!("Path does not exist: {}", folder_path));
+        return Err(format!("Path does not exist: {}", normalized));
     }
 
     fn traverse_folder(path: &PathBuf) -> Result<Vec<FileInfo>, String> {
         let mut entries = fs::read_dir(path).map_err(|e| e.to_string())?;
         let mut result = Vec::new();
 
-        // entries.next() 返回 Option<Result<DirEntry, Error>>
         while let Some(entry_result) = entries.next() {
             let entry = entry_result.map_err(|e| e.to_string())?;
             let file_path = entry.path();
             let file_name = entry.file_name().to_string_lossy().to_string();
 
+            // Skip dotfiles and dotfolders (e.g. .lamp, .git, .DS_Store)
+            if file_name.starts_with('.') {
+                continue;
+            }
+
+            // Normalize all paths to forward slashes for JS consumption.
+            let path_str = file_path.to_string_lossy().replace('\\', "/");
             let is_dir = file_path.is_dir();
+            let is_supported = !is_dir && is_supported_file(&file_name);
             let mut file_info = FileInfo {
                 name: file_name,
-                path: file_path.to_string_lossy().to_string(),
+                path: path_str,
                 is_directory: is_dir,
+                is_supported,
                 children: None,
             };
 
@@ -435,14 +515,30 @@ async fn get_folder_content(folder_path: String) -> Result<Vec<FileInfo>, String
 
 #[tauri::command]
 async fn open_specific_file(file_path: String) -> Result<Vec<serde_json::Value>, String> {
-    let path = PathBuf::from(&file_path);
+    // Normalize to forward slashes for consistent comparison with workspace paths.
+    let normalized = file_path.replace('\\', "/");
+    let path = PathBuf::from(&normalized);
 
     if !path.exists() {
-        return Err(format!("File does not exist: {}", file_path));
+        return Err(format!("File does not exist: {}", normalized));
     }
 
     if path.is_dir() {
         return Ok(vec![serde_json::Value::Number(0.into())]);
+    }
+
+    let file_name = path.file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+
+    if !is_supported_file(&file_name) {
+        return Err(format!(
+            "Unsupported format: Lamp does not support opening .{}. Supported formats: {}.",
+            path.extension()
+                .map(|e| e.to_string_lossy().to_string())
+                .unwrap_or_else(|| "file".to_string()),
+            supported_extensions().join(", ")
+        ));
     }
 
     let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
@@ -468,6 +564,94 @@ async fn delete_file(file_path: String) -> Result<bool, String> {
 #[tauri::command]
 async fn save_file_content(file_path: String, content: String) -> Result<(), String> {
     fs::write(&file_path, content).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// ==================== 自动保存临时文件 ====================
+
+/// 获取自动保存临时目录路径
+#[tauri::command]
+fn get_auto_save_dir(app: AppHandle) -> Result<String, String> {
+    let mut dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    dir.push("autosave");
+    if !dir.exists() {
+        fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    }
+    Ok(dir.to_string_lossy().to_string())
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AutoSaveFileInfo {
+    pub tab_id: String,
+    pub original_path: String,
+    pub temp_path: String,
+    pub title: String,
+    pub content: String,
+    pub saved_at: u64,
+}
+
+/// 列出所有自动保存的临时文件
+#[tauri::command]
+async fn list_auto_save_files(app: AppHandle) -> Result<Vec<AutoSaveFileInfo>, String> {
+    let mut dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    dir.push("autosave");
+
+    if !dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut result = Vec::new();
+    let entries = fs::read_dir(&dir).map_err(|e| e.to_string())?;
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_file() && path.extension().map_or(false, |e| e == "autosave") {
+            if let Some(stem) = path.file_stem() {
+                let stem_str = stem.to_string_lossy();
+                // 文件名格式: <tabId>_<timestamp> 或 <encoded_path>_<timestamp>
+                if let Some(underscore_pos) = stem_str.rfind('_') {
+                    let timestamp_str = &stem_str[underscore_pos + 1..];
+                    let encoded = &stem_str[..underscore_pos];
+
+                    if let Ok(timestamp) = timestamp_str.parse::<u64>() {
+                        let content = fs::read_to_string(&path).unwrap_or_default();
+                        result.push(AutoSaveFileInfo {
+                            tab_id: encoded.to_string(),
+                            original_path: String::new(),
+                            temp_path: path.to_string_lossy().to_string(),
+                            title: path.file_name()
+                                .map(|n| n.to_string_lossy().to_string())
+                                .unwrap_or_else(|| "untitled".to_string()),
+                            content,
+                            saved_at: timestamp,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    result.sort_by(|a, b| b.saved_at.cmp(&a.saved_at));
+    Ok(result)
+}
+
+/// 清理所有自动保存的临时文件
+#[tauri::command]
+async fn clear_auto_save_files(app: AppHandle) -> Result<(), String> {
+    let mut dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    dir.push("autosave");
+
+    if !dir.exists() {
+        return Ok(());
+    }
+
+    let entries = fs::read_dir(&dir).map_err(|e| e.to_string())?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_file() {
+            let _ = fs::remove_file(path);
+        }
+    }
     Ok(())
 }
 
@@ -567,6 +751,430 @@ fn get_user_plugins_dir(app: AppHandle) -> Result<String, String> {
     Ok(dir.to_string_lossy().to_string())
 }
 
+// ==================== 搜索操作 ====================
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct SearchMatch {
+    #[serde(rename = "lineNumber")]
+    line_number: usize,
+    line: String,
+    #[serde(rename = "matchStart")]
+    match_start: usize,
+    #[serde(rename = "matchEnd")]
+    match_end: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct FileSearchResult {
+    path: String,
+    name: String,
+    matches: Vec<SearchMatch>,
+}
+
+fn default_max_results() -> usize { 1000 }
+
+#[derive(Debug, Clone, Deserialize)]
+struct SearchOptions {
+    #[serde(rename = "caseSensitive", default)]
+    case_sensitive: bool,
+    #[serde(rename = "wholeWord", default)]
+    whole_word: bool,
+    #[serde(rename = "maxResults", default = "default_max_results")]
+    max_results: usize,
+}
+
+fn strip_html_tags(input: &str) -> String {
+    let mut out = String::with_capacity(input.len());
+    let mut in_tag = false;
+    for ch in input.chars() {
+        match ch {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if !in_tag => out.push(ch),
+            _ => {}
+        }
+    }
+    out
+}
+
+fn decode_basic_html_entities(input: &str) -> String {
+    input
+        .replace("&nbsp;", " ")
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+}
+
+fn strip_markdown_formatting(input: &str) -> String {
+    let mut line = input.trim_start().to_string();
+
+    // Headings, blockquotes, list bullets and ordered list prefixes.
+    while line.starts_with('#') {
+        line = line[1..].trim_start().to_string();
+    }
+    while line.starts_with('>') {
+        line = line[1..].trim_start().to_string();
+    }
+    for bullet in ["- ", "* ", "+ "] {
+        if line.starts_with(bullet) {
+            line = line[2..].trim_start().to_string();
+            break;
+        }
+    }
+    if let Some(dot_idx) = line.find(". ") {
+        if line[..dot_idx].chars().all(|c| c.is_ascii_digit()) {
+            line = line[dot_idx + 2..].trim_start().to_string();
+        }
+    }
+
+    // Link/image wrappers and common markdown markers.
+    line = line.replace("![](", "").replace("[", "").replace("](", " ").replace(")", "");
+    line = line.replace("**", "").replace("__", "").replace('*', "").replace('_', "");
+    line = line.replace('`', "").replace("~~", "");
+    line
+}
+
+fn to_rendered_line(file_name: &str, line: &str) -> String {
+    let lower = file_name.to_lowercase();
+    if lower.ends_with(".html")
+        || lower.ends_with(".htm")
+        || lower.ends_with(".lmph")
+    {
+        return decode_basic_html_entities(&strip_html_tags(line));
+    }
+    if lower.ends_with(".md") {
+        return strip_markdown_formatting(&decode_basic_html_entities(&strip_html_tags(line)));
+    }
+    decode_basic_html_entities(line)
+}
+
+fn is_html_like_file(file_name: &str) -> bool {
+    let lower = file_name.to_lowercase();
+    lower.ends_with(".html")
+        || lower.ends_with(".htm")
+        || lower.ends_with(".lmph")
+}
+
+fn is_block_like_html_tag(tag_name: &str) -> bool {
+    matches!(
+        tag_name,
+        "p"
+            | "h1"
+            | "h2"
+            | "h3"
+            | "h4"
+            | "h5"
+            | "h6"
+            | "li"
+            | "blockquote"
+            | "pre"
+            | "div"
+            | "section"
+            | "article"
+            | "br"
+            | "hr"
+    )
+}
+
+fn parse_html_tag(raw_tag: &str) -> Option<(String, bool, bool)> {
+    let trimmed = raw_tag.trim();
+    if trimmed.is_empty() || trimmed.starts_with('!') || trimmed.starts_with('?') {
+        return None;
+    }
+
+    let is_closing = trimmed.starts_with('/');
+    let body = if is_closing {
+        trimmed[1..].trim_start()
+    } else {
+        trimmed
+    };
+    let name: String = body
+        .chars()
+        .take_while(|c| c.is_ascii_alphanumeric())
+        .collect::<String>()
+        .to_lowercase();
+    if name.is_empty() {
+        return None;
+    }
+    let is_self_closing = body.trim_end().ends_with('/');
+    Some((name, is_closing, is_self_closing))
+}
+
+fn to_rendered_lines_with_source(file_name: &str, content: &str) -> Vec<(usize, String)> {
+    if is_html_like_file(file_name) {
+        let mut out = Vec::new();
+        let mut current = String::new();
+        let mut rendered_line_number = 1usize;
+        let mut in_tag = false;
+        let mut tag_buf = String::new();
+
+        let flush_current = |out: &mut Vec<(usize, String)>,
+                             current: &mut String,
+                             rendered_line_number: &mut usize,
+                             advance_if_empty: bool| {
+            let rendered = decode_basic_html_entities(current.trim()).trim().to_string();
+            if !rendered.is_empty() {
+                out.push((*rendered_line_number, rendered));
+                *rendered_line_number += 1;
+            } else if advance_if_empty {
+                *rendered_line_number += 1;
+            }
+            current.clear();
+        };
+
+        for ch in content.chars() {
+            if in_tag {
+                if ch == '>' {
+                    if let Some((name, is_closing, is_self_closing)) = parse_html_tag(&tag_buf) {
+                        if is_block_like_html_tag(&name) {
+                            if !is_closing {
+                                flush_current(
+                                    &mut out,
+                                    &mut current,
+                                    &mut rendered_line_number,
+                                    false,
+                                );
+                            }
+                            if is_closing || is_self_closing || name == "br" || name == "hr" {
+                                flush_current(
+                                    &mut out,
+                                    &mut current,
+                                    &mut rendered_line_number,
+                                    true,
+                                );
+                            }
+                        }
+                    }
+                    tag_buf.clear();
+                    in_tag = false;
+                } else {
+                    tag_buf.push(ch);
+                }
+                continue;
+            }
+
+            match ch {
+                '<' => {
+                    in_tag = true;
+                    tag_buf.clear();
+                }
+                '\n' => {
+                    if !current.is_empty() && !current.ends_with(' ') {
+                        current.push(' ');
+                    }
+                }
+                _ => {
+                    current.push(ch);
+                }
+            }
+        }
+
+        flush_current(&mut out, &mut current, &mut rendered_line_number, false);
+        return out;
+    }
+
+    content
+        .lines()
+        .enumerate()
+        .map(|(idx, line)| (idx + 1, to_rendered_line(file_name, line)))
+        .collect()
+}
+
+#[tauri::command]
+async fn search_workspace(
+    workspace_path: String,
+    query: String,
+    options: SearchOptions,
+) -> Result<Vec<FileSearchResult>, String> {
+    if query.is_empty() {
+        return Ok(vec![]);
+    }
+
+    let normalized = workspace_path.replace('\\', "/");
+    let path = PathBuf::from(&normalized);
+
+    if !path.exists() || !path.is_dir() {
+        return Err(format!("Invalid workspace path: {}", normalized));
+    }
+
+    let max_results = options.max_results.max(1).min(10000);
+    let mut total_matches = 0;
+
+    fn search_file(
+        file_path: &PathBuf,
+        query_str: &str,
+        case_sensitive: bool,
+        whole_word: bool,
+        max_results: usize,
+        total_matches: &mut usize,
+    ) -> Option<FileSearchResult> {
+        if *total_matches >= max_results {
+            return None;
+        }
+
+        let content = match fs::read_to_string(file_path) {
+            Ok(c) => c,
+            Err(_) => return None,
+        };
+
+        let file_name = file_path
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+
+        let rendered_lines = to_rendered_lines_with_source(&file_name, &content);
+
+        let rendered_query = to_rendered_line(&file_name, query_str).trim().to_string();
+        if rendered_query.is_empty() {
+            return None;
+        }
+
+        // Always use lowercase for searching, but track positions in original
+        let query_needle = if case_sensitive {
+            rendered_query
+        } else {
+            rendered_query.to_lowercase()
+        };
+
+        let mut matches = Vec::new();
+
+        for (source_line_number, rendered_line) in rendered_lines.iter() {
+            if *total_matches >= max_results {
+                break;
+            }
+
+            let line = rendered_line.trim_end().to_string();
+            if line.is_empty() {
+                continue;
+            }
+            let search_line = if case_sensitive {
+                line.clone()
+            } else {
+                line.to_lowercase()
+            };
+
+            let mut start = 0;
+            while let Some(pos) = search_line[start..].find(&query_needle) {
+                let abs_pos = start + pos;
+                let match_end_byte = abs_pos + query_needle.len();
+                let next_step = search_line[abs_pos..]
+                    .chars()
+                    .next()
+                    .map(|c| c.len_utf8())
+                    .unwrap_or(1);
+
+                if whole_word {
+                    let before_ok = abs_pos == 0
+                        || !search_line[..abs_pos]
+                            .chars()
+                            .next_back()
+                            .map(|c| c.is_alphanumeric())
+                            .unwrap_or(false);
+                    let after_ok = match_end_byte >= search_line.len()
+                        || !search_line[match_end_byte..]
+                            .chars()
+                            .next()
+                            .map(|c| c.is_alphanumeric())
+                            .unwrap_or(false);
+
+                    if !before_ok || !after_ok {
+                        start = abs_pos + next_step;
+                        continue;
+                    }
+                }
+
+                let match_start = search_line[..abs_pos].chars().count();
+                let match_end = search_line[..match_end_byte].chars().count();
+
+                matches.push(SearchMatch {
+                    line_number: *source_line_number,
+                    line: line.clone(),
+                    match_start,
+                    match_end,
+                });
+                *total_matches += 1;
+                start = abs_pos + next_step;
+            }
+        }
+
+        if matches.is_empty() {
+            return None;
+        }
+
+        let path_str = file_path.to_string_lossy().replace('\\', "/");
+
+        Some(FileSearchResult {
+            path: path_str,
+            name: file_name,
+            matches,
+        })
+    }
+
+    fn traverse_and_search(
+        dir: &PathBuf,
+        query_lower: &str,
+        case_sensitive: bool,
+        whole_word: bool,
+        max_results: usize,
+        total_matches: &mut usize,
+    ) -> Vec<FileSearchResult> {
+        let mut results = Vec::new();
+
+        let entries = match fs::read_dir(dir) {
+            Ok(e) => e,
+            Err(_) => return results,
+        };
+
+        for entry in entries.flatten() {
+            if *total_matches >= max_results {
+                break;
+            }
+
+            let path = entry.path();
+
+            if path.is_dir() {
+                let name: String = entry.file_name().to_string_lossy().into_owned();
+                if name.starts_with('.') {
+                    continue;
+                }
+                results.extend(traverse_and_search(
+                    &path,
+                    query_lower,
+                    case_sensitive,
+                    whole_word,
+                    max_results,
+                    total_matches,
+                ));
+            } else if path.is_file() {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if is_supported_file(&name) {
+                    if let Some(result) =
+                        search_file(&path, query_lower, case_sensitive, whole_word, max_results, total_matches)
+                    {
+                        results.push(result);
+                    }
+                }
+            }
+        }
+
+        results
+    }
+
+    let query_lower = if options.case_sensitive {
+        query.clone()
+    } else {
+        query.to_lowercase()
+    };
+    let mut results = traverse_and_search(&path, &query_lower, options.case_sensitive, options.whole_word, max_results, &mut total_matches);
+
+    // Sort by number of matches descending
+    results.sort_by(|a, b| b.matches.len().cmp(&a.matches.len()));
+
+    Ok(results)
+}
+
 // ==================== 应用入口 ====================
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -589,12 +1197,17 @@ pub fn run() {
             // 通用设置
             get_general_settings,
             save_general_settings,
+            get_editor_settings,
+            save_editor_settings,
             // 文件操作
             get_folder_content,
             open_specific_file,
             has_file,
             delete_file,
             save_file_content,
+            get_auto_save_dir,
+            list_auto_save_files,
+            clear_auto_save_files,
             // 窗口管理
             minimize_window,
             maximize_window,
@@ -609,6 +1222,8 @@ pub fn run() {
             read_text_file,
             get_app_data_dir,
             get_user_plugins_dir,
+            // 搜索
+            search_workspace,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -1,6 +1,6 @@
 # Lamp
 
-[English](README.md) | [简体中文](./doc/README_zh-CN.md) | [Official Website](https://www.shaloong.com/lamp/)
+[English](README.md) | [简体中文](./docs/README_zh-CN.md) | [Official Website](https://www.shaloong.com/lamp/)
 
 Lamp is a modern, cross-platform, distraction-free desktop editor crafted for writers. Born from the Shaloong studio, it combines the elegance of a minimalist WYSIWYG experience with the power of Markdown-inspired tooling, AI assistance, and a Tauri shell that feels native on every desktop OS.
 

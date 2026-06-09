@@ -60,10 +60,13 @@ export const AI_PROVIDERS = [
   { id: 'custom', name: 'Custom', baseUrl: '', models: [], helpUrl: '' },
 ]
 
-export const BUILTIN_NAV_ITEMS = [
+export const BUILTIN_SETTINGS_SECTIONS = [
   { id: 'general', labelKey: 'settings.general', icon: 'setting', priority: 100, type: 'builtin' },
   { id: 'ai', labelKey: 'settings.ai', icon: 'Bot', priority: 100, type: 'builtin' },
   { id: 'editor', labelKey: 'settings.editor', icon: 'edit', priority: 100, type: 'builtin' },
   { id: 'plugins', labelKey: 'settings.plugins', icon: 'plugin', priority: 100, type: 'builtin' },
   { id: 'shortcuts', labelKey: 'settings.shortcuts', icon: 'jianpankuaijiejian', priority: 100, type: 'builtin' },
 ]
+
+// Backward alias during migration from tab-specific rendering to section-driven rendering.
+export const BUILTIN_NAV_ITEMS = BUILTIN_SETTINGS_SECTIONS

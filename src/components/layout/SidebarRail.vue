@@ -1,7 +1,7 @@
 <template>
     <div class="toolbar border-r border-border">
-        <button class="toggle-button" :class="{ activeToggleButton: tool1Active }" @click="$emit('toggle-tool1')"
-            style="-webkit-app-region: no-drag">
+        <button v-if="showExplorerButton" class="toggle-button" :class="{ activeToggleButton: explorerPanelActive }"
+            @click="$emit('toggle-explorer-panel')" style="-webkit-app-region: no-drag">
             <Folder :size="20" />
         </button>
 
@@ -17,10 +17,11 @@
 import { Folder, Settings } from 'lucide-vue-next'
 
 defineProps({
-    tool1Active: { type: Boolean, default: false },
+    explorerPanelActive: { type: Boolean, default: false },
+    showExplorerButton: { type: Boolean, default: true },
 })
 
-defineEmits(['toggle-tool1', 'open-settings'])
+defineEmits(['toggle-explorer-panel', 'open-settings'])
 </script>
 
 <style scoped>
@@ -46,12 +47,26 @@ defineEmits(['toggle-tool1', 'open-settings'])
     width: 32px;
     height: 32px;
     overflow: hidden;
+    border: none;
     background-color: transparent;
     color: var(--muted-foreground);
+    border-radius: var(--radius-sm);
+    opacity: 0.7;
+    transition: color 0.15s ease, opacity 0.15s ease;
+}
+
+.toggle-button:hover {
+    color: var(--foreground);
+    opacity: 1;
+}
+
+.toggle-button:focus-visible {
+    outline: 2px solid color-mix(in oklab, var(--ring) 55%, transparent);
+    outline-offset: 1px;
 }
 
 .activeToggleButton {
     color: var(--primary);
-    border-color: var(--primary);
+    opacity: 1;
 }
 </style>

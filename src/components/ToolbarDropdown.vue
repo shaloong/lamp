@@ -100,13 +100,14 @@ useClickOutside(rootRef, () => {
   display: flex;
   align-items: center;
   gap: 2px;
-  padding: 5px 10px;
-  color: #333;
+  padding: 4px 8px;
+  color: var(--muted-foreground);
   font-size: 14px;
   cursor: pointer;
   background: transparent;
   border: none;
   border-radius: 4px;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .trigger .icon {
@@ -127,7 +128,18 @@ useClickOutside(rootRef, () => {
 }
 
 .trigger:hover:not(:disabled) {
-  background-color: oklch(0 0 0 / 0.10);
+  color: var(--accent-foreground);
+  background-color: color-mix(in oklab, var(--foreground) 9%, transparent);
+}
+
+.trigger:focus-visible {
+  outline: 2px solid color-mix(in oklab, var(--ring) 55%, transparent);
+  outline-offset: 1px;
+}
+
+.trigger.is-active {
+  color: var(--foreground);
+  background-color: color-mix(in oklab, var(--foreground) 14%, transparent);
 }
 
 .trigger:disabled {
@@ -144,10 +156,10 @@ useClickOutside(rootRef, () => {
   flex-direction: column;
   min-width: 160px;
   padding: 4px 6px;
-  background-color: var(--muted);
-  border: 1px solid oklch(0 0 0 / 0.20);
+  background-color: var(--popover);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  box-shadow: 2px 4px 12px 2px oklch(0 0 0 / 0.15);
+  box-shadow: 0 8px 20px color-mix(in oklab, var(--foreground) 18%, transparent);
 }
 
 .dropdown-item {
@@ -178,11 +190,12 @@ useClickOutside(rootRef, () => {
 }
 
 .dropdown-item:hover {
-  background-color: oklch(0 0 0 / 0.15);
+  background-color: color-mix(in oklab, var(--foreground) 10%, transparent);
+  color: var(--accent-foreground);
 }
 
 .dropdown-item.is-active {
-  color: var(--primary);
-  background-color: oklch(0.5462 0.2451 265.5 / 0.10);
+  color: var(--foreground);
+  background-color: color-mix(in oklab, var(--foreground) 14%, transparent);
 }
 </style>

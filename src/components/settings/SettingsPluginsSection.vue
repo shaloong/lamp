@@ -16,7 +16,7 @@
                 </div>
                 <div class="plugin-actions">
                     <Badge v-if="plugin.disableable === false" variant="secondary">{{ t('app.core') }}</Badge>
-                    <Badge v-else variant="default">{{ t('app.enabled') }}</Badge>
+                    <Badge v-else variant="outline">{{ t('app.enabled') }}</Badge>
                 </div>
             </div>
         </div>
