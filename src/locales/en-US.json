@@ -22,6 +22,7 @@
     "customModel": "Custom",
     "presetModels": "Select preset model",
     "modelPlaceholder": "Enter model name",
+    "noModelSuggestions": "No model suggestions available",
     "editor": "Editor",
     "shortcuts": "Shortcuts",
     "plugins": "Plugins"

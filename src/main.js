@@ -1,6 +1,6 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
-import './styles/style.scss'
+import './index.css'
 import './preload'  // Tauri preload
 import App from './App.vue'
 import { i18n } from './i18n.js'

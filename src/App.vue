@@ -1,176 +1,115 @@
 <template>
   <div class="app">
     <div class="app-menu">
-      <main-menu @minWindow="minWindow" @maxWindow="maxWindow" @closeWindow="closeWindow" />
+      <AppMenu @minWindow="minWindow" @maxWindow="maxWindow" @closeWindow="closeWindow" />
     </div>
     <div class="app-content">
-      <div class="toolbar">
-        <!-- 顶部按钮 -->
-        <button class="toggle-button" :class="{ activeToggleButton: tool1Active }" @click="toggleTool1()">
-          <svg class="icon" aria-hidden="true">
-            <use xlink:href="#icon-folder"></use>
-          </svg>
-        </button>
-        <!-- Spacer -->
-        <div style="flex: 1" />
-        <!-- 底部：设置 -->
-        <button class="toggle-button" @click="openSettingsDialog">
-          <svg class="icon" aria-hidden="true">
-            <use xlink:href="#icon-setting"></use>
-          </svg>
-        </button>
-      </div>
-      <div class="tool-view" v-show="tool1Active || tool2Active">
-        <!-- 工具1操作视图 -->
-        <div v-show="tool1Active" class="tool1" :class="{ active: tool1Active }" style="flex-grow: 1;">
-          <!-- 工作区模式：显示文件资源管理器 -->
-          <div v-if="workspaceStore.isOpen" class="file-explorer">
-            <div class="workspace-header">
-              <span class="workspace-name" :title="workspaceStore.rootPath">
-                <svg class="workspace-icon" aria-hidden="true">
-                  <use xlink:href="#icon-folder"></use>
-                </svg>
-                {{ workspaceStore.name }}
-              </span>
-            </div>
-            <!-- 树状结构显示文件夹内容 -->
-            <div v-if="folderContent !== ''" class="folder-tree">
-              <el-tree-v2 ref="treeV2Ref" :data="folderContent" :props="treeProps" :height="toolViewHeight"
-                :expanded-keys="expandedKeys" style="background-color: #F2F2F2" @node-click="handleNodeClick" />
-            </div>
-            <!-- 临时文件区域 -->
-            <div v-if="tempFiles.length > 0" class="temp-files-section">
-              <div class="section-header" @click="tempSectionExpanded = !tempSectionExpanded">
-                <svg class="section-icon" :class="{ collapsed: !tempSectionExpanded }" aria-hidden="true">
-                  <use xlink:href="#icon-right"></use>
-                </svg>
-                <span>{{ $t('app.tempFiles') }}</span>
-                <span class="file-count">({{ tempFiles.length }})</span>
-              </div>
-              <div v-show="tempSectionExpanded" class="temp-files-list">
-                <div v-for="file in tempFiles" :key="file.path" class="temp-file-item" @click="openTempFile(file)">
-                  <svg class="file-icon" aria-hidden="true">
-                    <use xlink:href="#icon-file"></use>
-                  </svg>
-                  <span class="file-name" :title="file.path">{{ file.name }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-          <!-- 无工作区模式：显示引导 -->
-          <div v-else class="no-workspace">
-            <div class="no-workspace-content">
-              <p class="empty-text">{{ $t('app.noWorkspace') }}</p>
-              <div class="action-buttons">
-                <el-button type="primary" size="small" @click="openWorkspace" class="lamp-btn-primary">
-                  {{ $t('app.openWorkspace') }}
-                </el-button>
-              </div>
-            </div>
-          </div>
-        </div>
-        <!-- 工具2操作视图 -->
-        <!--        <div v-show="tool2Active" class="tool2" :class="{ active: tool2Active }" style="flex-grow: 1;">-->
-        <!--          工具2操作视图-->
-        <!--        </div>-->
-      </div>
-      <div class="editor">
+      <Sidebar :explorerPanelActive="explorerPanelActive" :workspaceStore="workspaceStore"
+        :folderContent="folderContent" :toolViewHeight="toolViewHeight" :tempFiles="tempFiles"
+        :expandedKeys="expandedKeys" :showExplorerButton="sidebarButtonVisibility.explorer"
+        v-model:tempSectionExpanded="tempSectionExpanded" @toggle-explorer-panel="toggleExplorerPanel"
+        @open-settings="openSettingsDialog" @open-workspace="openWorkspace" @open-temp-file="openTempFile"
+        @node-click="handleNodeClick" @toggle-expand="handleToggleExpand" @contextmenu="onSidebarContextMenu" />
+      <div class="editor flex flex-col h-full">
         <!-- 编辑器选项卡组 -->
-        <div class="editor-tabs">
+        <div class="editor-tabs" @contextmenu="onTabBarContextMenu">
           <!-- 编辑器选项卡 -->
-          <div class="editor-tab" v-for="(tab, index) in tabs" :key="index" @click="switchTab(index)"
+          <div class="editor-tab h-5.5 pt-2 pr-2.5 pb-1 pl-3.5 box-content" v-for="(tab, index) in tabs" :key="index"
+            @click="switchTab(index)" @contextmenu.stop.prevent="onTabContextMenu(index, $event)"
             :class="{ activeTab: activeTab === index }">
+            <File :size="12" style="margin-right: 4px; flex-shrink: 0;" />
             {{ tab.title }}
             <button class="close-button" @click.stop="toggleCloseTab(index)">
-              <svg class="icon" aria-hidden="true">
-                <use xlink:href="#icon-close"></use>
-              </svg>
+              <X :size="12" />
             </button>
             <span class="active-indicator" v-show="activeTab === index"></span>
           </div>
         </div>
         <!-- 编辑器 -->
-        <!--        <editor class="editor-editor" @update:modelValue="autoSave" v-model="tabs[activeTab].content"/>-->
-        <editor v-for="(item, index) in tabs" class="editor-editor" v-show="item.id === tabs[activeTab].id"
-          @update:modelValue="autoSave" v-model="item.content" />
+        <Editor v-for="(item, index) in tabs" v-show="item.id === tabs[activeTab].id" @update:modelValue="autoSave"
+          v-model="item.content" />
       </div>
     </div>
     <div class="mask">
-      <el-dialog v-model="dialogConfirmCloseTab" :title="$t('app.unsavedTitle')" width="500" center
-        :before-close="(done) => { indexCloseTab = -1; done(); }">
-        <span>{{ $t('app.unsavedMessage') }}</span>
-        <template #footer>
-          <div class="dialog-footer">
-            <button class="lamp-btn-warning" @click="handleNotSave">
+      <Dialog v-model:open="dialogConfirmCloseTab" @update:open="(val) => { if (!val) indexCloseTab = -1; }">
+        <DialogContent style="max-width: 500px;">
+          <DialogHeader>
+            <DialogTitle>{{ $t('app.unsavedTitle') }}</DialogTitle>
+          </DialogHeader>
+          <p style="padding: 8px 0;">{{ $t('app.unsavedMessage') }}</p>
+          <DialogFooter>
+            <Button variant="destructive" @click="handleNotSave">
               {{ $t('app.dontSaveAndClose') }}
-            </button>
-            <button class="lamp-btn-primary" @click="handleSave">
+            </Button>
+            <Button @click="handleSave">
               {{ $t('app.saveAndClose') }}
-            </button>
-          </div>
-        </template>
-      </el-dialog>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
 
-    <CommandPalette v-model="dialogCommandPalette" />
-    <SettingsDialog v-model="dialogSettings" />
+    <CommandPalette v-if="dialogCommandPalette" v-model="dialogCommandPalette" />
+    <SettingsDialog v-if="dialogSettings" v-model="dialogSettings" />
+
+    <div v-if="contextMenu.visible" class="ui-context-menu" :style="contextMenuStyle" @click.stop>
+      <button v-for="item in contextMenu.items" :key="item.id" class="ui-context-item"
+        :class="{ checked: item.checked }" :disabled="item.disabled" @click="onContextMenuItemClick(item)">
+        <span>{{ item.label }}</span>
+        <span class="check">
+          <Check :size="14" class="check-icon" :class="item.checked ? 'opacity-100' : 'opacity-0'" />
+        </span>
+      </button>
+    </div>
   </div>
 </template>
 
 <script>
-import '@/assets/iconfont.js'
+import { defineAsyncComponent } from 'vue'
 import Editor from './components/Editor.vue'
 import { marked } from "marked";
 import { v4 as uuidv4 } from 'uuid';
-import editor from "@/components/Editor.vue";
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useFileStore } from '@/stores/files'
 import { pluginHost } from '@/plugins/index'
 import { useShortcutCenter } from '@/composables/useShortcutCenter'
-import CommandPalette from './components/CommandPalette.vue'
-import SettingsDialog from './components/SettingsDialog.vue'
+import { workspaceExplorerMethods } from '@/composables/workspaceExplorerMethods'
+const CommandPalette = defineAsyncComponent(() => import('./components/CommandPalette.vue'))
+const SettingsDialog = defineAsyncComponent(() => import('./components/SettingsDialog.vue'))
+import AppMenu from './components/AppMenu.vue'
+import Sidebar from './components/layout/Sidebar.vue'
+import Dialog from '@/components/ui/dialog/Dialog.vue'
+import DialogContent from '@/components/ui/dialog/DialogContent.vue'
+import DialogHeader from '@/components/ui/dialog/DialogHeader.vue'
+import DialogTitle from '@/components/ui/dialog/DialogTitle.vue'
+import DialogFooter from '@/components/ui/dialog/DialogFooter.vue'
+import DialogClose from '@/components/ui/dialog/DialogClose.vue'
+import { Check, File, X } from 'lucide-vue-next'
 import { i18n } from './i18n.js'
 
-// 获取父目录
-function getParentDirectory(url) {
-  if (url === "") {
-    return url
-  } else {
-    const path = new URL(url).pathname;
-    const parts = path.split('/');
-    parts.shift();
-    parts.pop(); // 移除当前文件或文件夹的名称
-    if (parts.length === 0) {
-      return '/'; // 如果是根目录，返回 '/'
-    }
-    return parts.join('/') + '/'; // 重新拼接父目录的路径
-  }
-}
-
 export default {
-  computed: {
-    editor() {
-      return editor
-    }
-  },
   components: {
     Editor,
     CommandPalette,
     SettingsDialog,
+    AppMenu,
+    Sidebar,
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+    DialogClose,
+    Check,
+    File,
+    X,
   },
   data() {
     return {
-      tool1Active: false, // 工具1是否激活
-      tool2Active: false, // 工具2是否激活
+      explorerPanelActive: false,
       tabs: [],
       activeTab: 0,
       folderContent: "",
-      treeProps: {
-        value: 'path',
-        label: 'name',
-        children: 'children',
-      },
-      toolHeight: window.innerHeight,
       toolViewHeight: 400,
       dialogConfirmCloseTab: false,
       indexCloseTab: -1, // 删除的索引号，-1表示没有传递
@@ -182,6 +121,17 @@ export default {
       tempSectionExpanded: true,
       expandedKeys: [],
       treeRefreshKey: 0,
+      isDevMode: import.meta.env.DEV,
+      contextMenu: {
+        visible: false,
+        x: 0,
+        y: 0,
+        items: [],
+      },
+      sidebarButtonVisibility: {
+        explorer: true,
+      },
+      hiddenSidebarPluginPanels: [],
     };
   },
 
@@ -195,6 +145,8 @@ export default {
   },
 
   methods: {
+    ...workspaceExplorerMethods,
+
     /**
      * Resolve a plugin manifest name that may be either a plain string or an i18n key.
      */
@@ -287,10 +239,10 @@ export default {
       }
     },
 
-    // 工具1
-    toggleTool1() {
-      this.tool1Active = !this.tool1Active;
-      if (this.tool1Active) {
+    // 切换资源管理器侧边面板
+    toggleExplorerPanel() {
+      this.explorerPanelActive = !this.explorerPanelActive;
+      if (this.explorerPanelActive) {
         this.updateToolViewHeight();
       }
     },
@@ -298,184 +250,11 @@ export default {
     // 更新工具视图高度
     updateToolViewHeight() {
       this.$nextTick(() => {
-        const toolView = document.querySelector('.tool-view');
-        if (toolView) {
-          this.toolViewHeight = toolView.clientHeight - 50; // 减去header高度
+        const sidebarPanel = document.querySelector('.sidebar-panel');
+        if (sidebarPanel) {
+          this.toolViewHeight = sidebarPanel.clientHeight - 50; // 减去header高度
         }
       });
-    },
-
-    // 打开工作区（选择文件夹）
-    async openWorkspace() {
-      try {
-        const result = await window.lampAPI.openWorkspace()
-        if (result) {
-          this.workspaceStore.setWorkspace({
-            workspacePath: '',  // 不需要配置文件
-            rootPath: result.rootPath,
-            name: result.name,
-            settings: {}
-          })
-          // 加载工作区根目录内容
-          if (result.rootPath) {
-            this.showDirection(result.rootPath)
-            // 开始监视文件夹
-            await window.lampAPI.startWatching(result.rootPath)
-          }
-          // 清空临时文件
-          this.tempFiles = []
-        }
-      } catch (error) {
-        console.error('打开工作区失败:', error)
-      }
-    },
-
-    // 关闭工作区
-    async closeWorkspace() {
-      // 停止监视
-      await window.lampAPI.stopWatching()
-      this.workspaceStore.clearWorkspace()
-      this.fileStore.clearAll()
-      this.folderContent = ''
-      this.tempFiles = []
-    },
-
-    // 初始化文件变化监听
-    initFileWatcher() {
-      window.lampAPI.onFileChange((event) => {
-        console.log('文件变化:', event)
-        // 有变化时自动刷新文件树（使用 refresh 模式保留展开状态）
-        if (this.workspaceStore.isOpen && this.workspaceStore.rootPath) {
-          this.showDirection(this.workspaceStore.rootPath, 'refresh')
-        }
-      })
-    },
-
-    // 打开临时文件
-    async openTempFile(file) {
-      await this.openSpecificFile(file.path)
-    },
-
-    // 转换为树结构
-    convertToTree(folderContent) {
-      const tree = [];
-      for (const item of folderContent) {
-        const node = {
-          name: item.name,
-          path: item.path,
-        };
-        if (item.children && item.children.length > 0) {
-          node.children = this.convertToTree(item.children);
-        }
-        tree.push(node);
-      }
-      return tree;
-    },
-
-    // 展示目录结构
-    // mode: 'normal' | 'refresh'  - refresh 模式会保留展开状态
-    showDirection(path, mode = 'normal') {
-      // 防御性检查
-      if (!this.tabs || this.tabs.length === 0 || !this.tabs[this.activeTab]) {
-        this.folderContent = "";
-        return;
-      }
-
-      // 如果没有传入 path，则使用默认值
-      if (path === undefined) {
-        path = getParentDirectory(this.tabs[this.activeTab].filePath);
-      }
-
-      // 保存当前展开的文件夹路径（相对于工作区根目录）
-      let expandedRelativePaths = [];
-      if (mode === 'refresh' && this.folderContent && this.workspaceStore.rootPath) {
-        expandedRelativePaths = this.collectExpandedRelativePaths(this.folderContent, this.workspaceStore.rootPath);
-      }
-
-      if (path !== "") {
-        window.lampAPI.getFolderContent(path).then(result => {
-          this.folderContent = this.convertToTree(result);
-
-          // 恢复展开状态
-          if (mode === 'refresh' && expandedRelativePaths.length > 0) {
-            this.$nextTick(() => {
-              this.restoreExpandedByRelativePaths(this.folderContent, expandedRelativePaths, this.workspaceStore.rootPath);
-            });
-          }
-        }).catch(error => {
-          // 处理错误
-          console.error(error);
-          this.folderContent = "";
-        });
-      } else {
-        this.folderContent = "";
-      }
-    },
-
-    // 收集展开的文件夹相对路径
-    collectExpandedRelativePaths(tree, rootPath) {
-      const paths = [];
-      const collect = (nodes) => {
-        for (const node of nodes) {
-          if (node.isDirectory && this.fileStore.isExpanded(node.path)) {
-            // 转换为相对路径
-            const relativePath = this.getRelativePath(node.path, rootPath);
-            paths.push(relativePath);
-          }
-          if (node.children) {
-            collect(node.children);
-          }
-        }
-      };
-      collect(tree || []);
-      return paths;
-    },
-
-    // 获取相对路径
-    getRelativePath(fullPath, rootPath) {
-      const normalizedFull = fullPath.replace(/\\/g, '/');
-      const normalizedRoot = rootPath.replace(/\\/g, '/');
-      if (normalizedFull.toLowerCase().startsWith(normalizedRoot.toLowerCase())) {
-        return normalizedFull.substring(normalizedRoot.length).replace(/^\//, '');
-      }
-      return normalizedFull;
-    },
-
-    // 根据相对路径恢复展开状态
-    restoreExpandedByRelativePaths(tree, relativePaths, rootPath) {
-      if (!tree || !relativePaths) return;
-
-      const newExpandedKeys = [];
-      const restore = (nodes) => {
-        for (const node of nodes) {
-          const relativePath = this.getRelativePath(node.path, rootPath);
-          if (relativePaths.includes(relativePath)) {
-            newExpandedKeys.push(node.path);
-          }
-          if (node.children) {
-            restore(node.children);
-          }
-        }
-      };
-      restore(tree);
-
-      // 更新展开状态
-      this.expandedKeys = newExpandedKeys;
-      // 同步到 fileStore
-      this.fileStore.expandedFolders = new Set(newExpandedKeys);
-    },
-
-    // 工具2
-    toggleTool2() {
-      this.tool2Active = !this.tool2Active;
-      // 视窗1调整
-      if (window.innerHeight != null) {
-        if (this.tool2Active === false) {
-          this.toolHeight = window.innerHeight;
-        } else {
-          this.toolHeight = window.innerHeight / 2;
-        }
-      }
     },
 
     // 切换标签页
@@ -614,7 +393,7 @@ export default {
           const filePath = this.tabs[this.activeTab].filePath;
           const fileContent = this.tabs[this.activeTab].content;
           window.lampAPI.saveInfo(filePath, fileContent);
-          const result = this.hasFile(this.tabs[index].filePath + '.lampsave');
+          const result = this.hasFile(this.tabs[this.activeTab].filePath + '.lampsave');
           if (result) {
             this.delFile(this.tabs[this.activeTab].filePath + '.lampsave') // 删除自动保存的文件
           }
@@ -657,45 +436,142 @@ export default {
 
     // 缩放窗口后行为
     handleResize() {
-      if (window.innerHeight != null) {
-        if (this.tool2Active === false) {
-          this.toolHeight = window.innerHeight;
-        } else {
-          this.toolHeight = window.innerHeight / 2;
-        }
+      this.updateToolViewHeight();
+    },
+
+    isEditableTarget(target) {
+      if (!(target instanceof Element)) return false;
+      const editable = target.closest('input, textarea, [contenteditable="true"], [role="textbox"]');
+      return !!editable;
+    },
+
+    hideContextMenu() {
+      this.contextMenu.visible = false;
+      this.contextMenu.items = [];
+    },
+
+    showContextMenu(event, items) {
+      event.preventDefault();
+      this.contextMenu = {
+        visible: true,
+        x: event.clientX,
+        y: event.clientY,
+        items,
+      };
+    },
+
+    onContextMenuItemClick(item) {
+      if (item.disabled) return;
+      if (typeof item.action === 'function') item.action();
+      this.hideContextMenu();
+    },
+
+    onTabContextMenu(index, event) {
+      this.showContextMenu(event, [
+        {
+          id: 'close-current',
+          label: this.$t('common.close') || '关闭',
+          action: () => this.toggleCloseTab(index),
+        },
+      ]);
+    },
+
+    onTabBarContextMenu(event) {
+      if (event.target.closest('.editor-tab')) return;
+      this.showContextMenu(event, [
+        {
+          id: 'new-tab',
+          label: this.$t('app.newLampText') || '新建',
+          action: () => this.newFile(),
+        },
+      ]);
+    },
+
+    onSidebarContextMenu(event) {
+      const pluginPanelItems = (this.pluginHost.contributions.sortedSidebarPanels || []).map((panel) => {
+        const id = `plugin:${panel.pluginId || 'builtin'}:${panel.id}`;
+        const checked = !this.hiddenSidebarPluginPanels.includes(id);
+        return {
+          id,
+          label: panel.title,
+          checked,
+          action: () => this.toggleSidebarPluginPanel(id),
+        };
+      });
+
+      this.showContextMenu(event, [
+        {
+          id: 'toggle-explorer',
+          label: this.$t('app.openWorkspace') || '资源管理器',
+          checked: this.sidebarButtonVisibility.explorer,
+          action: () => this.toggleSidebarButton('explorer'),
+        },
+        ...pluginPanelItems,
+      ]);
+    },
+
+    toggleSidebarButton(key) {
+      this.sidebarButtonVisibility[key] = !this.sidebarButtonVisibility[key];
+      localStorage.setItem('lamp:ui:sidebar-buttons', JSON.stringify(this.sidebarButtonVisibility));
+      if (key === 'explorer' && !this.sidebarButtonVisibility[key]) {
+        this.explorerPanelActive = false;
       }
     },
 
-    handleNodeClick(data, node) {
-      const filePath = node.key;
+    toggleSidebarPluginPanel(id) {
+      const has = this.hiddenSidebarPluginPanels.includes(id);
+      this.hiddenSidebarPluginPanels = has
+        ? this.hiddenSidebarPluginPanels.filter((x) => x !== id)
+        : [...this.hiddenSidebarPluginPanels, id];
+      localStorage.setItem('lamp:ui:hidden-sidebar-plugin-panels', JSON.stringify(this.hiddenSidebarPluginPanels));
+    },
 
-      // 如果是目录，切换展开状态
-      if (data.isDirectory) {
-        if (this.expandedKeys.includes(filePath)) {
-          // 折叠
-          this.expandedKeys = this.expandedKeys.filter(k => k !== filePath);
-        } else {
-          // 展开
-          this.expandedKeys = [...this.expandedKeys, filePath];
+    loadUiPreferences() {
+      try {
+        const rawButtons = localStorage.getItem('lamp:ui:sidebar-buttons');
+        if (rawButtons) {
+          const parsed = JSON.parse(rawButtons);
+          this.sidebarButtonVisibility = {
+            ...this.sidebarButtonVisibility,
+            ...parsed,
+          };
         }
-        // 同步到 fileStore
-        this.fileStore.expandedFolders = new Set(this.expandedKeys);
-        return;
+      } catch (error) {
+        console.warn('Failed to load sidebar button visibility', error);
       }
 
-      // 检查文件是否在工作区内
-      if (this.workspaceStore.isOpen) {
-        const isInWorkspace = this.fileStore.isFileInWorkspace(filePath, this.workspaceStore.rootPath);
-        if (!isInWorkspace) {
-          // 添加到临时文件
-          const fileName = filePath.split('\\').pop() || filePath.split('/').pop();
-          const exists = this.tempFiles.some(f => f.path === filePath);
-          if (!exists) {
-            this.tempFiles.push({ name: fileName, path: filePath });
-          }
+      try {
+        const rawPanels = localStorage.getItem('lamp:ui:hidden-sidebar-plugin-panels');
+        if (rawPanels) {
+          const parsed = JSON.parse(rawPanels);
+          this.hiddenSidebarPluginPanels = Array.isArray(parsed) ? parsed : [];
         }
+      } catch (error) {
+        console.warn('Failed to load sidebar panel visibility', error);
       }
-      this.openSpecificFile(filePath);
+    },
+
+    handleGlobalContextMenu(event) {
+      if (this.isDevMode) return;
+      if (this.isEditableTarget(event.target)) return;
+      event.preventDefault();
+    },
+
+    handleGlobalWebShortcutGuard(event) {
+      if (this.isDevMode) return;
+      const key = event.key.toLowerCase();
+      const ctrlOrMeta = event.ctrlKey || event.metaKey;
+      const blocked =
+        event.key === 'F5' ||
+        event.key === 'F12' ||
+        (ctrlOrMeta && key === 'r') ||
+        (ctrlOrMeta && key === 'u') ||
+        (ctrlOrMeta && event.shiftKey && ['i', 'j', 'c', 'r'].includes(key));
+
+      if (blocked) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
     },
 
   },
@@ -708,6 +584,7 @@ export default {
     })()
     this.initIpcRenderers()
     this.initFileWatcher()
+    this.loadUiPreferences()
     window.addEventListener('resize', this.handleResize)
 
     // ── Register all main menu commands with the centralized ShortcutService ──
@@ -761,78 +638,53 @@ export default {
   },
 
   beforeUnmount() {
-    // No listener to clean up — App.vue no longer listens for lamp.command.execute
+    window.removeEventListener('resize', this.handleResize)
+    document.removeEventListener('click', this.hideContextMenu)
+    window.removeEventListener('blur', this.hideContextMenu)
+    document.removeEventListener('contextmenu', this.handleGlobalContextMenu, true)
+    window.removeEventListener('keydown', this.handleGlobalWebShortcutGuard, true)
   },
 
   mounted() {
     this.showDirection();
+    document.addEventListener('click', this.hideContextMenu)
+    window.addEventListener('blur', this.hideContextMenu)
+    document.addEventListener('contextmenu', this.handleGlobalContextMenu, true)
+    window.addEventListener('keydown', this.handleGlobalWebShortcutGuard, true)
     // Initialize VueUse shortcut polling and start listening
     const { register } = useShortcutCenter();
     pluginHost.shortcutService.setExternalRegister(register);
     pluginHost.shortcutService.startListening();
   },
 
+  computed: {
+    contextMenuStyle() {
+      return {
+        left: `${this.contextMenu.x}px`,
+        top: `${this.contextMenu.y}px`,
+      };
+    },
+  },
+
 };
 </script>
 
-<style lang="scss" scoped>
+<style>
 .app {
   display: grid;
   grid-template-rows: auto 1fr;
   width: 100vw;
   height: 100vh;
-  margin: 0;
-}
-
-.app-menu {
-  grid-row: 1;
-}
-
-.app-content {
-  grid-row: 2;
-}
-
-.app-content {
-  grid-row: 2;
-  position: relative;
-  margin-top: 38px;
   overflow: hidden;
-  /* 保证内容溢出时不会影响父元素布局 */
+  position: relative;
+}
+
+.app-content {
   display: grid;
-  grid-template-columns: auto auto 1fr;
-}
-
-.toolbar {
-  position: relative;
-  width: 42px;
-  /* 工具栏的固定宽度 */
-  flex-shrink: 0;
-  background-color: #F2F2F2;
-  border-right: 1px solid var(--lamp-dark-10);
-  display: flex;
-  flex-direction: column;
-}
-
-.toggle-button {
-  align-items: center;
-  /* 垂直居中 */
-  justify-content: center;
-  /* 水平居中 */
-  margin: 6px 4px 6px 4px;
-  width: 32px;
-  height: 32px;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: 1fr;
   overflow: hidden;
-  background-color: transparent;
-
-  /* 确保SVG不会超出按钮 */
-  .icon {
-    width: 20px;
-    height: 20px;
-  }
-}
-
-.activeToggleButton {
-  border-color: var(--lamp-color-primary);
+  height: 100%;
 }
 
 .close-button {
@@ -842,38 +694,21 @@ export default {
   border: 0;
   border-radius: 7px;
   font-size: 10px;
+  margin-left: 4px;
   align-items: center;
-
-  .icon {
-    width: 8px;
-    height: 8px;
-  }
+  display: flex;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
 }
 
 .close-button:hover {
-  background-color: var(--lamp-grey-20)
-}
-
-.tool-view {
-  width: 300px;
-  /* 操作视图宽度 */
-  display: flex;
-  /* 设置为 flex 布局 */
-  flex-direction: column;
-  background-color: #F2F2F2;
-}
-
-.tool1 {
-  font-size: 12px;
-  text-align: left;
+  background-color: oklch(0 0 0 / 0.20);
 }
 
 .editor {
-  grid-column: 3 / 4;
   height: 100%;
-  background-color: var(--lamp-color-neutral-light);
-  display: grid;
-  grid-template-rows: auto 1fr;
+  background-color: var(--background);
   overflow: hidden;
 }
 
@@ -881,44 +716,33 @@ export default {
   grid-row: 1;
   display: flex;
   flex-wrap: wrap;
-  border-bottom: 1px solid var(--lamp-grey-20);
-}
-
-.editor-editor {
-  grid-row: 2;
+  border-bottom: 1px solid var(--border);
 }
 
 .editor-tab {
-  height: 22px;
   position: relative;
-  margin: 0 0 0 0;
-  padding: 6px 10px 4px 14px;
   cursor: pointer;
   font-size: 12px;
-  color: var(--lamp-color-neutral-grey);
+  color: var(--muted-foreground);
   display: flex;
   align-items: center;
+  transition: background-color 0.12s;
+}
 
-  .close-button {
-    margin-left: 4px;
-    visibility: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
+.editor-tab:hover {
+  background-color: oklch(0 0 0 / 0.10);
+}
+
+.editor-tab:hover .close-button {
+  visibility: visible;
 }
 
 .activeTab {
-  color: var(--lamp-color-neutral-dark);
-  border: 0 0 3px 0 var(--lamp-color-primary);
+  color: var(--foreground);
+}
 
-  .close-button {
-    margin-left: 4px;
-    visibility: visible;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
+.activeTab .close-button {
+  visibility: visible;
 }
 
 .active-indicator {
@@ -927,141 +751,59 @@ export default {
   left: 0;
   width: 100%;
   height: 3px;
-  background-color: var(--lamp-color-primary);
+  background-color: var(--primary);
   border-radius: 4px;
   transition: height 0.3s ease;
 }
 
-.editor-tab:hover {
-  background-color: var(--lamp-grey-10);
-
-  .close-button {
-    visibility: visible;
-  }
+.ui-context-menu {
+  position: fixed;
+  z-index: 3000;
+  min-width: 180px;
+  padding: 4px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--popover);
+  box-shadow: 0 10px 24px color-mix(in oklab, var(--foreground) 16%, transparent);
 }
 
-// 工作区样式
-.file-explorer {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-.workspace-header {
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--lamp-grey-15);
-  background-color: var(--lamp-grey-05);
-}
-
-.workspace-name {
+.ui-context-item {
+  width: 100%;
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: none;
+  background: transparent;
+  color: var(--foreground);
   font-size: 13px;
-  font-weight: 500;
-  color: var(--lamp-color-neutral-dark);
-
-  .workspace-icon {
-    width: 16px;
-    height: 16px;
-    margin-right: 6px;
-    color: var(--lamp-color-primary);
-  }
-}
-
-.folder-tree {
-  flex: 1;
-  overflow-y: auto;
-}
-
-.temp-files-section {
-  border-top: 1px solid var(--lamp-grey-15);
-  background-color: var(--lamp-grey-03);
-  max-height: 150px;
-  overflow-y: auto;
-}
-
-.section-header {
-  display: flex;
-  align-items: center;
-  padding: 6px 12px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  color: var(--lamp-color-neutral-grey);
+  border-radius: 6px;
+  padding: 6px 8px;
+  text-align: left;
   cursor: pointer;
-
-  &:hover {
-    background-color: var(--lamp-grey-08);
-  }
-
-  .section-icon {
-    width: 10px;
-    height: 10px;
-    margin-right: 4px;
-    transition: transform 0.15s ease;
-
-    &.collapsed {
-      transform: rotate(0deg);
-    }
-
-    &:not(.collapsed) {
-      transform: rotate(90deg);
-    }
-  }
-
-  .file-count {
-    margin-left: 4px;
-    opacity: 0.7;
-  }
 }
 
-.temp-files-list {
-  padding: 4px 0;
+.ui-context-item:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--foreground) 8%, transparent);
 }
 
-.temp-file-item {
+.ui-context-item:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ui-context-item .check {
+  width: 14px;
+  height: 14px;
   display: flex;
-  align-items: center;
-  padding: 4px 12px 4px 24px;
-  font-size: 13px;
-  cursor: pointer;
-
-  &:hover {
-    background-color: var(--lamp-grey-10);
-  }
-
-  .file-icon {
-    width: 14px;
-    height: 14px;
-    margin-right: 6px;
-    color: var(--lamp-color-neutral-grey);
-  }
-
-  .file-name {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--lamp-color-neutral-dark);
-  }
-}
-
-.no-workspace {
-  display: flex;
+  flex-shrink: 0;
   align-items: center;
   justify-content: center;
-  height: 100%;
-  padding: 0 20px 0 20px;
+  color: var(--foreground);
 }
 
-.no-workspace-content {
-  text-align: center;
-}
-
-.empty-text {
-  font-size: 14px;
-  color: var(--lamp-color-neutral-grey);
-  margin-bottom: 20px;
+.ui-context-item .check-icon {
+  color: var(--foreground);
+  transition: opacity 0.12s ease;
 }
 </style>

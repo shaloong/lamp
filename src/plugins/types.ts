@@ -160,7 +160,7 @@ export interface PluginSettingsItem {
 export interface EditorToolbarItem {
   id: string;
   label: string;
-  icon?: string; // iconfont id e.g. "#icon-bold"
+  icon?: string; // Lucide icon component name e.g. "Bold"
   /** Supply a Vue component for custom rendering */
   component?: string; // path relative to plugin root
   /** Shortcut displayed next to the label */
@@ -227,7 +227,7 @@ export interface MenuItem {
 export interface SidebarPanelContribution {
   id: string;
   title: string;
-  icon?: string; // iconfont id
+  icon?: string; // Lucide icon component name
   /** Path to a Vue 3 SFC, relative to plugin root */
   component: string;
   /** Z-order when multiple panels are open (default 0) */

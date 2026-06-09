@@ -40,7 +40,7 @@ export default {
         {
           id: 'bold',
           label: P + 'bold',
-          icon: '#icon-bold',
+          icon: 'Bold',
           type: 'button',
           group: 'format',
           priority: 100,
@@ -53,7 +53,7 @@ export default {
         {
           id: 'italic',
           label: P + 'italic',
-          icon: '#icon-italic',
+          icon: 'Italic',
           type: 'button',
           group: 'format',
           priority: 90,
@@ -66,7 +66,7 @@ export default {
         {
           id: 'strike',
           label: P + 'strike',
-          icon: '#icon-strike',
+          icon: 'Strikethrough',
           type: 'button',
           group: 'format',
           priority: 80,
@@ -86,7 +86,7 @@ export default {
             {
               id: 'alignLeft',
               label: P + 'alignLeft',
-              icon: '#icon-left-alignment',
+              icon: 'AlignLeft',
               action: cmd('setTextAlign', 'left'),
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               isActive: (editor: any) => editor.isActive({ textAlign: 'left' }),
@@ -94,7 +94,7 @@ export default {
             {
               id: 'alignCenter',
               label: P + 'alignCenter',
-              icon: '#icon-center-alignment',
+              icon: 'AlignCenter',
               action: cmd('setTextAlign', 'center'),
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               isActive: (editor: any) => editor.isActive({ textAlign: 'center' }),
@@ -102,7 +102,7 @@ export default {
             {
               id: 'alignRight',
               label: P + 'alignRight',
-              icon: '#icon-right-alignment',
+              icon: 'AlignRight',
               action: cmd('setTextAlign', 'right'),
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               isActive: (editor: any) => editor.isActive({ textAlign: 'right' }),
@@ -110,7 +110,7 @@ export default {
             {
               id: 'alignJustify',
               label: P + 'alignJustify',
-              icon: '#icon-justify-alignment',
+              icon: 'AlignJustify',
               action: cmd('setTextAlign', 'justify'),
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               isActive: (editor: any) => editor.isActive({ textAlign: 'justify' }),
@@ -129,7 +129,7 @@ export default {
             {
               id: 'paragraph',
               label: P + 'paragraph',
-              icon: '#icon-para',
+              icon: 'Pilcrow',
               action: cmd('setParagraph'),
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               isActive: (editor: any) => editor.isActive('paragraph'),
@@ -137,7 +137,7 @@ export default {
             {
               id: 'heading1',
               label: P + 'heading1',
-              icon: '#icon-h1',
+              icon: 'Heading1',
               action: cmd('toggleHeading', { level: 1 }),
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               isActive: (editor: any) => editor.isActive('heading', { level: 1 }),
@@ -145,7 +145,7 @@ export default {
             {
               id: 'heading2',
               label: P + 'heading2',
-              icon: '#icon-h2',
+              icon: 'Heading2',
               action: cmd('toggleHeading', { level: 2 }),
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               isActive: (editor: any) => editor.isActive('heading', { level: 2 }),
@@ -153,7 +153,7 @@ export default {
             {
               id: 'heading3',
               label: P + 'heading3',
-              icon: '#icon-h3',
+              icon: 'Heading3',
               action: cmd('toggleHeading', { level: 3 }),
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               isActive: (editor: any) => editor.isActive('heading', { level: 3 }),
@@ -161,7 +161,7 @@ export default {
             {
               id: 'heading4',
               label: P + 'heading4',
-              icon: '#icon-h4',
+              icon: 'Heading4',
               action: cmd('toggleHeading', { level: 4 }),
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               isActive: (editor: any) => editor.isActive('heading', { level: 4 }),
@@ -169,7 +169,7 @@ export default {
             {
               id: 'heading5',
               label: P + 'heading5',
-              icon: '#icon-h5',
+              icon: 'Heading5',
               action: cmd('toggleHeading', { level: 5 }),
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               isActive: (editor: any) => editor.isActive('heading', { level: 5 }),
@@ -177,7 +177,7 @@ export default {
             {
               id: 'heading6',
               label: P + 'heading6',
-              icon: '#icon-h6',
+              icon: 'Heading6',
               action: cmd('toggleHeading', { level: 6 }),
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               isActive: (editor: any) => editor.isActive('heading', { level: 6 }),
@@ -187,7 +187,7 @@ export default {
         {
           id: 'bulletList',
           label: P + 'bulletList',
-          icon: '#icon-ul',
+          icon: 'List',
           type: 'button',
           group: 'list',
           priority: 60,
@@ -198,7 +198,7 @@ export default {
         {
           id: 'orderedList',
           label: P + 'orderedList',
-          icon: '#icon-ol',
+          icon: 'ListOrdered',
           type: 'button',
           group: 'list',
           priority: 50,
@@ -209,7 +209,7 @@ export default {
         {
           id: 'horizontalRule',
           label: P + 'horizontalRule',
-          icon: '#icon-split',
+          icon: 'Minus',
           type: 'button',
           group: 'insert',
           priority: 40,
@@ -218,7 +218,7 @@ export default {
         {
           id: 'clearFormat',
           label: P + 'clearFormat',
-          icon: '#icon-eraser',
+          icon: 'RemoveFormatting',
           type: 'button',
           group: 'clear',
           priority: 30,
@@ -227,7 +227,7 @@ export default {
         {
           id: 'undo',
           label: P + 'undo',
-          icon: '#icon-undo',
+          icon: 'Undo',
           type: 'button',
           group: 'history',
           priority: 20,
@@ -238,7 +238,7 @@ export default {
         {
           id: 'redo',
           label: P + 'redo',
-          icon: '#icon-redo',
+          icon: 'Redo',
           type: 'button',
           group: 'history',
           priority: 10,

@@ -22,6 +22,7 @@
     "customModel": "自定义",
     "presetModels": "选择预设模型",
     "modelPlaceholder": "输入模型名称",
+    "noModelSuggestions": "没有可用的模型建议",
     "editor": "编辑器",
     "shortcuts": "快捷键",
     "plugins": "插件"

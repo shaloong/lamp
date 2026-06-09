@@ -34,7 +34,8 @@
 </template>
 
 <script>
-import { pluginHost } from '../plugins/index';
+import { toRef } from 'vue';
+import { useAISuggestToolbar } from '@/composables/useAISuggestToolbar';
 
 export default {
   props: {
@@ -44,81 +45,22 @@ export default {
     },
   },
 
-  data() {
+  setup(props) {
+    const editorRef = toRef(props, 'editor');
+    const { visible, currentLabel, toolbarStyle, accept, dismiss } = useAISuggestToolbar(editorRef);
+
     return {
-      top: 0,
-      left: 0,
-      visible: false,
-      currentLabel: '',
+      visible,
+      currentLabel,
+      toolbarStyle,
+      accept,
+      dismiss,
     };
-  },
-
-  computed: {
-    toolbarStyle() {
-      return {
-        top: `${this.top}px`,
-        left: `${this.left}px`,
-        transform: 'translateY(-100%)',
-      };
-    },
-  },
-
-  methods: {
-    _update() {
-      const s = pluginHost.aiState.suggestion;
-      if (!s || !this.editor) {
-        this.visible = false;
-        return;
-      }
-      this.currentLabel = s.actionLabel;
-      try {
-        const coords = this.editor.view.coordsAtPos(s.to);
-        this.top = coords.top - 10;
-        this.left = coords.left;
-        this.visible = true;
-      } catch {
-        this.visible = false;
-      }
-    },
-
-    accept() {
-      if (!this.editor) return;
-      this.visible = false;
-      // pluginHost.aiState.suggestion is cleared inside acceptAISuggestion
-      this.editor.commands.acceptAISuggestion();
-    },
-
-    dismiss() {
-      if (!this.editor) return;
-      this.visible = false;
-      this.editor.commands.dismissAISuggestion();
-    },
-  },
-
-  mounted() {
-    // Re-position on every editor update (scroll, selection change, etc.)
-    if (this.editor) {
-      this._unwatch = this.editor.on('update', () => this._update());
-    }
-    // React to new AI suggestions
-    this._unwatchAi = this.$watch(
-      () => pluginHost.aiState.suggestion,
-      (s) => {
-        if (s) this.$nextTick(() => this._update());
-        else this.visible = false;
-      },
-      { immediate: true },
-    );
-  },
-
-  beforeUnmount() {
-    this._unwatch?.();
-    this._unwatchAi();
   },
 };
 </script>
 
-<style lang="scss" scoped>
+<style scoped>
 .ai-suggest-toolbar {
   position: fixed;
   z-index: 9100;
@@ -126,7 +68,7 @@ export default {
   align-items: center;
   gap: 6px;
   padding: 6px 8px;
-  background: var(--lamp-color-neutral-dark);
+  background: var(--foreground);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
   box-shadow:
@@ -134,16 +76,15 @@ export default {
     0 1px 4px rgba(0, 0, 0, 0.16);
   user-select: none;
   white-space: nowrap;
+}
 
-  /* Subtle arrow pointing down */
-  &::after {
-    content: '';
-    position: absolute;
-    top: 100%;
-    left: 14px;
-    border: 5px solid transparent;
-    border-top-color: var(--lamp-color-neutral-dark);
-  }
+.ai-suggest-toolbar::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 14px;
+  border: 5px solid transparent;
+  border-top-color: var(--foreground);
 }
 
 .ai-toolbar-meta {
@@ -160,7 +101,7 @@ export default {
   gap: 5px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--lamp-color-primary);
+  color: var(--primary);
   letter-spacing: 0.02em;
 }
 
@@ -174,12 +115,12 @@ export default {
   font-size: 10.5px;
   color: rgba(255, 255, 255, 0.38);
   letter-spacing: 0.01em;
+}
 
-  kbd {
-    font-family: inherit;
-    font-size: inherit;
-    color: rgba(255, 255, 255, 0.55);
-  }
+.ai-toolbar-hints kbd {
+  font-family: inherit;
+  font-size: inherit;
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .ai-toolbar-actions {
@@ -197,41 +138,40 @@ export default {
   border-radius: 6px;
   cursor: pointer;
   transition: background 0.12s ease, opacity 0.12s ease;
+}
 
-  svg {
-    width: 14px;
-    height: 14px;
-  }
+.ai-btn svg {
+  width: 14px;
+  height: 14px;
 }
 
 .ai-btn-accept {
-  background: var(--lamp-color-primary);
+  background: var(--primary);
   color: #fff;
+}
 
-  &:hover {
-    background: var(--lamp-btn-primary-hover);
-  }
+.ai-btn-accept:hover {
+  background: oklch(0.40 0.19 265.5);
+}
 
-  &:active {
-    opacity: 0.85;
-  }
+.ai-btn-accept:active {
+  opacity: 0.85;
 }
 
 .ai-btn-dismiss {
   background: rgba(255, 255, 255, 0.08);
   color: rgba(255, 255, 255, 0.55);
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.14);
-    color: rgba(255, 255, 255, 0.8);
-  }
-
-  &:active {
-    opacity: 0.75;
-  }
 }
 
-/* Transition */
+.ai-btn-dismiss:hover {
+  background: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.ai-btn-dismiss:active {
+  opacity: 0.75;
+}
+
 .ai-toolbar-enter-active,
 .ai-toolbar-leave-active {
   transition: opacity 0.15s ease, transform 0.15s ease;
