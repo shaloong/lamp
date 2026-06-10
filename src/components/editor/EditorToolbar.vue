@@ -21,7 +21,6 @@ import { computed } from 'vue'
 import ToolbarDropdown from '@/components/ToolbarDropdown.vue'
 import { pluginHost } from '@/plugins/index'
 import { lucideIconMap } from './icons'
-import { CORE_EDITOR_TOOLBAR_ITEMS } from '@/core/editorToolbarItems'
 
 defineProps({
     editor: { type: Object, default: null },
@@ -30,8 +29,6 @@ defineProps({
 })
 
 const allToolbarItems = computed(() => {
-    const pluginItems = pluginHost.contributions.sortedEditorToolbar
-    return [...CORE_EDITOR_TOOLBAR_ITEMS, ...pluginItems]
-        .sort((a, b) => (b.priority ?? 50) - (a.priority ?? 50))
+    return pluginHost.contributions.sortedEditorToolbar
 })
 </script>

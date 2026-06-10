@@ -1,5 +1,6 @@
 <script setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
+import { Editor } from '@tiptap/core'
 import { pluginHost } from '../plugins/index'
 import { useWorkspaceStore } from '../stores/workspace'
 import { Folder, MousePointer2 } from 'lucide-vue-next'
@@ -7,6 +8,14 @@ import { Folder, MousePointer2 } from 'lucide-vue-next'
 const workspaceStore = useWorkspaceStore()
 const line = ref(1)
 const column = ref(1)
+
+// Track editor cursor position
+let editorWatchOff: (() => void) | null = null
+const offEditorReady = pluginHost.events.on('lamp.editor.ready', () => {
+  editorWatchOff?.();
+  // Poll editor selection for line/col — TipTap doesn't expose line numbers natively,
+  // but we can track cursor position
+})
 </script>
 
 <template>
