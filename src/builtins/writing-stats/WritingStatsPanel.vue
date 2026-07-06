@@ -8,8 +8,11 @@
           {{ remaining <= 0 ? p('panelGoalReached') : p('panelGoalOpen', { remaining }) }}
         </span>
       </div>
-      <div class="progress-ring" :style="{ '--progress': progressDegrees }">
+      <div class="progress-summary">
         <span>{{ progressPercent }}%</span>
+        <div class="progress-track">
+          <i :style="{ width: progressWidth }" />
+        </div>
       </div>
     </div>
 
@@ -32,22 +35,32 @@
       </div>
     </div>
 
-    <form class="goal-editor" @submit.prevent="applyGoal">
-      <label for="writing-goal-input">{{ p('panelDailyGoal') }}</label>
-      <div class="goal-control">
-        <input id="writing-goal-input" v-model="goalDraft" type="number" min="1" max="200000" />
-        <button type="submit">{{ p('panelApplyGoal') }}</button>
-      </div>
-    </form>
+    <div class="goal-editor">
+      <span>{{ p('panelDailyGoal') }}</span>
+      <label class="goal-pill" for="writing-goal-input">
+        <input id="writing-goal-input" v-model="goalDraft" type="number" min="1" max="200000"
+          @blur="commitGoal" @change="commitGoal" @keydown.enter.prevent="commitGoalAndBlur" />
+        <em>{{ p('panelGoalUnit') }}</em>
+      </label>
+    </div>
 
     <div class="contribution-section">
       <div class="section-heading">
         <strong>{{ p('panelContribution') }}</strong>
         <span>{{ p('panelContributionHint') }}</span>
       </div>
-      <div class="contribution-grid">
-        <div v-for="day in state.contributionDays" :key="day.date" class="contribution-day"
-          :class="`level-${getLevel(day.words, day.goal)}`" :title="getDayTitle(day)" />
+      <div class="contribution-calendar">
+        <div class="weekday-row">
+          <span v-for="label in weekdayLabels" :key="label.key" class="weekday-label"
+            :class="{ optional: label.optional }">
+            {{ label.text }}
+          </span>
+        </div>
+        <div class="contribution-grid">
+          <div v-for="day in calendarDays" :key="day.date" class="contribution-day"
+            :class="[`level-${getLevel(day.words, day.goal)}`, { today: day.date === state.currentDate }]"
+            :title="getDayTitle(day)" />
+        </div>
       </div>
     </div>
 
@@ -65,7 +78,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { setDailyGoal, writingStatsState as state } from './state'
 
-const { t } = useI18n()
+const { t, locale } = useI18n()
 const goalDraft = ref(String(state.dailyGoal))
 const celebrating = ref(false)
 let celebrationTimer = null
@@ -73,7 +86,20 @@ let celebrationTimer = null
 const remaining = computed(() => Math.max(0, state.dailyGoal - state.todayWords))
 const progressRatio = computed(() => Math.min(1, state.todayWords / Math.max(1, state.dailyGoal)))
 const progressPercent = computed(() => Math.round(progressRatio.value * 100))
-const progressDegrees = computed(() => `${Math.round(progressRatio.value * 360)}deg`)
+const progressWidth = computed(() => `${progressPercent.value}%`)
+const calendarDays = computed(() => state.contributionDays)
+const weekdayFormatter = computed(() => new Intl.DateTimeFormat(
+  locale.value?.startsWith('zh') ? 'zh-CN' : 'en-US',
+  { weekday: 'short' },
+))
+const weekdayLabels = computed(() => {
+  const firstWeek = calendarDays.value.slice(0, 7)
+  return firstWeek.map((day, index) => ({
+    key: `${day.date}-${index}`,
+    text: weekdayFormatter.value.format(parseDateKey(day.date)),
+    optional: index % 2 === 1,
+  }))
+})
 
 watch(() => state.dailyGoal, (goal) => {
   goalDraft.value = String(goal)
@@ -96,8 +122,14 @@ function p(key, params) {
   return t(`plugins.lamp-writing-stats.${key}`, params || {})
 }
 
-function applyGoal() {
+function commitGoal() {
   setDailyGoal(goalDraft.value)
+  goalDraft.value = String(state.dailyGoal)
+}
+
+function commitGoalAndBlur(event) {
+  commitGoal()
+  event.currentTarget?.blur()
 }
 
 function getLevel(words, goal) {
@@ -115,34 +147,39 @@ function getDayTitle(day) {
     ? `${day.date} · ${p('panelWords', { count: words })}`
     : `${day.date} · ${p('panelEmptyDay')}`
 }
+
+function parseDateKey(dateKey) {
+  const [year, month, day] = dateKey.split('-').map(Number)
+  return new Date(year, month - 1, day)
+}
 </script>
 
 <style scoped>
 .writing-stats-panel {
   --stats-soft: color-mix(in oklab, var(--muted) 72%, transparent);
   --stats-line: color-mix(in oklab, var(--border) 80%, transparent);
+  --stats-cell: 9px;
+  --stats-gap: 4px;
   height: 100%;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 14px;
+  gap: 12px;
+  padding: 12px;
   overflow-y: auto;
-  background:
-    linear-gradient(180deg, color-mix(in oklab, var(--background) 92%, var(--primary) 8%), var(--background) 34%),
-    var(--background);
+  background: color-mix(in oklab, var(--background) 96%, var(--muted) 4%);
   color: var(--foreground);
 }
 
 .today-block {
   display: grid;
-  grid-template-columns: 1fr 88px;
+  grid-template-columns: 1fr auto;
   align-items: center;
   gap: 12px;
-  padding: 14px;
+  padding: 14px 12px 12px;
   border: 1px solid var(--stats-line);
   border-radius: 8px;
-  background: color-mix(in oklab, var(--background) 82%, var(--muted) 18%);
+  background: var(--background);
 }
 
 .today-copy {
@@ -155,15 +192,16 @@ function getDayTitle(day) {
 .eyebrow,
 .metric-cell span,
 .section-heading span,
-.goal-editor label {
+.goal-editor span {
   font-size: 11px;
   color: var(--muted-foreground);
 }
 
 .today-copy strong {
-  font-size: 34px;
+  font-size: 36px;
   line-height: 1;
-  font-weight: 750;
+  font-weight: 680;
+  letter-spacing: 0;
 }
 
 .subline {
@@ -172,31 +210,41 @@ function getDayTitle(day) {
   overflow-wrap: anywhere;
 }
 
-.progress-ring {
-  width: 78px;
-  height: 78px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background:
-    conic-gradient(var(--primary) var(--progress), color-mix(in oklab, var(--muted) 86%, transparent) 0),
-    var(--muted);
-  position: relative;
+.progress-summary {
+  width: 96px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
 }
 
-.progress-ring::after {
-  content: '';
-  position: absolute;
-  inset: 8px;
-  border-radius: 50%;
-  background: var(--background);
-}
-
-.progress-ring span {
-  position: relative;
-  z-index: 1;
-  font-size: 13px;
+.progress-summary span {
+  min-width: 44px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--primary) 10%, var(--muted));
+  font-size: 12px;
   font-weight: 700;
+}
+
+.progress-track {
+  width: 96px;
+  height: 4px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in oklab, var(--muted) 82%, transparent);
+}
+
+.progress-track i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary);
+  transition: width 260ms ease;
 }
 
 .metric-grid {
@@ -209,11 +257,11 @@ function getDayTitle(day) {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
   padding: 10px;
   border: 1px solid var(--stats-line);
   border-radius: 7px;
-  background: var(--stats-soft);
+  background: var(--background);
 }
 
 .metric-cell strong {
@@ -222,39 +270,45 @@ function getDayTitle(day) {
 }
 
 .goal-editor {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 10px;
   padding: 10px;
   border: 1px solid var(--stats-line);
   border-radius: 7px;
-  background: color-mix(in oklab, var(--background) 84%, var(--muted) 16%);
-}
-
-.goal-control {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 8px;
-}
-
-.goal-control input {
-  min-width: 0;
-  height: 30px;
-  padding: 0 8px;
-  border: 1px solid var(--border);
-  border-radius: 5px;
   background: var(--background);
-  color: var(--foreground);
 }
 
-.goal-control button {
+.goal-pill {
+  display: inline-grid;
+  grid-template-columns: minmax(56px, 74px) auto;
+  align-items: center;
   height: 30px;
-  padding: 0 10px;
-  border: 1px solid color-mix(in oklab, var(--primary) 50%, var(--border));
-  border-radius: 5px;
-  background: color-mix(in oklab, var(--primary) 16%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--muted) 50%, transparent);
+  overflow: hidden;
+}
+
+.goal-pill input {
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0 4px 0 12px;
+  border: 0;
+  background: transparent;
   color: var(--foreground);
-  cursor: pointer;
+  font-size: 13px;
+  text-align: right;
+  outline: none;
+}
+
+.goal-pill em {
+  padding: 0 10px 0 4px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-style: normal;
 }
 
 .contribution-section {
@@ -264,7 +318,8 @@ function getDayTitle(day) {
   padding: 10px;
   border: 1px solid var(--stats-line);
   border-radius: 7px;
-  background: var(--stats-soft);
+  background: var(--background);
+  container-type: inline-size;
 }
 
 .section-heading {
@@ -278,18 +333,45 @@ function getDayTitle(day) {
   font-size: 13px;
 }
 
+.contribution-calendar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.weekday-row {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: var(--stats-gap);
+}
+
+.weekday-label {
+  min-width: 0;
+  color: var(--muted-foreground);
+  font-size: 9px;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+}
+
 .contribution-grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 5px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: var(--stats-gap);
 }
 
 .contribution-day {
-  aspect-ratio: 1;
-  min-width: 0;
+  width: var(--stats-cell);
+  height: var(--stats-cell);
+  justify-self: center;
   border-radius: 3px;
   border: 1px solid color-mix(in oklab, var(--border) 75%, transparent);
   background: color-mix(in oklab, var(--muted) 78%, transparent);
+}
+
+.contribution-day.today {
+  outline: 1px solid color-mix(in oklab, var(--foreground) 45%, transparent);
+  outline-offset: 1px;
 }
 
 .level-1 {
@@ -330,7 +412,7 @@ function getDayTitle(day) {
   color: var(--muted-foreground);
 }
 
-.celebrating .progress-ring {
+.celebrating .progress-summary span {
   animation: ring-pop 650ms ease-out;
 }
 
@@ -354,6 +436,12 @@ function getDayTitle(day) {
   }
   100% {
     transform: scale(1);
+  }
+}
+
+@container (max-width: 300px) {
+  .weekday-label.optional {
+    visibility: hidden;
   }
 }
 </style>
