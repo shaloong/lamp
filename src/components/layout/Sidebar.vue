@@ -1,7 +1,9 @@
 <template>
     <div class="sidebar-shell" @contextmenu="$emit('contextmenu', $event)">
         <SidebarRail :explorerPanelActive="explorerPanelActive" @toggle-explorer-panel="$emit('toggle-explorer-panel')"
-            :showExplorerButton="showExplorerButton" @open-settings="$emit('open-settings')" />
+            :showExplorerButton="showExplorerButton" :visiblePluginPanels="visiblePluginPanels"
+            :activePluginPanelId="activePluginPanelId"
+            @toggle-plugin-panel="$emit('toggle-plugin-panel', $event)" @open-settings="$emit('open-settings')" />
 
         <WorkspacePanel :explorerPanelActive="explorerPanelActive" :workspaceStore="workspaceStore"
             :folderContent="folderContent" :toolViewHeight="toolViewHeight" :tempFiles="tempFiles"
@@ -9,12 +11,15 @@
             @open-workspace="$emit('open-workspace')" @open-temp-file="$emit('open-temp-file', $event)"
             @node-click="$emit('node-click', $event)" @toggle-expand="$emit('toggle-expand', $event)"
             @update:tempSectionExpanded="$emit('update:tempSectionExpanded', $event)" />
+
+        <PluginPanelHost v-if="activePluginPanel" :panel="activePluginPanel" />
     </div>
 </template>
 
 <script setup>
 import SidebarRail from './SidebarRail.vue'
 import WorkspacePanel from './WorkspacePanel.vue'
+import PluginPanelHost from './PluginPanelHost.vue'
 
 defineProps({
     explorerPanelActive: { type: Boolean, default: false },
@@ -25,10 +30,14 @@ defineProps({
     tempFiles: { type: Array, default: () => [] },
     tempSectionExpanded: { type: Boolean, default: true },
     expandedKeys: { type: Array, default: () => [] },
+    visiblePluginPanels: { type: Array, default: () => [] },
+    activePluginPanel: { type: Object, default: null },
+    activePluginPanelId: { type: String, default: '' },
 })
 
 defineEmits([
     'toggle-explorer-panel',
+    'toggle-plugin-panel',
     'open-settings',
     'open-workspace',
     'open-temp-file',

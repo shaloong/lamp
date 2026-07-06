@@ -5,6 +5,13 @@
             <Folder :size="20" />
         </button>
 
+        <button v-for="panel in visiblePluginPanels" :key="panel.panelKey" class="toggle-button"
+            :class="{ activeToggleButton: activePluginPanelId === panel.panelKey }" :title="resolveLabel(panel.title)"
+            @click="$emit('toggle-plugin-panel', panel.panelKey)" style="-webkit-app-region: no-drag">
+            <component v-if="getIcon(panel.icon)" :is="getIcon(panel.icon)" :size="20" />
+            <BarChart3 v-else :size="20" />
+        </button>
+
         <div class="toolbar-spacer" />
 
         <button class="toggle-button" @click="$emit('open-settings')" style="-webkit-app-region: no-drag">
@@ -14,14 +21,29 @@
 </template>
 
 <script setup>
-import { Folder, Settings } from 'lucide-vue-next'
+import { BarChart3, Folder, Settings } from 'lucide-vue-next'
+import { useI18n } from 'vue-i18n'
+import { resolveI18nLabel } from '@/lib/resolveI18nLabel'
+import { lucideIconMap } from '@/components/editor/icons'
+
+const { t } = useI18n()
 
 defineProps({
     explorerPanelActive: { type: Boolean, default: false },
     showExplorerButton: { type: Boolean, default: true },
+    visiblePluginPanels: { type: Array, default: () => [] },
+    activePluginPanelId: { type: String, default: '' },
 })
 
-defineEmits(['toggle-explorer-panel', 'open-settings'])
+defineEmits(['toggle-explorer-panel', 'toggle-plugin-panel', 'open-settings'])
+
+function getIcon(icon) {
+    return icon ? lucideIconMap[icon] : null
+}
+
+function resolveLabel(label) {
+    return resolveI18nLabel(t, label)
+}
 </script>
 
 <style scoped>

@@ -5,7 +5,7 @@ import {
   Pilcrow, List, ListOrdered, Minus, RemoveFormatting,
   Undo, Redo,
   Sparkles, ListChevronsUpDown, ArrowDownWideNarrow, ListChevronsDownUp,
-  AlertCircle,
+  AlertCircle, BarChart3, ChevronsDown,
 } from 'lucide-vue-next'
 
 export const lucideIconMap = {
@@ -15,7 +15,7 @@ export const lucideIconMap = {
   Pilcrow, List, ListOrdered, Minus, RemoveFormatting,
   Undo, Redo,
   Sparkles, ListChevronsUpDown, ArrowDownWideNarrow, ListChevronsDownUp,
-  AlertCircle,
+  AlertCircle, BarChart3, ChevronsDown,
 }
 
 export { AlertCircle, Sparkles }

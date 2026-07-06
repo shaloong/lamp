@@ -7,7 +7,10 @@
       <Sidebar :explorerPanelActive="explorerPanelActive" :workspaceStore="workspaceStore"
         :folderContent="folderContent" :toolViewHeight="toolViewHeight" :tempFiles="tempFiles"
         :expandedKeys="expandedKeys" :showExplorerButton="sidebarButtonVisibility.explorer"
+        :visiblePluginPanels="visibleSidebarPluginPanels" :activePluginPanel="activeSidebarPluginPanel"
+        :activePluginPanelId="activeSidebarPluginPanelId"
         v-model:tempSectionExpanded="tempSectionExpanded" @toggle-explorer-panel="toggleExplorerPanel"
+        @toggle-plugin-panel="togglePluginPanel"
         @open-settings="openSettingsDialog" @open-workspace="openWorkspace" @open-temp-file="openTempFile"
         @node-click="handleNodeClick" @toggle-expand="handleToggleExpand" @contextmenu="onSidebarContextMenu" />
       <div class="editor flex flex-col h-full">
@@ -40,6 +43,7 @@
           @open-file="openFileDialog" @open-workspace="openWorkspace" @open-recent="openSpecificFile" />
       </div>
     </div>
+    <StatusBar />
     <div class="mask">
       <Dialog v-model:open="dialogConfirmCloseTab" @update:open="(val) => { if (!val) cancelPendingClose(); }">
         <DialogContent style="max-width: 500px;">
@@ -139,6 +143,7 @@ const SettingsDialog = defineAsyncComponent(() => import('./components/SettingsD
 import AppMenu from './components/AppMenu.vue'
 import Sidebar from './components/layout/Sidebar.vue'
 import SearchDialog from './components/SearchDialog.vue'
+import StatusBar from './components/StatusBar.vue'
 import Dialog from '@/components/ui/dialog/Dialog.vue'
 import DialogContent from '@/components/ui/dialog/DialogContent.vue'
 import DialogHeader from '@/components/ui/dialog/DialogHeader.vue'
@@ -157,6 +162,7 @@ export default {
     SearchDialog,
     AppMenu,
     Sidebar,
+    StatusBar,
     Dialog,
     DialogContent,
     DialogHeader,
@@ -199,6 +205,7 @@ export default {
         explorer: true,
       },
       hiddenSidebarPluginPanels: [],
+      activeSidebarPluginPanelId: '',
       editorRefs: {},
       autoSaveTimers: {},
       documentSearchState: {
@@ -235,6 +242,10 @@ export default {
 
     getLampAPI() {
       return getLampAPI();
+    },
+
+    getSidebarPluginPanelId(panel) {
+      return `plugin:${panel.pluginId || 'builtin'}:${panel.id}`;
     },
 
     createTab({
@@ -480,10 +491,13 @@ export default {
     setEditorRef(tabId, el) {
       if (!tabId) return;
       if (el) {
+        if (this.editorRefs[tabId] === el) return;
         this.editorRefs[tabId] = el;
       } else {
+        if (!this.editorRefs[tabId]) return;
         delete this.editorRefs[tabId];
       }
+      this.$nextTick(() => this.syncActiveEditorInstance());
     },
 
     getActiveEditorInstance() {
@@ -491,6 +505,11 @@ export default {
       if (!activeTab) return null;
       const editorComponent = this.editorRefs[activeTab.id];
       return editorComponent || null;
+    },
+
+    syncActiveEditorInstance() {
+      const editorComponent = this.getActiveEditorInstance();
+      pluginHost.setEditorInstance(editorComponent?.editor || null);
     },
 
     getDocumentMatches(query) {
@@ -718,6 +737,7 @@ export default {
     toggleExplorerPanel() {
       this.explorerPanelActive = !this.explorerPanelActive;
       if (this.explorerPanelActive) {
+        this.activeSidebarPluginPanelId = '';
         this.updateToolViewHeight();
       }
     },
@@ -739,6 +759,7 @@ export default {
         return;
       }
       this.activeTab = index;
+      this.$nextTick(() => this.syncActiveEditorInstance());
     },
 
     // 关闭标签
@@ -1188,7 +1209,7 @@ export default {
 
     onSidebarContextMenu(event) {
       const pluginPanelItems = (this.pluginHost.contributions.sortedSidebarPanels || []).map((panel) => {
-        const id = `plugin:${panel.pluginId || 'builtin'}:${panel.id}`;
+        const id = this.getSidebarPluginPanelId(panel);
         const checked = !this.hiddenSidebarPluginPanels.includes(id);
         return {
           id,
@@ -1217,12 +1238,39 @@ export default {
       }
     },
 
+    togglePluginPanel(id) {
+      if (this.activeSidebarPluginPanelId === id) {
+        this.activeSidebarPluginPanelId = '';
+        return;
+      }
+
+      this.activeSidebarPluginPanelId = id;
+      this.explorerPanelActive = false;
+    },
+
+    openSidebarPluginPanel(payload = {}) {
+      const pluginId = payload.pluginId || payload.id;
+      const panelId = payload.panelId || payload.panel;
+      if (!pluginId || !panelId) return;
+
+      const panelKey = `plugin:${pluginId}:${panelId}`;
+      if (this.hiddenSidebarPluginPanels.includes(panelKey)) {
+        this.hiddenSidebarPluginPanels = this.hiddenSidebarPluginPanels.filter((id) => id !== panelKey);
+        localStorage.setItem('lamp:ui:hidden-sidebar-plugin-panels', JSON.stringify(this.hiddenSidebarPluginPanels));
+      }
+      this.activeSidebarPluginPanelId = panelKey;
+      this.explorerPanelActive = false;
+    },
+
     toggleSidebarPluginPanel(id) {
       const has = this.hiddenSidebarPluginPanels.includes(id);
       this.hiddenSidebarPluginPanels = has
         ? this.hiddenSidebarPluginPanels.filter((x) => x !== id)
         : [...this.hiddenSidebarPluginPanels, id];
       localStorage.setItem('lamp:ui:hidden-sidebar-plugin-panels', JSON.stringify(this.hiddenSidebarPluginPanels));
+      if (!has && this.activeSidebarPluginPanelId === id) {
+        this.activeSidebarPluginPanelId = '';
+      }
     },
 
     loadUiPreferences() {
@@ -1291,6 +1339,7 @@ export default {
     this.initIpcRenderers()
     this.initFileWatcher()
     this.loadUiPreferences()
+    this._disposeSidebarPanelOpen = pluginHost.events.on('lamp.sidebar.openPanel', this.openSidebarPluginPanel)
     window.addEventListener('resize', this.handleResize)
 
     // ── Register all main menu commands with the centralized ShortcutService ──
@@ -1356,6 +1405,10 @@ export default {
     document.removeEventListener('contextmenu', this.handleGlobalContextMenu, true)
     document.removeEventListener('keydown', this.handleGlobalWebShortcutGuard, true)
     window.removeEventListener('keydown', this.handleGlobalWebShortcutGuard, true)
+    if (typeof this._disposeSidebarPanelOpen === 'function') {
+      this._disposeSidebarPanelOpen()
+      this._disposeSidebarPanelOpen = null
+    }
     if (typeof this._disposePluginThemes === 'function') {
       this._disposePluginThemes()
       this._disposePluginThemes = null
@@ -1402,6 +1455,18 @@ export default {
     canSave() {
       return this.hasOpenFile && this.activeTab >= 0 && this.activeTab < this.tabs.length;
     },
+    sidebarPluginPanels() {
+      return (this.pluginHost.contributions.sortedSidebarPanels || []).map((panel) => ({
+        ...panel,
+        panelKey: this.getSidebarPluginPanelId(panel),
+      }));
+    },
+    visibleSidebarPluginPanels() {
+      return this.sidebarPluginPanels.filter((panel) => !this.hiddenSidebarPluginPanels.includes(panel.panelKey));
+    },
+    activeSidebarPluginPanel() {
+      return this.visibleSidebarPluginPanels.find((panel) => panel.panelKey === this.activeSidebarPluginPanelId) || null;
+    },
   },
 
 };
@@ -1410,7 +1475,7 @@ export default {
 <style>
 .app {
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto 1fr auto;
   width: 100vw;
   height: 100vh;
   overflow: hidden;

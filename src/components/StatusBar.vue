@@ -1,6 +1,5 @@
 <script setup>
-import { ref, watch } from 'vue'
-import { Editor } from '@tiptap/core'
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { pluginHost } from '../plugins/index'
 import { useWorkspaceStore } from '../stores/workspace'
@@ -11,14 +10,6 @@ const workspaceStore = useWorkspaceStore()
 const { t } = useI18n()
 const line = ref(1)
 const column = ref(1)
-
-// Track editor cursor position
-let editorWatchOff: (() => void) | null = null
-const offEditorReady = pluginHost.events.on('lamp.editor.ready', () => {
-  editorWatchOff?.();
-  // Poll editor selection for line/col — TipTap doesn't expose line numbers natively,
-  // but we can track cursor position
-})
 
 function resolveContributionValue(value) {
   const raw = typeof value === 'function' ? value() : value

@@ -5,7 +5,7 @@
 // sorted arrays from this registry and never call plugins directly.
 // ============================================================
 
-import { reactive, computed } from 'vue';
+import { markRaw, reactive } from 'vue';
 import type {
   PluginContributions,
   EditorToolbarItem,
@@ -68,7 +68,7 @@ export class ContributionRegistry {
       this._settings,
     ];
     for (const map of allMaps) {
-      for (const key of [...map.keys()]) {
+      for (const key of map.keys()) {
         if (key.startsWith(pluginId + ':')) {
           map.delete(key);
         }
@@ -148,7 +148,11 @@ export class ContributionRegistry {
     for (const item of items) {
       // Key is namespaced to prevent collisions
       // Also attach pluginId on the item so consumers don't need to parse it
-      map.set(`${pluginId}:${item.id}`, { ...item, pluginId } as unknown as T);
+      const normalized = { ...item } as T & { component?: unknown; pluginId?: string };
+      if (normalized.component && typeof normalized.component === 'object') {
+        normalized.component = markRaw(normalized.component);
+      }
+      map.set(`${pluginId}:${item.id}`, { ...normalized, pluginId } as unknown as T);
     }
   }
 

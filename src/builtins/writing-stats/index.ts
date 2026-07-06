@@ -1,27 +1,32 @@
 import type { PluginContributions } from '../../plugins/types';
 import { pluginI18nKey } from '../../plugins/PluginI18nService';
 import { messages } from './messages';
+import WritingStatsPanel from './WritingStatsPanel.vue';
+import {
+  initializeWritingStats,
+  resetDocumentBaseline,
+  sampleEditorText,
+  setDailyGoal,
+  writingStatsState,
+} from './state';
 
 export const manifest = {
   id: 'lamp.writing-stats',
   name: pluginI18nKey('lamp.writing-stats', 'name'),
-  version: '1.0.0',
+  version: '1.1.0',
   builtin: true,
   disableable: true,
 };
 
-// ── Counting ─────────────────────────────────────────────────────
+let sampleTimer: ReturnType<typeof setInterval> | null = null;
+let disposeEditorReady: (() => void) | null = null;
+let disposeEditorDestroy: (() => void) | null = null;
 
-function countWords(text: string): number {
-  if (!text) return 0;
-  const chineseChars = (text.match(/[一-鿿㐀-䶿]/g) || []).length;
-  const nonChinese = text.replace(/[一-鿿㐀-䶿]/g, ' ');
-  const words = nonChinese.split(/\s+/).filter(Boolean).length;
-  return chineseChars + words;
-}
-
-function countChars(text: string): number {
-  return text.replace(/\s/g, '').length;
+function stopSampling() {
+  if (sampleTimer) {
+    clearInterval(sampleTimer);
+    sampleTimer = null;
+  }
 }
 
 export default {
@@ -29,56 +34,70 @@ export default {
   messages,
 
   onLoad(ctx: any): PluginContributions {
-    let lastContent = '';
-    let sessionWords = 0;
-    let interval: ReturnType<typeof setInterval> | null = null;
-    let dailyGoal = (ctx.storage.get('dailyGoal', 2000) as number) || 2000;
-    let words = 0;
-    let chars = 0;
     const label = (key: string) => ctx.i18n.key(key);
 
-    // Wire to host events
-    const offEditorReady = ctx.event.on('lamp.editor.ready', () => {
-      interval = setInterval(() => {
-        const editor = ctx.editor.getRawEditor();
-        if (!editor) return;
+    initializeWritingStats({
+      dailyGoal: ctx.storage.get('dailyGoal', 2000),
+      history: ctx.storage.get('historyV1', { days: {} }),
+      adapter: {
+        saveDailyGoal: (goal) => ctx.storage.set('dailyGoal', goal),
+        saveHistory: (history) => ctx.storage.set('historyV1', history),
+      },
+    });
 
-        const text = editor.getText();
-        const currentLen = text.length;
-        const lastLen = lastContent.length;
-
-        if (currentLen > lastLen) {
-          sessionWords += countWords(text.slice(lastLen));
+    disposeEditorReady = ctx.event.on('lamp.editor.ready', () => {
+      stopSampling();
+      const editor = ctx.editor.getRawEditor();
+      resetDocumentBaseline(editor?.getText() || '');
+      sampleTimer = setInterval(() => {
+        const currentEditor = ctx.editor.getRawEditor();
+        if (currentEditor) {
+          sampleEditorText(currentEditor.getText());
         }
-
-        lastContent = text;
-
-        const words = countWords(text);
-        const chars = countChars(text);
-        dailyGoal = (ctx.storage.get('dailyGoal', 2000) as number) || 2000;
-        void dailyGoal;
-      }, 3000);
+      }, 1500);
     });
 
-    const offEditorDestroy = ctx.event.on('lamp.editor.destroy', () => {
-      if (interval) { clearInterval(interval); interval = null; }
+    disposeEditorDestroy = ctx.event.on('lamp.editor.destroy', () => {
+      stopSampling();
     });
+
+    const openDashboard = () => {
+      ctx.event.emit('lamp.sidebar.openPanel', { pluginId: ctx.id, panelId: 'dashboard' });
+    };
 
     return {
+      sidebarPanels: [
+        {
+          id: 'dashboard',
+          title: label('panelTitle'),
+          icon: 'BarChart3',
+          component: WritingStatsPanel,
+          priority: 70,
+        },
+      ],
+
       statusBarItems: [
         {
           id: 'word-count',
           side: 'right',
           priority: 60,
-          text: () => ctx.i18n.t('wordCount', { words, chars }),
+          text: () => ctx.i18n.t('wordCount', {
+            words: writingStatsState.currentWords,
+            chars: writingStatsState.currentChars,
+          }),
           tooltip: label('wordCountTooltip'),
+          action: openDashboard,
         },
         {
-          id: 'session-words',
+          id: 'today-progress',
           side: 'right',
           priority: 55,
-          text: () => ctx.i18n.t('sessionWords', { count: sessionWords }),
-          tooltip: label('sessionWordsTooltip'),
+          text: () => ctx.i18n.t('statusProgress', {
+            today: writingStatsState.todayWords,
+            goal: writingStatsState.dailyGoal,
+          }),
+          tooltip: label('todayProgressTooltip'),
+          action: openDashboard,
         },
       ],
 
@@ -94,10 +113,19 @@ export default {
               label: label('dailyGoal'),
               description: label('dailyGoalDesc'),
               defaultValue: 2000,
+              onChange: (value: unknown) => setDailyGoal(value),
             },
           ],
         },
       ],
     };
+  },
+
+  onDeactivate() {
+    stopSampling();
+    disposeEditorReady?.();
+    disposeEditorReady = null;
+    disposeEditorDestroy?.();
+    disposeEditorDestroy = null;
   },
 };

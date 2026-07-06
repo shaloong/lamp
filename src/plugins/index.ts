@@ -424,7 +424,7 @@ export class PluginHost {
   }
 
   private _deactivateScope(scope: PluginScope): void {
-    for (const [id, loaded] of [...this._loaded.entries()]) {
+    for (const [id, loaded] of this._loaded.entries()) {
       if (loaded.scope === scope) {
         this.deactivate(id);
       }
@@ -504,10 +504,11 @@ export class PluginHost {
   ): Promise<void> {
     if (this._loaded.has(manifest.id)) return;
 
+    const getEditorInstance = () => this._editorInstance;
     const ctx = new PluginContext(manifest, {
       events: this.events,
       contributions: this.contributions,
-      editorInstance: this._editorInstance,
+      get editorInstance() { return getEditorInstance(); },
       workspace: this._workspace,
       storageService: this.storageService,
       commandService: this.commandService,
@@ -521,8 +522,7 @@ export class PluginHost {
     const plugin: LampPlugin = ('default' in module) ? (module as any).default : (module as any);
     this._registerModuleMessages(manifest.id, module, plugin);
 
-    const { onLoad, onActivate, onDeactivate } = plugin;
-    void onDeactivate;
+    const { onLoad, onActivate } = plugin;
 
     if (onLoad) {
       const contribs = onLoad(ctx);
@@ -561,10 +561,11 @@ export class PluginHost {
     }
 
     // Create per-plugin context (the lamp.* API)
+    const getEditorInstance = () => this._editorInstance;
     const ctx = new PluginContext(manifest, {
       events: this.events,
       contributions: this.contributions,
-      editorInstance: this._editorInstance,
+      get editorInstance() { return getEditorInstance(); },
       workspace: this._workspace,
       storageService: this.storageService,
       commandService: this.commandService,
@@ -598,7 +599,7 @@ export class PluginHost {
     }
 
     // Phase 1: onLoad — register contributions (synchronous)
-    const { onLoad, onActivate, onDeactivate, ...rest } = plugin;
+    const { onLoad, onActivate } = plugin;
     if (onLoad) {
       const contribs = onLoad(ctx);
       if (contribs) {
@@ -713,10 +714,11 @@ export class PluginHost {
       }
     }
 
+    const getEditorInstance = () => this._editorInstance;
     const ctx = new PluginContext(manifest, {
       events: this.events,
       contributions: this.contributions,
-      editorInstance: this._editorInstance,
+      get editorInstance() { return getEditorInstance(); },
       workspace: this._workspace,
       storageService: this.storageService,
       commandService: this.commandService,
@@ -731,8 +733,7 @@ export class PluginHost {
       return;
     }
 
-    const { onLoad, onActivate, onDeactivate, ...rest } = plugin;
-    void rest; // ignore
+    const { onLoad } = plugin;
 
     // Phase 1: onLoad — sync registration
     if (onLoad) {

@@ -3,6 +3,7 @@
 // Single source of truth for all plugin-related types
 // ============================================================
 
+import type { Component } from 'vue';
 import type { Editor } from '@tiptap/core';
 
 // ─── Manifest ───────────────────────────────────────────────
@@ -235,8 +236,8 @@ export interface SidebarPanelContribution {
   id: string;
   title: string;
   icon?: string; // Lucide icon component name
-  /** Path to a Vue 3 SFC, relative to plugin root */
-  component: string;
+  /** Vue component, or a path to a Vue 3 SFC relative to plugin root */
+  component: string | Component;
   /** Z-order when multiple panels are open (default 0) */
   priority?: number;
 }
