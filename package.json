@@ -9,6 +9,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "test:dirty-state": "node --test scripts/regression/documentDirtyState.test.mjs",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build"

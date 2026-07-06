@@ -32,6 +32,7 @@
           :ref="(el) => setEditorRef(item.id, el)"
           v-show="activeTab === index"
           :model-value="item.content"
+          @content-normalized="(value) => handleEditorContentNormalized(index, value)"
           @update:modelValue="(value) => handleEditorUpdate(index, value)"
         />
         <!-- 启动页面 -->
@@ -132,6 +133,7 @@ import { setupPluginThemes } from '@/composables/usePluginThemes'
 import { useTheme } from '@/composables/useTheme'
 import { workspaceExplorerMethods } from '@/composables/workspaceExplorerMethods'
 import { getLampAPI } from '@/lib/lampApi'
+import { adoptEditorBaseline, applyEditorContentUpdate } from '@/lib/documentDirtyState'
 const CommandPalette = defineAsyncComponent(() => import('./components/CommandPalette.vue'))
 const SettingsDialog = defineAsyncComponent(() => import('./components/SettingsDialog.vue'))
 import AppMenu from './components/AppMenu.vue'
@@ -235,7 +237,15 @@ export default {
       return getLampAPI();
     },
 
-    createTab({ title, filePath = '', content = '', savedContent = content, isDirty = false, autoSavePath = '' }) {
+    createTab({
+      title,
+      filePath = '',
+      content = '',
+      savedContent = content,
+      isDirty = false,
+      autoSavePath = '',
+      pendingContentBaseline = !isDirty,
+    }) {
       return {
         title,
         filePath,
@@ -245,6 +255,7 @@ export default {
         id: uuidv4(),
         _autoSavePath: autoSavePath,
         _hasUnsavedAutoSave: false,
+        _pendingContentBaseline: pendingContentBaseline,
       };
     },
 
@@ -428,6 +439,7 @@ export default {
           savedContent: '',
           isDirty: true,
           autoSavePath: autoSaveFile.temp_path,
+          pendingContentBaseline: false,
         }));
         this.activeTab = this.tabs.length - 1;
         this.dialogRecovery = false;
@@ -981,19 +993,20 @@ export default {
       }
 
       const tab = this.tabs[index];
-      if (!tab || tab.content === value) {
-        return;
-      }
-
-      tab.content = value;
-      tab.isDirty = tab.content !== tab.savedContent;
-      tab._hasUnsavedAutoSave = tab.isDirty;
-
-      if (!tab.isDirty) {
+      const result = applyEditorContentUpdate(tab, value);
+      if (!result.changed || !result.dirty) {
         return;
       }
 
       this.scheduleAutoSave(tab);
+    },
+
+    handleEditorContentNormalized(index, value) {
+      if (!this.tabs || index < 0 || index >= this.tabs.length) {
+        return;
+      }
+
+      adoptEditorBaseline(this.tabs[index], value);
     },
 
     scheduleAutoSave(tab) {

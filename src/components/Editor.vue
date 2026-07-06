@@ -102,6 +102,7 @@ export default {
           this.$emit("update:modelValue", this.editor.getHTML())
         },
       })
+      this.$emit("content-normalized", this.editor.getHTML())
       pluginHost.setEditorInstance(this.editor)
     },
 
@@ -178,7 +179,7 @@ export default {
     },
   },
 
-  emits: ['update:modelValue'],
+  emits: ['update:modelValue', 'content-normalized'],
 
   data() {
     return {
