@@ -7,9 +7,9 @@ import { i18n } from './i18n.js'
 import { pluginHost } from './plugins/index'
 import './builtins';  // registers built-in plugins → pluginHost.start() below
 
-// Register all built-in plugin locale messages before mounting so i18n
-// can resolve plugin labels from the first render.
-pluginHost.i18nService.mergeBuiltinMessagesInto(i18n);
+// Install the plugin i18n adapter before mounting so built-in and dynamic
+// plugin labels resolve through the same namespace and fallback rules.
+pluginHost.i18nService.install(i18n);
 
 pluginHost.start();
 

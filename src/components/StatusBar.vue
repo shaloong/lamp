@@ -1,11 +1,14 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { Editor } from '@tiptap/core'
+import { useI18n } from 'vue-i18n'
 import { pluginHost } from '../plugins/index'
 import { useWorkspaceStore } from '../stores/workspace'
+import { resolveI18nLabel } from '@/lib/resolveI18nLabel'
 import { Folder, MousePointer2 } from 'lucide-vue-next'
 
 const workspaceStore = useWorkspaceStore()
+const { t } = useI18n()
 const line = ref(1)
 const column = ref(1)
 
@@ -16,6 +19,17 @@ const offEditorReady = pluginHost.events.on('lamp.editor.ready', () => {
   // Poll editor selection for line/col — TipTap doesn't expose line numbers natively,
   // but we can track cursor position
 })
+
+function resolveContributionValue(value) {
+  const raw = typeof value === 'function' ? value() : value
+  return resolveI18nLabel(t, raw)
+}
+
+function invokeStatusAction(item) {
+  if (!item.action) return
+  const ctx = item.pluginId ? pluginHost.getContext(item.pluginId) : null
+  if (ctx) item.action(ctx)
+}
 </script>
 
 <template>
@@ -33,9 +47,9 @@ const offEditorReady = pluginHost.events.on('lamp.editor.ready', () => {
       </span>
       <span class="status-item">UTF-8</span>
       <template v-for="item in pluginHost.contributions.sortedStatusBarItems" :key="item.id">
-        <span class="status-item plugin-status-item" :title="item.tooltip"
-          @click="item.action && item.action({ editor: { getRawEditor: () => null } })">
-          {{ item.text }}
+        <span class="status-item plugin-status-item" :title="resolveContributionValue(item.tooltip)"
+          @click="invokeStatusAction(item)">
+          {{ resolveContributionValue(item.text) }}
         </span>
       </template>
     </div>

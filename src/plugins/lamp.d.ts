@@ -49,6 +49,14 @@ interface LampAPI {
   openSpecificFile(filePath: string): Promise<import('@tauri-apps/api/core').JsonValue[]>;
   hasFile(filePath: string): Promise<boolean>;
   delFile(filePath: string): Promise<boolean>;
+  readTextFile(filePath: string): Promise<string>;
+  getAppDataDir(): Promise<string>;
+  getUserPluginsDir(): Promise<string>;
+  searchWorkspace(
+    workspacePath: string,
+    query: string,
+    options?: { caseSensitive?: boolean; wholeWord?: boolean; maxResults?: number }
+  ): Promise<Array<{ path: string; name: string; matches: Array<{ lineNumber: number; line: string; matchStart: number; matchEnd: number }> }>>;
   // Edit (DOM fallback)
   menuEditUndo(): void;
   menuEditRedo(): void;
@@ -64,6 +72,8 @@ interface LampAPI {
   // Settings
   getGeneralSettings(): Promise<unknown>;
   saveGeneralSettings(settings: unknown): Promise<boolean>;
+  getEditorSettings(): Promise<unknown>;
+  saveEditorSettings(settings: unknown): Promise<boolean>;
   // Events
   openFile(callback: (status: number, path: string, data: string) => void): void;
   saveFile(callback: () => void): void;
@@ -75,10 +85,6 @@ interface LampAPI {
   // File watching
   startWatching(folderPath: string): Promise<void>;
   stopWatching(): Promise<void>;
-  // Plugins
-  readTextFile(filePath: string): Promise<string>;
-  getAppDataDir(): Promise<string>;
-  getUserPluginsDir(): Promise<string>;
 }
 
 // ─── Global window extension ────────────────────────────────

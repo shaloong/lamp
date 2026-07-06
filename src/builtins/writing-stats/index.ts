@@ -1,16 +1,14 @@
 import type { PluginContributions } from '../../plugins/types';
-
-const pluginNs = (id: string) => 'plugins.' + id.replace(/\./g, '-') + '.';
+import { pluginI18nKey } from '../../plugins/PluginI18nService';
+import { messages } from './messages';
 
 export const manifest = {
   id: 'lamp.writing-stats',
-  name: pluginNs('lamp.writing-stats') + 'name',
+  name: pluginI18nKey('lamp.writing-stats', 'name'),
   version: '1.0.0',
   builtin: true,
   disableable: true,
 };
-
-const P = manifest.name.slice(0, -4); // strip 'name' → 'plugins.lamp-writing-stats.'
 
 // ── Counting ─────────────────────────────────────────────────────
 
@@ -28,16 +26,16 @@ function countChars(text: string): number {
 
 export default {
   manifest,
+  messages,
 
   onLoad(ctx: any): PluginContributions {
     let lastContent = '';
     let sessionWords = 0;
     let interval: ReturnType<typeof setInterval> | null = null;
     let dailyGoal = (ctx.storage.get('dailyGoal', 2000) as number) || 2000;
-
-    // Keep a reference so _updateStatusBar can mutate the contributed item text reactively
-    let wcItemText = '';
-    let ssItemText = '';
+    let words = 0;
+    let chars = 0;
+    const label = (key: string) => ctx.i18n.key(key);
 
     // Wire to host events
     const offEditorReady = ctx.event.on('lamp.editor.ready', () => {
@@ -58,11 +56,7 @@ export default {
         const words = countWords(text);
         const chars = countChars(text);
         dailyGoal = (ctx.storage.get('dailyGoal', 2000) as number) || 2000;
-        const pct = dailyGoal > 0 ? Math.round((words / dailyGoal) * 100) : 0;
-        const mins = Math.max(1, Math.round((Date.now() - (sessionWords > 0 ? Date.now() : Date.now())) / 60000));
-
-        wcItemText = `${words} 字 | ${chars} 字符`;
-        ssItemText = `本会话 ${sessionWords} 字`;
+        void dailyGoal;
       }, 3000);
     });
 
@@ -76,29 +70,29 @@ export default {
           id: 'word-count',
           side: 'right',
           priority: 60,
-          text: '0 字 | 0 字符',
-          tooltip: '当前文档字数统计',
+          text: () => ctx.i18n.t('wordCount', { words, chars }),
+          tooltip: label('wordCountTooltip'),
         },
         {
           id: 'session-words',
           side: 'right',
           priority: 55,
-          text: '本会话 0 字',
-          tooltip: '本次打开编辑器后的写作量',
+          text: () => ctx.i18n.t('sessionWords', { count: sessionWords }),
+          tooltip: label('sessionWordsTooltip'),
         },
       ],
 
       settings: [
         {
           id: 'goals',
-          label: P + 'writingGoals',
+          label: label('writingGoals'),
           priority: 40,
           items: [
             {
               id: 'dailyGoal',
               type: 'text',
-              label: P + 'dailyGoal',
-              description: P + 'dailyGoalDesc',
+              label: label('dailyGoal'),
+              description: label('dailyGoalDesc'),
               defaultValue: 2000,
             },
           ],

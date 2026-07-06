@@ -6,26 +6,18 @@
 // ============================================================
 
 import type { Editor } from '@tiptap/core';
-import { pluginHost } from '../../plugins/index';
-import type { AISuggestion, PluginContributions } from '../../plugins/types';
+import { pluginI18nKey } from '../../plugins/PluginI18nService';
+import type { AISuggestion, LampHostAPI, PluginContributions } from '../../plugins/types';
 import { messages } from './messages';
 import { AISuggestExtension } from './ext/AISuggestExtension';
 
-// Compute namespace prefix from manifest.id using the same logic as I18nService._pluginNamespace.
-function pluginNs(id: string): string {
-  return 'plugins.' + id.replace(/\./g, '-') + '.';
-}
-
 export const manifest = {
   id: 'lamp.ai-actions',
-  name: pluginNs('lamp.ai-actions') + 'name',
+  name: pluginI18nKey('lamp.ai-actions', 'name'),
   version: '1.0.0',
   builtin: true,
   disableable: true,
 };
-
-// Short prefix for referencing plugin keys in contributions
-const P = manifest.name.slice(0, -4); // strip 'name' suffix → 'plugins.lamp-ai-actions.'
 
 /** Default prompts for each AI action */
 const DEFAULT_PROMPTS = {
@@ -36,8 +28,8 @@ const DEFAULT_PROMPTS = {
 } as const;
 
 /** Resolve effective prompt: user override from storage, or default */
-function getPrompt(ctx: ReturnType<typeof pluginHost.getContext>, id: keyof typeof DEFAULT_PROMPTS): string {
-  return ((ctx as unknown as { storage: { get: (k: string) => string | undefined } })?.storage.get(id) as string | undefined) ?? DEFAULT_PROMPTS[id];
+function getPrompt(ctx: LampHostAPI, id: keyof typeof DEFAULT_PROMPTS): string {
+  return ctx.storage.get(id, DEFAULT_PROMPTS[id]) as string;
 }
 
 /** Returns the text content of the current editor selection */
@@ -48,11 +40,10 @@ function getSelection(editor: Editor): string {
 }
 
 async function aiSuggest(
-  ctx: ReturnType<typeof pluginHost.getContext>,
+  ctx: LampHostAPI,
   actionLabel: string,
   fn: () => Promise<AISuggestion>,
 ): Promise<void> {
-  if (!ctx) return;
   ctx.ai.startLoading(actionLabel);
   try {
     const suggestion = await fn();
@@ -67,8 +58,11 @@ export { messages };
 
 export default {
   manifest,
+  messages,
 
-  onLoad(_ctx: unknown): PluginContributions {
+  onLoad(ctx: LampHostAPI): PluginContributions {
+    const label = (key: string) => ctx.i18n.key(key);
+
     const makeAction = (
       id: keyof typeof DEFAULT_PROMPTS,
       loadingLabelKey: string,
@@ -76,12 +70,11 @@ export default {
       insertMode: 'replace' | 'append',
     ) => {
       return async (editor: Editor) => {
-        const ctx = pluginHost.getContext('lamp.ai-actions');
         const { text, from, to } = getInput(editor);
         if (!text.trim()) return;
         await aiSuggest(ctx, loadingLabelKey, async () => ({
           actionLabel: loadingLabelKey,
-          content: await ctx!.ai.chat(getPrompt(ctx, id), text),
+          content: await ctx.ai.chat(getPrompt(ctx, id), text),
           insertMode,
           from,
           to,
@@ -99,42 +92,44 @@ export default {
       tipTapExtensions: [
         {
           name: 'aiSuggest',
-          ExtensionClass: AISuggestExtension,
+          ExtensionClass: AISuggestExtension.configure({
+            onClearSuggestion: () => ctx.ai.clearSuggestion(),
+          }),
         },
       ],
 
       bubbleMenu: [
         {
           id: 'polish',
-          label: P + 'polish',
+          label: label('polish'),
           icon: 'Sparkles',
           priority: 80,
           requireSelection: true,
-          action: makeAction('polish', P + 'polishing', bubbleFrom, 'replace'),
+          action: makeAction('polish', label('polishing'), bubbleFrom, 'replace'),
         },
         {
           id: 'expand',
-          label: P + 'expand',
+          label: label('expand'),
           icon: 'ListChevronsUpDown',
           priority: 70,
           requireSelection: true,
-          action: makeAction('expand', P + 'expanding', bubbleFrom, 'replace'),
+          action: makeAction('expand', label('expanding'), bubbleFrom, 'replace'),
         },
         {
           id: 'continue',
-          label: P + 'continue',
+          label: label('continue'),
           icon: 'ArrowDownWideNarrow',
           priority: 60,
           requireSelection: false,
-          action: makeAction('continue', P + 'continuing', bubbleFrom, 'append'),
+          action: makeAction('continue', label('continuing'), bubbleFrom, 'append'),
         },
         {
           id: 'summarize',
-          label: P + 'summarize',
+          label: label('summarize'),
           icon: 'ListChevronsDownUp',
           priority: 50,
           requireSelection: true,
-          action: makeAction('summarize', P + 'summarizing', bubbleFrom, 'replace'),
+          action: makeAction('summarize', label('summarizing'), bubbleFrom, 'replace'),
         },
       ],
 
@@ -142,26 +137,26 @@ export default {
         {
           id: 'polish',
           where: 'edit',
-          label: P + 'polish',
+          label: label('polish'),
           icon: 'Sparkles',
           priority: 60,
-          action: makeAction('polish', P + 'polishing', bubbleFrom, 'replace'),
+          action: makeAction('polish', label('polishing'), bubbleFrom, 'replace'),
         },
         {
           id: 'expand',
           where: 'edit',
-          label: P + 'expand',
+          label: label('expand'),
           icon: 'ArrowDownWideNarrow',
           priority: 59,
-          action: makeAction('expand', P + 'expanding', bubbleFrom, 'replace'),
+          action: makeAction('expand', label('expanding'), bubbleFrom, 'replace'),
         },
         {
           id: 'continue',
           where: 'edit',
-          label: P + 'continue',
+          label: label('continue'),
           icon: 'ChevronsDown',
           priority: 58,
-          action: makeAction('continue', P + 'continuing', (editor: Editor) => ({
+          action: makeAction('continue', label('continuing'), (editor: Editor) => ({
             text: editor.getText(),
             from: editor.state.selection.from,
             to: editor.state.selection.to,
@@ -170,10 +165,10 @@ export default {
         {
           id: 'summarize',
           where: 'edit',
-          label: P + 'summarize',
+          label: label('summarize'),
           icon: 'ListChevronsDownUp',
           priority: 57,
-          action: makeAction('summarize', P + 'summarizing', bubbleFrom, 'replace'),
+          action: makeAction('summarize', label('summarizing'), bubbleFrom, 'replace'),
         },
       ],
 
@@ -181,31 +176,31 @@ export default {
       settings: [
         {
           id: 'prompts',
-          label: P + 'prompts',
+          label: label('prompts'),
           priority: 50,
           items: [
             {
               id: 'polish',
               type: 'textarea',
-              label: P + 'polish',
+              label: label('polish'),
               defaultValue: DEFAULT_PROMPTS.polish,
             },
             {
               id: 'expand',
               type: 'textarea',
-              label: P + 'expand',
+              label: label('expand'),
               defaultValue: DEFAULT_PROMPTS.expand,
             },
             {
               id: 'continue',
               type: 'textarea',
-              label: P + 'continue',
+              label: label('continue'),
               defaultValue: DEFAULT_PROMPTS.continue,
             },
             {
               id: 'summarize',
               type: 'textarea',
-              label: P + 'summarize',
+              label: label('summarize'),
               defaultValue: DEFAULT_PROMPTS.summarize,
             },
           ],

@@ -4,22 +4,18 @@
 // ============================================================
 
 import type { PluginContributions } from '../../plugins/types';
-
-// Compute namespace prefix from manifest.id using the same logic as I18nService._pluginNamespace.
-// One source of truth: the plugin author only needs to set manifest.id correctly.
-function pluginNs(id: string): string {
-  return 'plugins.' + id.replace(/\./g, '-') + '.';
-}
+import { pluginI18nKey } from '../../plugins/PluginI18nService';
+import { messages } from './messages';
 
 export const manifest = {
   id: 'lamp.core-toolbar',
-  name: pluginNs('lamp.core-toolbar') + 'name',
+  name: pluginI18nKey('lamp.core-toolbar', 'name'),
   version: '1.0.0',
   builtin: true,
 };
 
 // Short prefix for referencing plugin keys in contributions
-const P = manifest.name.slice(0, -4); // strip 'name' suffix → 'plugins.lamp-core-toolbar.'
+const label = (key: string) => pluginI18nKey(manifest.id, key);
 
 // Helper: build an action that calls editor.chain().focus().<command>(...args).run()
 function cmd(command: string, ...args: unknown[]): (editor: unknown) => void {
@@ -32,6 +28,7 @@ function cmd(command: string, ...args: unknown[]): (editor: unknown) => void {
 
 export default {
   manifest,
+  messages,
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onLoad(_ctx: any): PluginContributions {
@@ -39,7 +36,7 @@ export default {
       editorToolbar: [
         {
           id: 'bold',
-          label: P + 'bold',
+          label: label('bold'),
           icon: 'Bold',
           type: 'button',
           group: 'format',
@@ -52,7 +49,7 @@ export default {
         },
         {
           id: 'italic',
-          label: P + 'italic',
+          label: label('italic'),
           icon: 'Italic',
           type: 'button',
           group: 'format',
@@ -65,7 +62,7 @@ export default {
         },
         {
           id: 'strike',
-          label: P + 'strike',
+          label: label('strike'),
           icon: 'Strikethrough',
           type: 'button',
           group: 'format',
@@ -76,7 +73,7 @@ export default {
         },
         {
           id: 'textAlign',
-          label: P + 'align',
+          label: label('align'),
           type: 'dropdown',
           group: 'align',
           priority: 78,
@@ -85,7 +82,7 @@ export default {
           children: [
             {
               id: 'alignLeft',
-              label: P + 'alignLeft',
+              label: label('alignLeft'),
               icon: 'AlignLeft',
               action: cmd('setTextAlign', 'left'),
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -93,7 +90,7 @@ export default {
             },
             {
               id: 'alignCenter',
-              label: P + 'alignCenter',
+              label: label('alignCenter'),
               icon: 'AlignCenter',
               action: cmd('setTextAlign', 'center'),
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -101,7 +98,7 @@ export default {
             },
             {
               id: 'alignRight',
-              label: P + 'alignRight',
+              label: label('alignRight'),
               icon: 'AlignRight',
               action: cmd('setTextAlign', 'right'),
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -109,7 +106,7 @@ export default {
             },
             {
               id: 'alignJustify',
-              label: P + 'alignJustify',
+              label: label('alignJustify'),
               icon: 'AlignJustify',
               action: cmd('setTextAlign', 'justify'),
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -119,7 +116,7 @@ export default {
         },
         {
           id: 'heading',
-          label: P + 'heading',
+          label: label('heading'),
           type: 'dropdown',
           group: 'heading',
           priority: 76,
@@ -128,7 +125,7 @@ export default {
           children: [
             {
               id: 'paragraph',
-              label: P + 'paragraph',
+              label: label('paragraph'),
               icon: 'Pilcrow',
               action: cmd('setParagraph'),
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -136,7 +133,7 @@ export default {
             },
             {
               id: 'heading1',
-              label: P + 'heading1',
+              label: label('heading1'),
               icon: 'Heading1',
               action: cmd('toggleHeading', { level: 1 }),
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -144,7 +141,7 @@ export default {
             },
             {
               id: 'heading2',
-              label: P + 'heading2',
+              label: label('heading2'),
               icon: 'Heading2',
               action: cmd('toggleHeading', { level: 2 }),
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -152,7 +149,7 @@ export default {
             },
             {
               id: 'heading3',
-              label: P + 'heading3',
+              label: label('heading3'),
               icon: 'Heading3',
               action: cmd('toggleHeading', { level: 3 }),
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -160,7 +157,7 @@ export default {
             },
             {
               id: 'heading4',
-              label: P + 'heading4',
+              label: label('heading4'),
               icon: 'Heading4',
               action: cmd('toggleHeading', { level: 4 }),
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -168,7 +165,7 @@ export default {
             },
             {
               id: 'heading5',
-              label: P + 'heading5',
+              label: label('heading5'),
               icon: 'Heading5',
               action: cmd('toggleHeading', { level: 5 }),
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -176,7 +173,7 @@ export default {
             },
             {
               id: 'heading6',
-              label: P + 'heading6',
+              label: label('heading6'),
               icon: 'Heading6',
               action: cmd('toggleHeading', { level: 6 }),
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -186,7 +183,7 @@ export default {
         },
         {
           id: 'bulletList',
-          label: P + 'bulletList',
+          label: label('bulletList'),
           icon: 'List',
           type: 'button',
           group: 'list',
@@ -197,7 +194,7 @@ export default {
         },
         {
           id: 'orderedList',
-          label: P + 'orderedList',
+          label: label('orderedList'),
           icon: 'ListOrdered',
           type: 'button',
           group: 'list',
@@ -208,7 +205,7 @@ export default {
         },
         {
           id: 'horizontalRule',
-          label: P + 'horizontalRule',
+          label: label('horizontalRule'),
           icon: 'Minus',
           type: 'button',
           group: 'insert',
@@ -217,7 +214,7 @@ export default {
         },
         {
           id: 'clearFormat',
-          label: P + 'clearFormat',
+          label: label('clearFormat'),
           icon: 'RemoveFormatting',
           type: 'button',
           group: 'clear',
@@ -226,7 +223,7 @@ export default {
         },
         {
           id: 'undo',
-          label: P + 'undo',
+          label: label('undo'),
           icon: 'Undo',
           type: 'button',
           group: 'history',
@@ -237,7 +234,7 @@ export default {
         },
         {
           id: 'redo',
-          label: P + 'redo',
+          label: label('redo'),
           icon: 'Redo',
           type: 'button',
           group: 'history',

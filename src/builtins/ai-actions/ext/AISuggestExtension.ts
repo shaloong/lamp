@@ -10,7 +10,6 @@ import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import type { AISuggestion } from '../../../plugins/types';
-import { pluginHost } from '../../../plugins/index';
 
 // ─── Plugin Key ──────────────────────────────────────────────
 
@@ -28,6 +27,11 @@ function getSuggestion(): AISuggestion | null {
 
 export const AISuggestExtension = Extension.create({
   name: 'aiSuggest',
+  addOptions() {
+    return {
+      onClearSuggestion: () => {},
+    };
+  },
 
   addProseMirrorPlugins() {
     return [
@@ -94,6 +98,9 @@ export const AISuggestExtension = Extension.create({
   },
 
   addCommands() {
+    const clearSuggestion = () => {
+      this.options.onClearSuggestion?.();
+    };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     return {
       setAISuggestion:
@@ -118,7 +125,7 @@ export const AISuggestExtension = Extension.create({
           const { content, insertMode, from, to } = suggestion;
 
           // Clear Vue state first so toolbar disappears immediately
-          pluginHost.aiState.suggestion = null;
+          clearSuggestion();
           tr.setMeta(aiSuggestPluginKey, null);
 
           if (insertMode === 'replace') {
@@ -139,7 +146,7 @@ export const AISuggestExtension = Extension.create({
         () =>
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ({ tr, dispatch }: any) => {
-          pluginHost.aiState.suggestion = null;
+          clearSuggestion();
           if (dispatch) {
             tr.setMeta(aiSuggestPluginKey, null);
             dispatch(tr);
@@ -150,10 +157,13 @@ export const AISuggestExtension = Extension.create({
   },
 
   addKeyboardShortcuts() {
+    const clearSuggestion = () => {
+      this.options.onClearSuggestion?.();
+    };
     return {
       Tab: ({ editor }) => {
         if (getSuggestion()) {
-          pluginHost.aiState.suggestion = null;
+          clearSuggestion();
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (editor.commands as any).acceptAISuggestion();
           return true;
@@ -162,7 +172,7 @@ export const AISuggestExtension = Extension.create({
       },
       Escape: ({ editor }) => {
         if (getSuggestion()) {
-          pluginHost.aiState.suggestion = null;
+          clearSuggestion();
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (editor.commands as any).dismissAISuggestion();
           return true;

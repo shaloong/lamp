@@ -5,25 +5,20 @@
 // contribution registry to the rest of the app.
 // ============================================================
 
-import { reactive, readonly } from 'vue';import type { Editor } from '@tiptap/core';
+import { reactive, readonly } from 'vue';
+import type { Editor } from '@tiptap/core';
 import { EventBus } from './EventBus';
 import { ContributionRegistry } from './ContributionRegistry';
 import { PluginLoader } from './PluginLoader';
+import { PluginContext } from './PluginContext';
+import { PluginI18nService } from './PluginI18nService';
 import type {
   LampPluginManifest,
   LampPlugin,
   LoadedPlugin,
   PluginScope,
 } from './types';
-import { PluginContext } from './types';
 import { requireLampAPI } from '../lib/lampApi';
-
-// Extend the Window interface to include __lamp_app__
-declare global {
-  interface Window {
-    __lamp_app__?: { i18n?: any };
-  }
-}
 
 // Re-export for external consumers
 export { EventBus } from './EventBus';
@@ -89,115 +84,6 @@ class StorageService {
   clear(pluginId: string): void {
     this.cache.delete(pluginId);
     this._persist();
-  }
-}
-
-// ─── I18n Service ─────────────────────────────────────────────
-
-/**
- * Centralized i18n message registration for plugins.
- * Built-in messages are collected before app.use(i18n).
- * Dynamic (workspace/user) plugins register via ctx.i18n.setLocaleMessages().
- */
-class I18nService {
-  /**
-   * Built-in messages collected before Vue mounts.
-   * Structure: { 'zh-CN': { 'plugins.lamp-ai-actions': { polish: '润色' } }, ... }
-   */
-  private builtinMessages: Record<string, Record<string, Record<string, unknown>>> = {};
-
-  /**
-   * Merge built-in messages into i18n before app.use(i18n).
-   * Called from main.js before mounting the Vue app.
-   */
-  /**
-   * Merge builtin plugin messages into an i18n instance AFTER it has been created.
-   * Storage keys include the namespace prefix (e.g. 'plugins.lamp-ai-actions.ai.polish').
-   * We strip that prefix so the remainder ('ai.polish') lands in the correct
-   * nesting depth, merging with the existing locale file messages
-   * (e.g. { ai: { polish: '...' } }).
-   */
-  mergeBuiltinMessagesInto(i18nInstance: ReturnType<typeof import('vue-i18n')['createI18n']>): void {
-    // vue-i18n v11 Composition API: global.messages is a ComputedRef.
-    // Access .value to get the raw messages object, then mutate in place.
-    const allMessages = i18nInstance.global.messages.value as Record<string, Record<string, unknown>>;
-    if (!allMessages) return;
-
-    for (const [locale, namespaceMap] of Object.entries(this.builtinMessages)) {
-      const localeMsgs = allMessages[locale];
-      if (!localeMsgs) continue;
-
-      for (const [nsFullKey, flatMessages] of Object.entries(namespaceMap)) {
-        // nsFullKey = 'plugins.lamp-ai-actions', stored keys in flatMessages have the prefix
-        // e.g. flatMessages = { 'plugins.lamp-ai-actions.bold': '粗体', 'plugins.lamp-ai-actions.italic': '斜体' }
-        const nsParts = nsFullKey.split('.'); // ['plugins', 'lamp-ai-actions']
-
-        for (const [fullKey, value] of Object.entries(flatMessages as Record<string, unknown>)) {
-          // Skip if the key is exactly the namespace (no remainder = nothing to add)
-          if (fullKey === nsFullKey) continue;
-          // remainder = key without the namespace prefix, e.g. 'bold' or 'ai.polish'
-          const remainder = fullKey.slice(nsFullKey.length + 1);
-          const remainderParts = remainder.split('.'); // always non-empty after 'continue' above
-          // Full path: namespace parts + remainder parts
-          const parts = [...nsParts, ...remainderParts];
-
-          let cur = localeMsgs;
-          for (let i = 0; i < parts.length - 1; i++) {
-            if (!cur[parts[i]]) cur[parts[i]] = {};
-            cur = cur[parts[i]] as Record<string, unknown>;
-          }
-          cur[parts[parts.length - 1]] = value;
-        }
-      }
-    }
-  }
-
-  /**
-   * Collect built-in messages (called from builtins/index.ts before Vue mounts).
-   * Stored as flat dot-notation keys (e.g. 'plugins.lamp-ai-actions.ai.polish')
-   * so mergeBuiltinMessagesInto can place them at the correct path in the root messages object.
-   * @param pluginId e.g. 'lamp.ai-actions'
-   * @param locale e.g. 'zh-CN'
-   * @param messages e.g. { 'ai.polish': '润色', 'ai.polishing': '润色中...' }
-   */
-  addBuiltinMessages(pluginId: string, locale: string, messages: Record<string, unknown>): void {
-    const ns = this._pluginNamespace(pluginId); // e.g. 'plugins.lamp-ai-actions'
-    if (!this.builtinMessages[locale]) {
-      this.builtinMessages[locale] = {};
-    }
-    if (!this.builtinMessages[locale][ns]) {
-      this.builtinMessages[locale][ns] = {};
-    }
-    for (const [key, value] of Object.entries(messages)) {
-      // key is already the full dot-notation path (e.g. 'ai.polish');
-      // prepend namespace to form the storage key.
-      const flatKey = `${ns}.${key}`; // e.g. 'plugins.lamp-ai-actions.ai.polish'
-      (this.builtinMessages[locale][ns] as Record<string, unknown>)[flatKey] = value;
-    }
-  }
-
-  /**
-   * Register messages for a dynamic plugin (called from ctx.i18n.setLocaleMessages).
-   */
-  setLocaleMessages(pluginId: string, locale: string, messages: Record<string, unknown>): void {
-    const { i18n } = window.__lamp_app__ ?? {};
-    if (!i18n) {
-      console.warn(`[I18nService] Cannot register messages for plugin "${pluginId}" — app not mounted yet.`);
-      return;
-    }
-    const ns = this._pluginNamespace(pluginId);
-    if (!i18n.global.messages[locale]) {
-      i18n.global.messages[locale] = {};
-    }
-    i18n.global.messages[locale][ns] = {
-      ...(i18n.global.messages[locale][ns] as Record<string, unknown> || {}),
-      ...messages,
-    };
-  }
-
-  /** Convert plugin id 'lamp.ai-actions' → 'plugins.lamp-ai-actions' */
-  private _pluginNamespace(pluginId: string): string {
-    return 'plugins.' + pluginId.replace(/\./g, '-');
   }
 }
 
@@ -488,7 +374,7 @@ export class PluginHost {
   readonly commandService = new CommandService(this.shortcutService, this.events);
 
   /** I18n service — for built-in messages collected before Vue mounts */
-  readonly i18nService = new I18nService();
+  readonly i18nService = new PluginI18nService();
 
   /** All loaded plugin descriptors (read-only) */
   get plugins() { return readonly(this._loaded); }
@@ -583,8 +469,8 @@ export class PluginHost {
 
       // 2. User plugins: ~/.lamp/plugins/
       try {
-          const api = requireLampAPI('user plugin discovery');
-          const userDir = await api.getUserPluginsDir();
+        const api = requireLampAPI('user plugin discovery');
+        const userDir = await api.getUserPluginsDir();
         const userManifests = await this._loader.scanPlugins(userDir);
         await this._activateAllDynamic(userManifests, userDir, 'user');
       } catch (err) {
@@ -633,6 +519,7 @@ export class PluginHost {
     const module = await this._loader.loadModule(manifest, basePath);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const plugin: LampPlugin = ('default' in module) ? (module as any).default : (module as any);
+    this._registerModuleMessages(manifest.id, module, plugin);
 
     const { onLoad, onActivate, onDeactivate } = plugin;
     void onDeactivate;
@@ -780,6 +667,7 @@ export class PluginHost {
    */
   registerBuiltin(id: string, module: LampPlugin): void {
     this._builtinModules.set(id, module);
+    this._registerModuleMessages(id, module);
   }
 
   private _loadBuiltinManifests(): LampPluginManifest[] {
@@ -878,7 +766,17 @@ export class PluginHost {
   private _checkCapabilities(requested: string[]): string[] {
     // In a full implementation, this would check against available capabilities.
     // For now, we allow all.
+    void requested;
     return [];
+  }
+
+  private _registerModuleMessages(pluginId: string, module: unknown, plugin?: LampPlugin): void {
+    const moduleWithMessages = module as { messages?: Record<string, Record<string, unknown>>; default?: { messages?: Record<string, Record<string, unknown>> } };
+    const pluginWithMessages = plugin as LampPlugin & { messages?: Record<string, Record<string, unknown>> } | undefined;
+    const messages = pluginWithMessages?.messages ?? moduleWithMessages.messages ?? moduleWithMessages.default?.messages;
+    if (messages) {
+      this.i18nService.setAllLocaleMessages(pluginId, messages);
+    }
   }
 }
 
