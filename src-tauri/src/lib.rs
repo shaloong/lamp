@@ -71,9 +71,7 @@ impl Default for GeneralSettings {
 
 impl Default for EditorSettings {
     fn default() -> Self {
-        Self {
-            focus_mode: false,
-        }
+        Self { focus_mode: false }
     }
 }
 
@@ -88,6 +86,8 @@ pub struct AppConfig {
 }
 
 pub struct ConfigState(pub Mutex<AppConfig>);
+
+pub struct WindowCloseState(pub Mutex<bool>);
 
 // ==================== 文件监视 ====================
 
@@ -527,7 +527,8 @@ async fn open_specific_file(file_path: String) -> Result<Vec<serde_json::Value>,
         return Ok(vec![serde_json::Value::Number(0.into())]);
     }
 
-    let file_name = path.file_name()
+    let file_name = path
+        .file_name()
         .map(|n| n.to_string_lossy().to_string())
         .unwrap_or_default();
 
@@ -590,6 +591,20 @@ pub struct AutoSaveFileInfo {
     pub saved_at: u64,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+struct AutoSavePayload {
+    #[serde(rename = "tabId", default)]
+    tab_id: String,
+    #[serde(rename = "originalPath", default)]
+    original_path: String,
+    #[serde(default)]
+    title: String,
+    #[serde(default)]
+    content: String,
+    #[serde(rename = "savedAt", default)]
+    saved_at: u64,
+}
+
 /// 列出所有自动保存的临时文件
 #[tauri::command]
 async fn list_auto_save_files(app: AppHandle) -> Result<Vec<AutoSaveFileInfo>, String> {
@@ -614,16 +629,35 @@ async fn list_auto_save_files(app: AppHandle) -> Result<Vec<AutoSaveFileInfo>, S
                     let encoded = &stem_str[..underscore_pos];
 
                     if let Ok(timestamp) = timestamp_str.parse::<u64>() {
-                        let content = fs::read_to_string(&path).unwrap_or_default();
+                        let raw = fs::read_to_string(&path).unwrap_or_default();
+                        let payload = serde_json::from_str::<AutoSavePayload>(&raw).ok();
+                        let fallback_title = path
+                            .file_name()
+                            .map(|n| n.to_string_lossy().to_string())
+                            .unwrap_or_else(|| "untitled".to_string());
+
                         result.push(AutoSaveFileInfo {
-                            tab_id: encoded.to_string(),
-                            original_path: String::new(),
+                            tab_id: payload
+                                .as_ref()
+                                .map(|p| p.tab_id.clone())
+                                .filter(|id| !id.is_empty())
+                                .unwrap_or_else(|| encoded.to_string()),
+                            original_path: payload
+                                .as_ref()
+                                .map(|p| p.original_path.clone())
+                                .unwrap_or_default(),
                             temp_path: path.to_string_lossy().to_string(),
-                            title: path.file_name()
-                                .map(|n| n.to_string_lossy().to_string())
-                                .unwrap_or_else(|| "untitled".to_string()),
-                            content,
-                            saved_at: timestamp,
+                            title: payload
+                                .as_ref()
+                                .map(|p| p.title.clone())
+                                .filter(|title| !title.is_empty())
+                                .unwrap_or(fallback_title),
+                            content: payload.as_ref().map(|p| p.content.clone()).unwrap_or(raw),
+                            saved_at: payload
+                                .as_ref()
+                                .map(|p| p.saved_at)
+                                .filter(|saved_at| *saved_at > 0)
+                                .unwrap_or(timestamp),
                         });
                     }
                 }
@@ -676,10 +710,15 @@ fn maximize_window(app: AppHandle) {
 }
 
 #[tauri::command]
-fn close_window(app: AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.close();
+fn close_window(app: AppHandle, close_state: State<'_, WindowCloseState>) -> Result<(), String> {
+    {
+        let mut allow_close = close_state.0.lock().map_err(|e| e.to_string())?;
+        *allow_close = true;
     }
+    if let Some(window) = app.get_webview_window("main") {
+        window.close().map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -771,7 +810,9 @@ struct FileSearchResult {
     matches: Vec<SearchMatch>,
 }
 
-fn default_max_results() -> usize { 1000 }
+fn default_max_results() -> usize {
+    1000
+}
 
 #[derive(Debug, Clone, Deserialize)]
 struct SearchOptions {
@@ -781,205 +822,6 @@ struct SearchOptions {
     whole_word: bool,
     #[serde(rename = "maxResults", default = "default_max_results")]
     max_results: usize,
-}
-
-fn strip_html_tags(input: &str) -> String {
-    let mut out = String::with_capacity(input.len());
-    let mut in_tag = false;
-    for ch in input.chars() {
-        match ch {
-            '<' => in_tag = true,
-            '>' => in_tag = false,
-            _ if !in_tag => out.push(ch),
-            _ => {}
-        }
-    }
-    out
-}
-
-fn decode_basic_html_entities(input: &str) -> String {
-    input
-        .replace("&nbsp;", " ")
-        .replace("&amp;", "&")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", "\"")
-        .replace("&#39;", "'")
-}
-
-fn strip_markdown_formatting(input: &str) -> String {
-    let mut line = input.trim_start().to_string();
-
-    // Headings, blockquotes, list bullets and ordered list prefixes.
-    while line.starts_with('#') {
-        line = line[1..].trim_start().to_string();
-    }
-    while line.starts_with('>') {
-        line = line[1..].trim_start().to_string();
-    }
-    for bullet in ["- ", "* ", "+ "] {
-        if line.starts_with(bullet) {
-            line = line[2..].trim_start().to_string();
-            break;
-        }
-    }
-    if let Some(dot_idx) = line.find(". ") {
-        if line[..dot_idx].chars().all(|c| c.is_ascii_digit()) {
-            line = line[dot_idx + 2..].trim_start().to_string();
-        }
-    }
-
-    // Link/image wrappers and common markdown markers.
-    line = line.replace("![](", "").replace("[", "").replace("](", " ").replace(")", "");
-    line = line.replace("**", "").replace("__", "").replace('*', "").replace('_', "");
-    line = line.replace('`', "").replace("~~", "");
-    line
-}
-
-fn to_rendered_line(file_name: &str, line: &str) -> String {
-    let lower = file_name.to_lowercase();
-    if lower.ends_with(".html")
-        || lower.ends_with(".htm")
-        || lower.ends_with(".lmph")
-    {
-        return decode_basic_html_entities(&strip_html_tags(line));
-    }
-    if lower.ends_with(".md") {
-        return strip_markdown_formatting(&decode_basic_html_entities(&strip_html_tags(line)));
-    }
-    decode_basic_html_entities(line)
-}
-
-fn is_html_like_file(file_name: &str) -> bool {
-    let lower = file_name.to_lowercase();
-    lower.ends_with(".html")
-        || lower.ends_with(".htm")
-        || lower.ends_with(".lmph")
-}
-
-fn is_block_like_html_tag(tag_name: &str) -> bool {
-    matches!(
-        tag_name,
-        "p"
-            | "h1"
-            | "h2"
-            | "h3"
-            | "h4"
-            | "h5"
-            | "h6"
-            | "li"
-            | "blockquote"
-            | "pre"
-            | "div"
-            | "section"
-            | "article"
-            | "br"
-            | "hr"
-    )
-}
-
-fn parse_html_tag(raw_tag: &str) -> Option<(String, bool, bool)> {
-    let trimmed = raw_tag.trim();
-    if trimmed.is_empty() || trimmed.starts_with('!') || trimmed.starts_with('?') {
-        return None;
-    }
-
-    let is_closing = trimmed.starts_with('/');
-    let body = if is_closing {
-        trimmed[1..].trim_start()
-    } else {
-        trimmed
-    };
-    let name: String = body
-        .chars()
-        .take_while(|c| c.is_ascii_alphanumeric())
-        .collect::<String>()
-        .to_lowercase();
-    if name.is_empty() {
-        return None;
-    }
-    let is_self_closing = body.trim_end().ends_with('/');
-    Some((name, is_closing, is_self_closing))
-}
-
-fn to_rendered_lines_with_source(file_name: &str, content: &str) -> Vec<(usize, String)> {
-    if is_html_like_file(file_name) {
-        let mut out = Vec::new();
-        let mut current = String::new();
-        let mut rendered_line_number = 1usize;
-        let mut in_tag = false;
-        let mut tag_buf = String::new();
-
-        let flush_current = |out: &mut Vec<(usize, String)>,
-                             current: &mut String,
-                             rendered_line_number: &mut usize,
-                             advance_if_empty: bool| {
-            let rendered = decode_basic_html_entities(current.trim()).trim().to_string();
-            if !rendered.is_empty() {
-                out.push((*rendered_line_number, rendered));
-                *rendered_line_number += 1;
-            } else if advance_if_empty {
-                *rendered_line_number += 1;
-            }
-            current.clear();
-        };
-
-        for ch in content.chars() {
-            if in_tag {
-                if ch == '>' {
-                    if let Some((name, is_closing, is_self_closing)) = parse_html_tag(&tag_buf) {
-                        if is_block_like_html_tag(&name) {
-                            if !is_closing {
-                                flush_current(
-                                    &mut out,
-                                    &mut current,
-                                    &mut rendered_line_number,
-                                    false,
-                                );
-                            }
-                            if is_closing || is_self_closing || name == "br" || name == "hr" {
-                                flush_current(
-                                    &mut out,
-                                    &mut current,
-                                    &mut rendered_line_number,
-                                    true,
-                                );
-                            }
-                        }
-                    }
-                    tag_buf.clear();
-                    in_tag = false;
-                } else {
-                    tag_buf.push(ch);
-                }
-                continue;
-            }
-
-            match ch {
-                '<' => {
-                    in_tag = true;
-                    tag_buf.clear();
-                }
-                '\n' => {
-                    if !current.is_empty() && !current.ends_with(' ') {
-                        current.push(' ');
-                    }
-                }
-                _ => {
-                    current.push(ch);
-                }
-            }
-        }
-
-        flush_current(&mut out, &mut current, &mut rendered_line_number, false);
-        return out;
-    }
-
-    content
-        .lines()
-        .enumerate()
-        .map(|(idx, line)| (idx + 1, to_rendered_line(file_name, line)))
-        .collect()
 }
 
 #[tauri::command]
@@ -1024,28 +866,32 @@ async fn search_workspace(
             .map(|n| n.to_string_lossy().to_string())
             .unwrap_or_default();
 
-        let rendered_lines = to_rendered_lines_with_source(&file_name, &content);
+        let source_lines = content
+            .lines()
+            .enumerate()
+            .map(|(idx, line)| (idx + 1, line.to_string()))
+            .collect::<Vec<_>>();
 
-        let rendered_query = to_rendered_line(&file_name, query_str).trim().to_string();
-        if rendered_query.is_empty() {
+        let search_query = query_str.trim().to_string();
+        if search_query.is_empty() {
             return None;
         }
 
         // Always use lowercase for searching, but track positions in original
         let query_needle = if case_sensitive {
-            rendered_query
+            search_query
         } else {
-            rendered_query.to_lowercase()
+            search_query.to_lowercase()
         };
 
         let mut matches = Vec::new();
 
-        for (source_line_number, rendered_line) in rendered_lines.iter() {
+        for (source_line_number, source_line) in source_lines.iter() {
             if *total_matches >= max_results {
                 break;
             }
 
-            let line = rendered_line.trim_end().to_string();
+            let line = source_line.trim_end().to_string();
             if line.is_empty() {
                 continue;
             }
@@ -1150,9 +996,14 @@ async fn search_workspace(
             } else if path.is_file() {
                 let name = entry.file_name().to_string_lossy().to_string();
                 if is_supported_file(&name) {
-                    if let Some(result) =
-                        search_file(&path, query_lower, case_sensitive, whole_word, max_results, total_matches)
-                    {
+                    if let Some(result) = search_file(
+                        &path,
+                        query_lower,
+                        case_sensitive,
+                        whole_word,
+                        max_results,
+                        total_matches,
+                    ) {
                         results.push(result);
                     }
                 }
@@ -1167,7 +1018,14 @@ async fn search_workspace(
     } else {
         query.to_lowercase()
     };
-    let mut results = traverse_and_search(&path, &query_lower, options.case_sensitive, options.whole_word, max_results, &mut total_matches);
+    let mut results = traverse_and_search(
+        &path,
+        &query_lower,
+        options.case_sensitive,
+        options.whole_word,
+        max_results,
+        &mut total_matches,
+    );
 
     // Sort by number of matches descending
     results.sort_by(|a, b| b.matches.len().cmp(&a.matches.len()));
@@ -1188,7 +1046,31 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .manage(ConfigState(Mutex::new(config)))
+        .manage(WindowCloseState(Mutex::new(false)))
         .manage(WatcherState::default())
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let app = window.app_handle();
+                let should_allow_close = app
+                    .state::<WindowCloseState>()
+                    .0
+                    .lock()
+                    .map(|mut allow_close| {
+                        if *allow_close {
+                            *allow_close = false;
+                            true
+                        } else {
+                            false
+                        }
+                    })
+                    .unwrap_or(false);
+
+                if !should_allow_close {
+                    api.prevent_close();
+                    let _ = window.emit("window-close-requested", ());
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             // AI
             ai_chat,

@@ -31,8 +31,8 @@
           :key="item.id"
           :ref="(el) => setEditorRef(item.id, el)"
           v-show="activeTab === index"
-          @update:modelValue="autoSave"
-          v-model="item.content"
+          :model-value="item.content"
+          @update:modelValue="(value) => handleEditorUpdate(index, value)"
         />
         <!-- 启动页面 -->
         <StartPage v-if="tabs.length === 0" class="flex-1" :recentFiles="recentFiles" @new-file="newFile"
@@ -40,7 +40,7 @@
       </div>
     </div>
     <div class="mask">
-      <Dialog v-model:open="dialogConfirmCloseTab" @update:open="(val) => { if (!val) indexCloseTab = -1; }">
+      <Dialog v-model:open="dialogConfirmCloseTab" @update:open="(val) => { if (!val) cancelPendingClose(); }">
         <DialogContent style="max-width: 500px;">
           <DialogHeader>
             <DialogTitle>{{ $t('app.unsavedTitle') }}</DialogTitle>
@@ -49,6 +49,9 @@
           <DialogFooter>
             <Button variant="destructive" @click="handleNotSave">
               {{ $t('app.dontSaveAndClose') }}
+            </Button>
+            <Button variant="outline" @click="cancelPendingClose">
+              {{ $t('common.cancel') }}
             </Button>
             <Button @click="handleSave">
               {{ $t('app.saveAndClose') }}
@@ -131,9 +134,9 @@ import { workspaceExplorerMethods } from '@/composables/workspaceExplorerMethods
 import { getLampAPI } from '@/lib/lampApi'
 const CommandPalette = defineAsyncComponent(() => import('./components/CommandPalette.vue'))
 const SettingsDialog = defineAsyncComponent(() => import('./components/SettingsDialog.vue'))
-const SearchDialog = defineAsyncComponent(() => import('./components/SearchDialog.vue'))
 import AppMenu from './components/AppMenu.vue'
 import Sidebar from './components/layout/Sidebar.vue'
+import SearchDialog from './components/SearchDialog.vue'
 import Dialog from '@/components/ui/dialog/Dialog.vue'
 import DialogContent from '@/components/ui/dialog/DialogContent.vue'
 import DialogHeader from '@/components/ui/dialog/DialogHeader.vue'
@@ -176,6 +179,7 @@ export default {
       dialogSearch: false,
       dialogRecovery: false,
       recoveryFiles: [],
+      pendingCloseAction: null,
       pluginHost,
       // 工作区相关
       tempFiles: [],
@@ -194,6 +198,7 @@ export default {
       },
       hiddenSidebarPluginPanels: [],
       editorRefs: {},
+      autoSaveTimers: {},
       documentSearchState: {
         query: '',
         caseSensitive: false,
@@ -230,6 +235,19 @@ export default {
       return getLampAPI();
     },
 
+    createTab({ title, filePath = '', content = '', savedContent = content, isDirty = false, autoSavePath = '' }) {
+      return {
+        title,
+        filePath,
+        content,
+        savedContent,
+        isDirty,
+        id: uuidv4(),
+        _autoSavePath: autoSavePath,
+        _hasUnsavedAutoSave: false,
+      };
+    },
+
     openFile(status, path, data) {
       // Main process opens file dialog and sends back the result via IPC
       if (status === 1 && path) {
@@ -241,7 +259,7 @@ export default {
         if (existingIndex >= 0) {
           this.activeTab = existingIndex;
         } else {
-          this.tabs.push({ title, filePath: normalizedPath, content: fileContent, id: uuidv4() });
+          this.tabs.push(this.createTab({ title, filePath: normalizedPath, content: fileContent }));
           this.activeTab = this.tabs.length - 1;
         }
       }
@@ -273,7 +291,7 @@ export default {
       }
     },
 
-    fileSave(index) {
+    async fileSave(index) {
       // 如果 index 是事件对象或无效值，使用 this.activeTab
       const tabIndex = (typeof index === 'number') ? index : this.activeTab;
 
@@ -281,18 +299,28 @@ export default {
       const tab = this.tabs?.[tabIndex];
       if (!tab) {
         console.warn('No tab available to save');
-        return;
+        return false;
       }
 
-      if (this.activeTab !== null && tab.filePath) {
+      if (tab.filePath) {
         // 如果 filePath 不为空，则执行保存操作
         const api = this.getLampAPI();
-        if (!api) return;
-        const contentToSave = this.getContentForSave(tab.filePath, tab.content);
-        api.saveInfo(tab.filePath, contentToSave);
+        if (!api) return false;
+        try {
+          const contentToSave = this.getContentForSave(tab.filePath, tab.content);
+          await api.saveInfo(tab.filePath, contentToSave);
+          tab.savedContent = tab.content;
+          tab.isDirty = false;
+          tab._hasUnsavedAutoSave = false;
+          await this.clearTabAutoSave(tab);
+          return true;
+        } catch (error) {
+          console.error('Failed to save file', error);
+          return false;
+        }
       } else {
         // 否则执行另存为操作
-        this.saveFileAs(tabIndex)
+        return await this.saveFileAs(tabIndex)
       }
     },
     menuEditUndo() {
@@ -346,6 +374,20 @@ export default {
       api.maxWindow();
     },
     closeWindow() {
+      this.requestCloseWindow();
+    },
+
+    requestCloseWindow() {
+      if (this.hasUnsavedTabs()) {
+        this.pendingCloseAction = 'window';
+        this.indexCloseTab = -1;
+        this.dialogConfirmCloseTab = true;
+        return;
+      }
+      this.performCloseWindow();
+    },
+
+    performCloseWindow() {
       const api = this.getLampAPI();
       if (!api) return;
       api.closeWindow();
@@ -379,14 +421,14 @@ export default {
       if (!api) return;
 
       try {
-        const tabId = uuidv4();
-        this.tabs.push({
+        this.tabs.push(this.createTab({
           title: autoSaveFile.title.replace(/\.autosave$/, '') || 'untitled',
-          filePath: '',
+          filePath: autoSaveFile.original_path || '',
           content: autoSaveFile.content,
-          id: tabId,
-          _autoSavePath: autoSaveFile.temp_path,
-        });
+          savedContent: '',
+          isDirty: true,
+          autoSavePath: autoSaveFile.temp_path,
+        }));
         this.activeTab = this.tabs.length - 1;
         this.dialogRecovery = false;
       } catch (e) {
@@ -396,6 +438,14 @@ export default {
 
     // 忽略恢复文件
     async ignoreRecoveryFiles() {
+      const api = this.getLampAPI();
+      if (api) {
+        try {
+          await api.clearAutoSaveFiles();
+        } catch (e) {
+          console.warn('Failed to clear recovery files:', e);
+        }
+      }
       this.dialogRecovery = false;
       this.recoveryFiles = [];
     },
@@ -514,11 +564,18 @@ export default {
       }
     },
 
-    handleSearchReplace({ type, filePath, oldText, newText, all }) {
+    async handleSearchReplace({ type, filePath, filePaths = [], oldText, newText, all, occurrenceIndex = 0 }) {
       if (type === 'workspace') {
-        this.replaceInFile(filePath, oldText, newText, all)
+        if (all) {
+          const targets = filePaths.length > 0 ? filePaths : (filePath ? [filePath] : [])
+          for (const targetPath of targets) {
+            await this.replaceInFile(targetPath, oldText, newText, true)
+          }
+          return
+        }
+        await this.replaceInFile(filePath, oldText, newText, false, occurrenceIndex)
       } else {
-        if (!oldText || !newText) return
+        if (!oldText || newText === undefined || newText === null) return
         const editor = this.getActiveEditorInstance()
         if (!editor) return
         const matches = this.getDocumentMatches(oldText)
@@ -540,28 +597,25 @@ export default {
       }
     },
 
-    async replaceInFile(filePath, oldText, newText, all) {
+    async replaceInFile(filePath, oldText, newText, all, occurrenceIndex = 0) {
       const api = this.getLampAPI()
-      if (!api) return
+      if (!api || !filePath || !oldText || newText === undefined || newText === null) return
       try {
         const data = await api.openSpecificFile(filePath)
         if (!data || data[0] !== 1) return
         let content = data[1]
-        if (all) {
-          const caseFlag = this.searchStore.options.caseSensitive ? 'g' : 'gi'
-          const regex = new RegExp(this.escapeRegex(oldText), caseFlag)
-          content = content.replace(regex, newText)
-        } else {
-          const idx = content.toLowerCase().indexOf(oldText.toLowerCase())
-          if (idx !== -1) {
-            content = content.slice(0, idx) + newText + content.slice(idx + oldText.length)
-          }
-        }
+        content = all
+          ? this.replaceTextOccurrences(content, oldText, newText, { all: true })
+          : this.replaceTextOccurrences(content, oldText, newText, { all: false, occurrenceIndex })
         await api.saveInfo(filePath, content)
         // Refresh tab if open
         const tab = this.tabs.find(t => t.filePath === filePath)
         if (tab) {
           tab.content = this.format2html(filePath, content)[1]
+          tab.savedContent = tab.content
+          tab.isDirty = false
+          tab._hasUnsavedAutoSave = false
+          await this.clearTabAutoSave(tab)
         }
         this.searchStore.requestRefresh()
       } catch (err) {
@@ -578,9 +632,32 @@ export default {
       return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     },
 
+    createSearchRegex(text) {
+      const flags = `g${this.searchStore.options.caseSensitive ? '' : 'i'}u`
+      const escaped = this.escapeRegex(text)
+      if (!this.searchStore.options.wholeWord) {
+        return new RegExp(escaped, flags)
+      }
+      return new RegExp(`(^|[^\\p{L}\\p{N}_])(${escaped})(?=$|[^\\p{L}\\p{N}_])`, flags)
+    },
+
+    replaceTextOccurrences(content, oldText, newText, { all, occurrenceIndex = 0 } = {}) {
+      const regex = this.createSearchRegex(oldText)
+      let seen = 0
+      const replaceMatch = (...args) => {
+        const match = args[0]
+        const prefix = this.searchStore.options.wholeWord ? args[1] : ''
+        const shouldReplace = all || seen === occurrenceIndex
+        seen += 1
+        if (!shouldReplace) return match
+        return `${prefix}${newText}`
+      }
+      return content.replace(regex, replaceMatch)
+    },
+
     newFile() {
       // 新建一个空标签页
-      this.tabs.push({ title: i18n.global.t('app.newLampText'), filePath: '', content: '', id: uuidv4() });
+      this.tabs.push(this.createTab({ title: i18n.global.t('app.newLampText') }));
       this.activeTab = this.tabs.length - 1;
     },
 
@@ -661,12 +738,7 @@ export default {
 
       // 清理该标签页的自动保存文件
       const tab = this.tabs[index];
-      if (tab && tab._autoSavePath) {
-        const api = this.getLampAPI();
-        if (api) {
-          api.delFile(tab._autoSavePath).catch(() => {});
-        }
-      }
+      this.clearTabAutoSave(tab);
 
       // 调整 activeTab 以适配删除后的标签页列表
       if (index < this.activeTab) {
@@ -693,30 +765,54 @@ export default {
       if (!this.tabs || index < 0 || index >= this.tabs.length) {
         return;
       }
+      if (this.tabs[index]?.isDirty) {
+        this.pendingCloseAction = 'tab';
+        this.indexCloseTab = index;
+        this.dialogConfirmCloseTab = true;
+        return;
+      }
       this.closeTab(index);
     },
 
-    handleSave() {
-      if (this.indexCloseTab !== -1) {
-        this.fileSave(this.indexCloseTab);
-        this.closeTab(this.indexCloseTab);
-        this.indexCloseTab = -1;
-        this.dialogConfirmCloseTab = false;
-      } else {
-        console.log("Error: 处理保存并关闭时发生了错误。");
-        this.dialogConfirmCloseTab = false;
+    async handleSave() {
+      if (this.pendingCloseAction === 'window') {
+        const saved = await this.saveAllDirtyTabs();
+        if (saved) {
+          this.cancelPendingClose();
+          this.performCloseWindow();
+        }
+        return;
+      }
+
+      if (this.pendingCloseAction === 'tab' && this.indexCloseTab !== -1) {
+        const targetIndex = this.indexCloseTab;
+        const saved = await this.fileSave(targetIndex);
+        if (saved) {
+          this.closeTab(targetIndex);
+          this.cancelPendingClose();
+        }
+        return;
       }
     },
 
-    handleNotSave() {
-      if (this.indexCloseTab !== -1) {
-        this.closeTab(this.indexCloseTab);
-        this.indexCloseTab = -1;
-        this.dialogConfirmCloseTab = false;
-      } else {
-        console.log("Error: 处理不保存并关闭时发生了错误。");
-        this.dialogConfirmCloseTab = false;
+    async handleNotSave() {
+      if (this.pendingCloseAction === 'window') {
+        await Promise.all(this.tabs.map((tab) => this.clearTabAutoSave(tab)));
+        this.cancelPendingClose();
+        this.performCloseWindow();
+        return;
       }
+
+      if (this.pendingCloseAction === 'tab' && this.indexCloseTab !== -1) {
+        this.closeTab(this.indexCloseTab);
+        this.cancelPendingClose();
+      }
+    },
+
+    cancelPendingClose() {
+      this.pendingCloseAction = null;
+      this.indexCloseTab = -1;
+      this.dialogConfirmCloseTab = false;
     },
 
     // 另存为：向主进程发起文件另存为，主进程保存成功后返回文件保存的路径
@@ -728,20 +824,31 @@ export default {
       const tab = this.tabs?.[tabIndex];
       if (!tab) {
         console.warn('No tab available to save, index:', tabIndex, 'tabs:', this.tabs);
-        return;
+        return false;
       }
 
       const api = this.getLampAPI();
-      if (!api) return;
+      if (!api) return false;
 
       // 保存时根据文件扩展名进行格式转换
-      const resultPath = await api.saveFileAs(tab.title || 'untitled', tab.content || '');
-      if (resultPath !== "") {
-        const normalizedPath = resultPath.replace(/\\/g, '/');
-        const contentToSave = this.getContentForSave(normalizedPath, tab.content);
-        await api.saveInfo(normalizedPath, contentToSave);
-        this.tabs[tabIndex].filePath = normalizedPath;
-        this.tabs[tabIndex].title = normalizedPath.split('/').pop();
+      try {
+        const resultPath = await api.saveFileAs(tab.title || 'untitled');
+        if (resultPath !== "") {
+          const normalizedPath = resultPath.replace(/\\/g, '/');
+          const contentToSave = this.getContentForSave(normalizedPath, tab.content);
+          await api.saveInfo(normalizedPath, contentToSave);
+          this.tabs[tabIndex].filePath = normalizedPath;
+          this.tabs[tabIndex].title = normalizedPath.split('/').pop();
+          this.tabs[tabIndex].savedContent = this.tabs[tabIndex].content;
+          this.tabs[tabIndex].isDirty = false;
+          this.tabs[tabIndex]._hasUnsavedAutoSave = false;
+          await this.clearTabAutoSave(this.tabs[tabIndex]);
+          return true;
+        }
+        return false;
+      } catch (error) {
+        console.error('Failed to save file as', error);
+        return false;
       }
     },
 
@@ -855,54 +962,58 @@ export default {
         this.openFile(status, path, data);
       });
       // 保存文件：监听主进程，被触发后将路径和内容发送给主进程执行保存操作；若文件路径为空则另存为
-      api.saveFile(() => {
+      api.saveFile(async () => {
         const hasActiveTab = this.activeTab >= 0 && this.activeTab < this.tabs.length;
-        if (hasActiveTab && this.tabs[this.activeTab].filePath) {
-          // 如果 filePath 不为空，则执行保存操作
-          const filePath = this.tabs[this.activeTab].filePath;
-          const fileContent = this.tabs[this.activeTab].content;
-          const contentToSave = this.getContentForSave(filePath, fileContent);
-          api.saveInfo(filePath, contentToSave);
-        } else {
-          // 否则执行另存为操作
-          this.saveFileAs();
+        if (hasActiveTab) {
+          await this.fileSave(this.activeTab);
         }
       });
+      if (typeof api.onWindowCloseRequest === 'function') {
+        api.onWindowCloseRequest(() => {
+          this.requestCloseWindow();
+        });
+      }
     },
 
-    autoSave() {
-      // 防御性检查：当没有标签页或 activeTab 无效时，不执行自动保存
-      if (!this.tabs || this.tabs.length === 0 || this.activeTab < 0 || this.activeTab >= this.tabs.length) {
+    handleEditorUpdate(index, value) {
+      if (!this.tabs || index < 0 || index >= this.tabs.length) {
         return;
       }
 
-      const currentTab = this.tabs[this.activeTab];
-      if (!currentTab || !currentTab.id) {
+      const tab = this.tabs[index];
+      if (!tab || tab.content === value) {
         return;
       }
 
-      // 标记有待保存的内容
-      currentTab._hasUnsavedAutoSave = true;
+      tab.content = value;
+      tab.isDirty = tab.content !== tab.savedContent;
+      tab._hasUnsavedAutoSave = tab.isDirty;
 
-      // 如果没有开启自动保存则直接返回
-      if (!this.settingsStore.autoSave) {
+      if (!tab.isDirty) {
         return;
       }
 
-      // 清除之前的防抖计时器
-      if (this._autoSaveDebounceTimer) {
-        clearTimeout(this._autoSaveDebounceTimer);
+      this.scheduleAutoSave(tab);
+    },
+
+    scheduleAutoSave(tab) {
+      if (!tab?.id || !this.settingsStore.autoSave) {
+        return;
       }
 
-      // 设置新的防抖计时器
-      this._autoSaveDebounceTimer = setTimeout(() => {
-        this.doAutoSave();
+      if (this.autoSaveTimers[tab.id]) {
+        clearTimeout(this.autoSaveTimers[tab.id]);
+      }
+
+      this.autoSaveTimers[tab.id] = setTimeout(() => {
+        delete this.autoSaveTimers[tab.id];
+        this.doAutoSave(tab.id);
       }, this.settingsStore.autoSaveInterval * 1000);
     },
 
-    async doAutoSave() {
-      const currentTab = this.tabs[this.activeTab];
-      if (!currentTab || !currentTab.id || !currentTab._hasUnsavedAutoSave) {
+    async doAutoSave(tabId) {
+      const currentTab = this.tabs.find(tab => tab.id === tabId);
+      if (!currentTab || !currentTab.id || !currentTab.isDirty || !currentTab._hasUnsavedAutoSave) {
         return;
       }
 
@@ -918,8 +1029,17 @@ export default {
         const fileName = `${currentTab.id}_${timestamp}.autosave`;
         const tempPath = `${autoSaveDir}/${fileName}`.replace(/\\/g, '/');
 
-        // 始终以 HTML 格式保存自动保存文件（TipTap 内部格式）
-        await api.saveInfo(tempPath, currentTab.content);
+        const payload = {
+          version: 1,
+          tabId: currentTab.id,
+          title: currentTab.title,
+          originalPath: currentTab.filePath || '',
+          content: currentTab.content,
+          savedAt: timestamp,
+        };
+
+        // 始终以 TipTap HTML 格式保存自动保存内容，并附带恢复所需元数据。
+        await api.saveInfo(tempPath, JSON.stringify(payload));
 
         // 清除旧的自动保存文件（同一标签页的旧版本）
         if (currentTab._autoSavePath) {
@@ -935,6 +1055,44 @@ export default {
       } catch (e) {
         console.warn('Auto-save failed:', e);
       }
+    },
+
+    async clearTabAutoSave(tab) {
+      if (!tab) return;
+      if (tab.id && this.autoSaveTimers[tab.id]) {
+        clearTimeout(this.autoSaveTimers[tab.id]);
+        delete this.autoSaveTimers[tab.id];
+      }
+      if (!tab._autoSavePath) return;
+      const api = this.getLampAPI();
+      if (!api) return;
+      try {
+        const oldExists = await api.hasFile(tab._autoSavePath);
+        if (oldExists) {
+          await api.delFile(tab._autoSavePath);
+        }
+      } catch (error) {
+        console.warn('Failed to clear tab auto-save file:', error);
+      } finally {
+        tab._autoSavePath = '';
+      }
+    },
+
+    hasUnsavedTabs() {
+      return this.tabs.some(tab => tab.isDirty);
+    },
+
+    async saveAllDirtyTabs() {
+      for (let i = 0; i < this.tabs.length; i += 1) {
+        if (this.tabs[i]?.isDirty) {
+          this.activeTab = i;
+          const saved = await this.fileSave(i);
+          if (!saved) {
+            return false;
+          }
+        }
+      }
+      return true;
     },
 
     async openSpecificFile(filePath) {
@@ -957,7 +1115,7 @@ export default {
       if (data && data[0] === 1) {
         const title = normalizedPath.split('/').pop();
         const [, fileContent] = this.format2html(normalizedPath, data[1]);
-        this.tabs.push({ title, filePath: normalizedPath, content: fileContent, id: uuidv4() });
+        this.tabs.push(this.createTab({ title, filePath: normalizedPath, content: fileContent }));
         this.activeTab = this.tabs.length - 1;
       }
     },
@@ -1193,16 +1351,8 @@ export default {
       this._disposeTheme()
       this._disposeTheme = null
     }
-    // Clean up auto-save timers and files
-    if (this._autoSaveDebounceTimer) {
-      clearTimeout(this._autoSaveDebounceTimer);
-      this._autoSaveDebounceTimer = null;
-    }
-    if (typeof this._cleanupAutoSave === 'function') {
-      this._cleanupAutoSave();
-      window.removeEventListener('beforeunload', this._cleanupAutoSave);
-      this._cleanupAutoSave = null;
-    }
+    Object.values(this.autoSaveTimers).forEach((timer) => clearTimeout(timer));
+    this.autoSaveTimers = {};
   },
 
   mounted() {
@@ -1224,19 +1374,6 @@ export default {
     // ── Auto-save recovery check ──
     this.checkRecoveryFiles();
 
-    // ── Window close handler: clean up auto-save files on clean exit ──
-    const cleanup = async () => {
-      const api = this.getLampAPI();
-      if (api) {
-        try {
-          await api.clearAutoSaveFiles();
-        } catch (e) {
-          console.warn('Failed to clear auto-save files:', e);
-        }
-      }
-    };
-    window.addEventListener('beforeunload', cleanup);
-    this._cleanupAutoSave = cleanup;
   },
 
   computed: {

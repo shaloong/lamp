@@ -14,6 +14,11 @@ window.electronAPI = {
   maxWindow: () => invoke('maximize_window'),
   // 关闭窗口
   closeWindow: () => invoke('close_window'),
+  onWindowCloseRequest: (callback) => {
+    listen('window-close-requested', () => {
+      callback();
+    });
+  },
   // 切换全屏
   menuViewFullScreen: () => invoke('toggle_fullscreen'),
   // 获取窗口最大化状态
@@ -49,7 +54,7 @@ window.electronAPI = {
   saveInfo: (filePath, content) => invoke('save_file_content', { filePath, content }),
 
   // 另存为
-  saveFileAs: async (fileName, data) => {
+  saveFileAs: async (fileName) => {
     const path = await save({
       defaultPath: fileName,
       filters: [
@@ -62,7 +67,6 @@ window.electronAPI = {
     });
 
     if (path) {
-      await invoke('save_file_content', { filePath: path, content: data });
       return path;
     }
     return '';

@@ -150,6 +150,13 @@ function emitNavigate() {
 }
 
 function navigateToMatch(match) {
+  const idx = flatMatches.value.findIndex(
+    item => item.filePath === match.filePath
+      && item.lineNumber === match.lineNumber
+      && item.matchStart === match.matchStart
+      && item.matchEnd === match.matchEnd
+  )
+  if (idx >= 0) selectedMatchIndex.value = idx
   emit('navigate', {
     type: 'workspace',
     filePath: match.filePath,
@@ -159,15 +166,23 @@ function navigateToMatch(match) {
 }
 
 function emitReplace(opts = {}) {
-  if (!replaceText.value) return
+  if (!query.value) return
   if (mode.value === 'workspace') {
     const match = flatMatches.value[selectedMatchIndex.value]
     if (!match && !opts.all) return
+    const filePaths = [...new Set(flatMatches.value.map(item => item.filePath))]
+    const occurrenceIndex = match
+      ? flatMatches.value
+          .slice(0, selectedMatchIndex.value + 1)
+          .filter(item => item.filePath === match.filePath).length - 1
+      : 0
     emit('replace', {
       type: 'workspace',
       filePath: match?.filePath,
+      filePaths,
       oldText: query.value,
       newText: replaceText.value,
+      occurrenceIndex,
       ...opts,
     })
   } else {
@@ -421,13 +436,13 @@ onBeforeUnmount(() => {
           <button
             class="action-btn"
             @click="emitReplace({ all: false })"
-            :disabled="!replaceText || (mode === 'workspace' && selectedMatchIndex < 0)"
+            :disabled="!query || (mode === 'workspace' && selectedMatchIndex < 0)"
             :title="t('search.replace')"
           >{{ t('search.replace') }}</button>
           <button
             class="action-btn action-btn-primary"
             @click="emitReplace({ all: true })"
-            :disabled="!replaceText || (mode === 'workspace' && !hasResults)"
+            :disabled="!query || (mode === 'workspace' && !hasResults)"
             :title="t('search.replaceAll')"
           >{{ t('search.replaceAll') }}</button>
         </div>

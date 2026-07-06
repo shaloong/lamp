@@ -38,12 +38,13 @@ interface LampAPI {
   minWindow(): Promise<void>;
   maxWindow(): Promise<void>;
   closeWindow(): Promise<void>;
+  onWindowCloseRequest(callback: () => void): void;
   menuViewFullScreen(): Promise<void>;
   isMaximized(): Promise<boolean>;
   // File
   menuFileOpen(): Promise<[number, string, string] | [-1]>;
   saveInfo(filePath: string, content: string): Promise<void>;
-  saveFileAs(fileName: string, data: string): Promise<string>;
+  saveFileAs(fileName: string, data?: string): Promise<string>;
   getFolderContent(folderPath: string): Promise<import('./types').FileInfo[]>;
   openSpecificFile(filePath: string): Promise<import('@tauri-apps/api/core').JsonValue[]>;
   hasFile(filePath: string): Promise<boolean>;
