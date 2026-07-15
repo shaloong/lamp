@@ -138,6 +138,7 @@ import { useTheme } from '@/composables/useTheme'
 import { workspaceExplorerMethods } from '@/composables/workspaceExplorerMethods'
 import { getLampAPI } from '@/lib/lampApi'
 import { adoptEditorBaseline, applyEditorContentUpdate } from '@/lib/documentDirtyState'
+import { createSearchRegex, replaceEditorSearchMatches, replaceTextOccurrences } from '@/lib/searchReplace'
 const CommandPalette = defineAsyncComponent(() => import('./components/CommandPalette.vue'))
 const SettingsDialog = defineAsyncComponent(() => import('./components/SettingsDialog.vue'))
 import AppMenu from './components/AppMenu.vue'
@@ -632,26 +633,70 @@ export default {
       const api = this.getLampAPI()
       if (!api || !filePath || !oldText || newText === undefined || newText === null) return
       try {
-        const data = await api.openSpecificFile(filePath)
+        const normalizedPath = filePath.replace(/\\/g, '/')
+        const openTabIndex = this.tabs.findIndex(t => t.filePath === normalizedPath)
+        if (openTabIndex >= 0) {
+          const changed = await this.replaceInOpenTab(openTabIndex, oldText, newText, all, occurrenceIndex)
+          if (changed) {
+            await this.fileSave(openTabIndex)
+          }
+          this.searchStore.requestRefresh()
+          return
+        }
+
+        const data = await api.openSpecificFile(normalizedPath)
         if (!data || data[0] !== 1) return
         let content = data[1]
         content = all
           ? this.replaceTextOccurrences(content, oldText, newText, { all: true })
           : this.replaceTextOccurrences(content, oldText, newText, { all: false, occurrenceIndex })
-        await api.saveInfo(filePath, content)
-        // Refresh tab if open
-        const tab = this.tabs.find(t => t.filePath === filePath)
-        if (tab) {
-          tab.content = this.format2html(filePath, content)[1]
-          tab.savedContent = tab.content
-          tab.isDirty = false
-          tab._hasUnsavedAutoSave = false
-          await this.clearTabAutoSave(tab)
-        }
+        await api.saveInfo(normalizedPath, content)
         this.searchStore.requestRefresh()
       } catch (err) {
         console.error('Replace failed:', err)
       }
+    },
+
+    async replaceInOpenTab(tabIndex, oldText, newText, all, occurrenceIndex = 0) {
+      const tab = this.tabs?.[tabIndex]
+      if (!tab) return false
+
+      const editorComponent = this.editorRefs[tab.id]
+      const replaceOptions = { all, occurrenceIndex }
+      if (editorComponent) {
+        const result = replaceEditorSearchMatches(
+          {
+            getDocumentSearchMatches: (query, options) =>
+              editorComponent.getDocumentSearchMatches(query, options),
+            replaceDocumentSearchMatch: (match, replacement) =>
+              editorComponent.replaceDocumentSearchMatch(match, replacement),
+            getHTML: () => editorComponent.editor?.getHTML(),
+          },
+          oldText,
+          newText,
+          this.searchStore.options,
+          replaceOptions,
+        )
+
+        if (!result.changed) return false
+        if (typeof result.content === 'string') {
+          tab.content = result.content
+        }
+      } else {
+        const nextContent = replaceTextOccurrences(
+          tab.content,
+          oldText,
+          newText,
+          this.searchStore.options,
+          replaceOptions,
+        )
+        if (nextContent === tab.content) return false
+        tab.content = nextContent
+      }
+
+      tab.isDirty = true
+      tab._hasUnsavedAutoSave = true
+      return true
     },
 
     scrollEditorToLine(lineNumber, query) {
@@ -664,26 +709,17 @@ export default {
     },
 
     createSearchRegex(text) {
-      const flags = `g${this.searchStore.options.caseSensitive ? '' : 'i'}u`
-      const escaped = this.escapeRegex(text)
-      if (!this.searchStore.options.wholeWord) {
-        return new RegExp(escaped, flags)
-      }
-      return new RegExp(`(^|[^\\p{L}\\p{N}_])(${escaped})(?=$|[^\\p{L}\\p{N}_])`, flags)
+      return createSearchRegex(text, this.searchStore.options)
     },
 
     replaceTextOccurrences(content, oldText, newText, { all, occurrenceIndex = 0 } = {}) {
-      const regex = this.createSearchRegex(oldText)
-      let seen = 0
-      const replaceMatch = (...args) => {
-        const match = args[0]
-        const prefix = this.searchStore.options.wholeWord ? args[1] : ''
-        const shouldReplace = all || seen === occurrenceIndex
-        seen += 1
-        if (!shouldReplace) return match
-        return `${prefix}${newText}`
-      }
-      return content.replace(regex, replaceMatch)
+      return replaceTextOccurrences(
+        content,
+        oldText,
+        newText,
+        this.searchStore.options,
+        { all, occurrenceIndex },
+      )
     },
 
     newFile() {

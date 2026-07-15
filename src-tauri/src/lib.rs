@@ -814,6 +814,10 @@ fn default_max_results() -> usize {
     1000
 }
 
+fn is_search_word_char(ch: char) -> bool {
+    ch.is_alphanumeric() || ch == '_'
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct SearchOptions {
     #[serde(rename = "caseSensitive", default)]
@@ -916,13 +920,13 @@ async fn search_workspace(
                         || !search_line[..abs_pos]
                             .chars()
                             .next_back()
-                            .map(|c| c.is_alphanumeric())
+                            .map(is_search_word_char)
                             .unwrap_or(false);
                     let after_ok = match_end_byte >= search_line.len()
                         || !search_line[match_end_byte..]
                             .chars()
                             .next()
-                            .map(|c| c.is_alphanumeric())
+                            .map(is_search_word_char)
                             .unwrap_or(false);
 
                     if !before_ok || !after_ok {

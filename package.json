@@ -10,6 +10,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test:dirty-state": "node --test scripts/regression/documentDirtyState.test.mjs",
+    "test:search-replace": "node --test scripts/regression/searchReplace.test.mjs",
     "test:writing-stats": "node --test scripts/regression/writingStatsLogic.test.mjs",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
