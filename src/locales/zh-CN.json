@@ -128,6 +128,8 @@
     "unsavedMessage": "您正在关闭的文件尚未保存，是否需要保存？",
     "dontSaveAndClose": "不保存并关闭",
     "saveAndClose": "保存并关闭",
+    "externalChangeTitle": "文件已在外部更改",
+    "externalChangeMessage": "{file} 在 Lamp 之外发生了变化。继续将覆盖外部版本，是否仍要保存？",
     "pluginsTitle": "插件管理",
     "noPlugins": "暂无已加载插件",
     "core": "核心",

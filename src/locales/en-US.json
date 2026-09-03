@@ -127,6 +127,8 @@
     "unsavedMessage": "The file you are closing has unsaved changes. Do you want to save it?",
     "dontSaveAndClose": "Don't Save & Close",
     "saveAndClose": "Save & Close",
+    "externalChangeTitle": "File Changed Outside Lamp",
+    "externalChangeMessage": "{file} changed outside Lamp. Continuing will overwrite the external version. Save anyway?",
     "pluginsTitle": "Plugins",
     "noPlugins": "No plugins loaded",
     "core": "Core",

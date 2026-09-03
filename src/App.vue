@@ -267,6 +267,7 @@ export default {
       isDirty = false,
       autoSavePath = '',
       pendingContentBaseline = !isDirty,
+      diskContent = null,
     }) {
       return {
         title,
@@ -279,6 +280,7 @@ export default {
         _autoSaveEpoch: 0,
         _hasUnsavedAutoSave: false,
         _pendingContentBaseline: pendingContentBaseline,
+        _diskContent: diskContent,
       };
     },
 
@@ -293,7 +295,12 @@ export default {
         if (existingIndex >= 0) {
           this.activeTab = existingIndex;
         } else {
-          this.tabs.push(this.createTab({ title, filePath: normalizedPath, content: fileContent }));
+          this.tabs.push(this.createTab({
+            title,
+            filePath: normalizedPath,
+            content: fileContent,
+            diskContent: data,
+          }));
           this.activeTab = this.tabs.length - 1;
         }
         this.recordRecentFile(normalizedPath)
@@ -356,12 +363,29 @@ export default {
 
       const contentSnapshot = tab.content
       const contentToSave = this.getContentForSave(filePath, contentSnapshot)
-      await api.saveInfo(filePath, contentToSave)
+      const canCheckConflict = !updatePath
+        && typeof tab._diskContent === 'string'
+        && typeof api.saveInfoIfUnchanged === 'function'
+      if (canCheckConflict) {
+        const outcome = await api.saveInfoIfUnchanged(filePath, contentToSave, tab._diskContent)
+        if (!outcome?.saved) {
+          const fileName = filePath.split('/').pop() || filePath
+          const overwrite = await api.confirmOverwrite(
+            this.$t('app.externalChangeMessage', { file: fileName }),
+            this.$t('app.externalChangeTitle'),
+          )
+          if (!overwrite) return false
+          await api.saveInfo(filePath, contentToSave)
+        }
+      } else {
+        await api.saveInfo(filePath, contentToSave)
+      }
 
       if (updatePath) {
         tab.filePath = filePath
         tab.title = filePath.split('/').pop()
       }
+      tab._diskContent = contentToSave
       this.recordRecentFile(filePath)
 
       const { clean } = commitSavedSnapshot(tab, contentSnapshot)
@@ -502,6 +526,15 @@ export default {
       if (!api) return;
 
       try {
+        let diskContent = null
+        if (autoSaveFile.original_path) {
+          try {
+            const diskResult = await api.openSpecificFile(autoSaveFile.original_path)
+            if (diskResult?.[0] === 1) diskContent = diskResult[1]
+          } catch {
+            // A missing original remains recoverable through Save As.
+          }
+        }
         this.tabs.push(this.createTab({
           title: autoSaveFile.title.replace(/\.autosave$/, '') || 'untitled',
           filePath: autoSaveFile.original_path || '',
@@ -510,6 +543,7 @@ export default {
           isDirty: true,
           autoSavePath: autoSaveFile.temp_path,
           pendingContentBaseline: false,
+          diskContent,
         }));
         this.activeTab = this.tabs.length - 1;
         this.dialogRecovery = false;
@@ -1262,7 +1296,12 @@ export default {
         if (data && data[0] === 1) {
           const title = normalizedPath.split('/').pop();
           const [, fileContent] = this.format2html(normalizedPath, data[1]);
-          this.tabs.push(this.createTab({ title, filePath: normalizedPath, content: fileContent }));
+          this.tabs.push(this.createTab({
+            title,
+            filePath: normalizedPath,
+            content: fileContent,
+            diskContent: data[1],
+          }));
           this.activeTab = this.tabs.length - 1;
           this.recordRecentFile(normalizedPath)
         }

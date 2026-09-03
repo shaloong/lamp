@@ -14,6 +14,8 @@ function createBrowserFallbackAPI() {
     isMaximized: async () => false,
     menuFileOpen: async () => [-1],
     saveInfo: async () => false,
+    saveInfoIfUnchanged: async () => ({ saved: false, currentContent: null }),
+    confirmOverwrite: async (message) => window.confirm(message),
     saveFileAs: async () => '',
     getFolderContent: async () => [],
     openSpecificFile: async () => [-1],
@@ -74,7 +76,7 @@ function initElectronAPI() {
 
   const { convertFileSrc, invoke } = window.__TAURI__.core;
   const { listen } = window.__TAURI__.event;
-  const { open, save } = window.__TAURI__.dialog;
+  const { ask, open, save } = window.__TAURI__.dialog;
 
   // 暴露全局 API 到渲染进程
   window.lampAPI = {
@@ -123,6 +125,9 @@ function initElectronAPI() {
 
     // 保存文件信息
     saveInfo: (filePath, content) => invoke('save_file_content', { filePath, content }),
+    saveInfoIfUnchanged: (filePath, content, expectedContent) =>
+      invoke('save_file_content_if_unchanged', { filePath, content, expectedContent }),
+    confirmOverwrite: (message, title) => ask(message, { title, kind: 'warning' }),
 
     // 另存为
     saveFileAs: async (fileName) => {

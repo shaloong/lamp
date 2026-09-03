@@ -44,6 +44,11 @@ interface LampAPI {
   // File
   menuFileOpen(): Promise<[number, string, string] | [-1]>;
   saveInfo(filePath: string, content: string): Promise<void>;
+  saveInfoIfUnchanged(filePath: string, content: string, expectedContent: string): Promise<{
+    saved: boolean;
+    currentContent: string | null;
+  }>;
+  confirmOverwrite(message: string, title: string): Promise<boolean>;
   saveFileAs(fileName: string, data?: string): Promise<string>;
   getFolderContent(folderPath: string): Promise<import('./types').FileInfo[]>;
   openSpecificFile(filePath: string): Promise<import('@tauri-apps/api/core').JsonValue[]>;

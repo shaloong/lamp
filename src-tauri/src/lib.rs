@@ -597,6 +597,57 @@ async fn save_file_content(file_path: String, content: String) -> Result<(), Str
     write_file_atomically(Path::new(&file_path), content.as_bytes())
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SaveFileOutcome {
+    saved: bool,
+    current_content: Option<String>,
+}
+
+fn save_file_content_if_unchanged_impl(
+    path: &Path,
+    content: &str,
+    expected_content: Option<&str>,
+) -> Result<SaveFileOutcome, String> {
+    if let Some(expected) = expected_content {
+        match fs::read_to_string(path) {
+            Ok(current) if current != expected => {
+                return Ok(SaveFileOutcome {
+                    saved: false,
+                    current_content: Some(current),
+                });
+            }
+            Ok(_) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(SaveFileOutcome {
+                    saved: false,
+                    current_content: None,
+                });
+            }
+            Err(error) => return Err(error.to_string()),
+        }
+    }
+
+    write_file_atomically(path, content.as_bytes())?;
+    Ok(SaveFileOutcome {
+        saved: true,
+        current_content: None,
+    })
+}
+
+#[tauri::command]
+async fn save_file_content_if_unchanged(
+    file_path: String,
+    content: String,
+    expected_content: Option<String>,
+) -> Result<SaveFileOutcome, String> {
+    save_file_content_if_unchanged_impl(
+        Path::new(&file_path),
+        &content,
+        expected_content.as_deref(),
+    )
+}
+
 // ==================== 自动保存临时文件 ====================
 
 /// 获取自动保存临时目录路径
@@ -1120,6 +1171,7 @@ pub fn run() {
             has_file,
             delete_file,
             save_file_content,
+            save_file_content_if_unchanged,
             get_auto_save_dir,
             list_auto_save_files,
             clear_auto_save_files,
@@ -1146,7 +1198,7 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::write_file_atomically;
+    use super::{save_file_content_if_unchanged_impl, write_file_atomically};
     use std::fs;
 
     #[test]
@@ -1169,6 +1221,25 @@ mod tests {
             })
             .count();
         assert_eq!(leftovers, 0);
+    }
+
+    #[test]
+    fn conditional_write_refuses_to_overwrite_external_changes() {
+        let dir = tempfile::tempdir().expect("create temp directory");
+        let path = dir.path().join("draft.md");
+        fs::write(&path, b"opened content").expect("create document");
+        fs::write(&path, b"external content").expect("change document externally");
+
+        let outcome =
+            save_file_content_if_unchanged_impl(&path, "lamp content", Some("opened content"))
+                .expect("check conditional save");
+
+        assert!(!outcome.saved);
+        assert_eq!(outcome.current_content.as_deref(), Some("external content"));
+        assert_eq!(
+            fs::read_to_string(&path).expect("read document"),
+            "external content"
+        );
     }
 
     #[cfg(unix)]
