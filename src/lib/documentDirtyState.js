@@ -31,3 +31,45 @@ export function applyEditorContentUpdate(tab, nextContent) {
 
   return { changed: true, dirty: tab.isDirty, adoptedBaseline: false }
 }
+
+export function commitSavedSnapshot(tab, savedContent) {
+  if (!tab) {
+    return { clean: false, dirty: false }
+  }
+
+  tab.savedContent = savedContent
+  tab._pendingContentBaseline = false
+  tab.isDirty = tab.content !== savedContent
+  tab._hasUnsavedAutoSave = tab.isDirty
+
+  return { clean: !tab.isDirty, dirty: tab.isDirty }
+}
+
+export function commitAutoSaveSnapshot(tab, savedContent, tempPath, epoch) {
+  if (!tab || tab._autoSaveEpoch !== epoch) {
+    return {
+      accepted: false,
+      previousPath: '',
+      needsAnotherSave: !!tab?._hasUnsavedAutoSave,
+    }
+  }
+
+  const previousPath = tab._autoSavePath || ''
+  tab._autoSavePath = tempPath
+  tab._hasUnsavedAutoSave = tab.isDirty && tab.content !== savedContent
+
+  return {
+    accepted: true,
+    previousPath,
+    needsAnotherSave: tab._hasUnsavedAutoSave,
+  }
+}
+
+export function invalidateAutoSave(tab) {
+  if (!tab) return ''
+
+  const previousPath = tab._autoSavePath || ''
+  tab._autoSaveEpoch = (tab._autoSaveEpoch || 0) + 1
+  tab._autoSavePath = ''
+  return previousPath
+}

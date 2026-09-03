@@ -2,7 +2,8 @@ use notify::event::{CreateKind, ModifyKind, RemoveKind};
 use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::PathBuf;
+use std::io::Write;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -89,6 +90,32 @@ pub struct ConfigState(pub Mutex<AppConfig>);
 
 pub struct WindowCloseState(pub Mutex<bool>);
 
+const ATOMIC_WRITE_PREFIX: &str = ".lamp-write-";
+
+fn write_file_atomically(path: &Path, content: &[u8]) -> Result<(), String> {
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."));
+    let existing_permissions = fs::metadata(path)
+        .ok()
+        .map(|metadata| metadata.permissions());
+
+    let mut temp = tempfile::Builder::new()
+        .prefix(ATOMIC_WRITE_PREFIX)
+        .tempfile_in(parent)
+        .map_err(|e| e.to_string())?;
+    temp.write_all(content).map_err(|e| e.to_string())?;
+    temp.as_file().sync_all().map_err(|e| e.to_string())?;
+
+    if let Some(permissions) = existing_permissions {
+        fs::set_permissions(temp.path(), permissions).map_err(|e| e.to_string())?;
+    }
+
+    temp.persist(path).map_err(|e| e.error.to_string())?;
+    Ok(())
+}
+
 // ==================== 文件监视 ====================
 
 // 文件变化事件
@@ -158,7 +185,11 @@ async fn start_watching(
                     let path_str = path.to_string_lossy();
 
                     // Skip .autosave auto-save files at the source to prevent tree flicker.
-                    if path_str.ends_with(".autosave") {
+                    if path_str.ends_with(".autosave")
+                        || path.file_name().is_some_and(|name| {
+                            name.to_string_lossy().starts_with(ATOMIC_WRITE_PREFIX)
+                        })
+                    {
                         continue;
                     }
 
@@ -246,8 +277,7 @@ fn load_config() -> AppConfig {
 fn save_config(config: &AppConfig) -> Result<(), String> {
     let config_path = get_config_path();
     let content = serde_json::to_string_pretty(config).map_err(|e| e.to_string())?;
-    fs::write(config_path, content).map_err(|e| e.to_string())?;
-    Ok(())
+    write_file_atomically(&config_path, content.as_bytes())
 }
 
 // ==================== AI 聊天 ====================
@@ -564,8 +594,7 @@ async fn delete_file(file_path: String) -> Result<bool, String> {
 
 #[tauri::command]
 async fn save_file_content(file_path: String, content: String) -> Result<(), String> {
-    fs::write(&file_path, content).map_err(|e| e.to_string())?;
-    Ok(())
+    write_file_atomically(Path::new(&file_path), content.as_bytes())
 }
 
 // ==================== 自动保存临时文件 ====================
@@ -1113,4 +1142,52 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::write_file_atomically;
+    use std::fs;
+
+    #[test]
+    fn atomic_write_creates_and_replaces_file_content() {
+        let dir = tempfile::tempdir().expect("create temp directory");
+        let path = dir.path().join("draft.md");
+
+        write_file_atomically(&path, b"first draft").expect("create document");
+        write_file_atomically(&path, b"second draft").expect("replace document");
+
+        assert_eq!(fs::read(&path).expect("read document"), b"second draft");
+        let leftovers = fs::read_dir(dir.path())
+            .expect("read temp directory")
+            .filter_map(Result::ok)
+            .filter(|entry| {
+                entry
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(".lamp-write-")
+            })
+            .count();
+        assert_eq!(leftovers, 0);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn atomic_write_preserves_existing_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().expect("create temp directory");
+        let path = dir.path().join("draft.md");
+        fs::write(&path, b"first draft").expect("create document");
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o640))
+            .expect("set document permissions");
+
+        write_file_atomically(&path, b"second draft").expect("replace document");
+
+        let mode = fs::metadata(&path)
+            .expect("read metadata")
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o640);
+    }
 }

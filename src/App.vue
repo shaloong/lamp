@@ -137,7 +137,13 @@ import { setupPluginThemes } from '@/composables/usePluginThemes'
 import { useTheme } from '@/composables/useTheme'
 import { workspaceExplorerMethods } from '@/composables/workspaceExplorerMethods'
 import { getLampAPI } from '@/lib/lampApi'
-import { adoptEditorBaseline, applyEditorContentUpdate } from '@/lib/documentDirtyState'
+import {
+  adoptEditorBaseline,
+  applyEditorContentUpdate,
+  commitAutoSaveSnapshot,
+  commitSavedSnapshot,
+  invalidateAutoSave,
+} from '@/lib/documentDirtyState'
 import { createSearchRegex, replaceEditorSearchMatches, replaceTextOccurrences } from '@/lib/searchReplace'
 const CommandPalette = defineAsyncComponent(() => import('./components/CommandPalette.vue'))
 const SettingsDialog = defineAsyncComponent(() => import('./components/SettingsDialog.vue'))
@@ -209,6 +215,8 @@ export default {
       activeSidebarPluginPanelId: '',
       editorRefs: {},
       autoSaveTimers: {},
+      autoSavePromises: {},
+      savePromises: {},
       documentSearchState: {
         query: '',
         caseSensitive: false,
@@ -266,6 +274,7 @@ export default {
         isDirty,
         id: uuidv4(),
         _autoSavePath: autoSavePath,
+        _autoSaveEpoch: 0,
         _hasUnsavedAutoSave: false,
         _pendingContentBaseline: pendingContentBaseline,
       };
@@ -314,6 +323,53 @@ export default {
       }
     },
 
+    async runTabSave(tab, task) {
+      if (this.savePromises[tab.id]) {
+        return await this.savePromises[tab.id]
+      }
+
+      const operation = Promise.resolve().then(task)
+      this.savePromises[tab.id] = operation
+      try {
+        return await operation
+      } finally {
+        if (this.savePromises[tab.id] === operation) {
+          delete this.savePromises[tab.id]
+        }
+      }
+    },
+
+    async saveTabToPath(tab, filePath, updatePath = false) {
+      const api = this.getLampAPI()
+      if (!api) return false
+
+      const contentSnapshot = tab.content
+      const contentToSave = this.getContentForSave(filePath, contentSnapshot)
+      await api.saveInfo(filePath, contentToSave)
+
+      if (updatePath) {
+        tab.filePath = filePath
+        tab.title = filePath.split('/').pop()
+      }
+
+      const { clean } = commitSavedSnapshot(tab, contentSnapshot)
+      if (clean) {
+        await this.clearTabAutoSave(tab)
+      }
+      return clean
+    },
+
+    async chooseAndSaveTab(tab) {
+      const api = this.getLampAPI()
+      if (!api) return false
+
+      const resultPath = await api.saveFileAs(tab.title || 'untitled')
+      if (!resultPath) return false
+
+      const normalizedPath = resultPath.replace(/\\/g, '/')
+      return await this.saveTabToPath(tab, normalizedPath, true)
+    },
+
     async fileSave(index) {
       // 如果 index 是事件对象或无效值，使用 this.activeTab
       const tabIndex = (typeof index === 'number') ? index : this.activeTab;
@@ -325,25 +381,15 @@ export default {
         return false;
       }
 
-      if (tab.filePath) {
-        // 如果 filePath 不为空，则执行保存操作
-        const api = this.getLampAPI();
-        if (!api) return false;
-        try {
-          const contentToSave = this.getContentForSave(tab.filePath, tab.content);
-          await api.saveInfo(tab.filePath, contentToSave);
-          tab.savedContent = tab.content;
-          tab.isDirty = false;
-          tab._hasUnsavedAutoSave = false;
-          await this.clearTabAutoSave(tab);
-          return true;
-        } catch (error) {
-          console.error('Failed to save file', error);
-          return false;
-        }
-      } else {
-        // 否则执行另存为操作
-        return await this.saveFileAs(tabIndex)
+      try {
+        return await this.runTabSave(tab, () => (
+          tab.filePath
+            ? this.saveTabToPath(tab, tab.filePath)
+            : this.chooseAndSaveTab(tab)
+        ))
+      } catch (error) {
+        console.error('Failed to save file', error)
+        return false
       }
     },
     menuEditUndo() {
@@ -896,28 +942,11 @@ export default {
         return false;
       }
 
-      const api = this.getLampAPI();
-      if (!api) return false;
-
-      // 保存时根据文件扩展名进行格式转换
       try {
-        const resultPath = await api.saveFileAs(tab.title || 'untitled');
-        if (resultPath !== "") {
-          const normalizedPath = resultPath.replace(/\\/g, '/');
-          const contentToSave = this.getContentForSave(normalizedPath, tab.content);
-          await api.saveInfo(normalizedPath, contentToSave);
-          this.tabs[tabIndex].filePath = normalizedPath;
-          this.tabs[tabIndex].title = normalizedPath.split('/').pop();
-          this.tabs[tabIndex].savedContent = this.tabs[tabIndex].content;
-          this.tabs[tabIndex].isDirty = false;
-          this.tabs[tabIndex]._hasUnsavedAutoSave = false;
-          await this.clearTabAutoSave(this.tabs[tabIndex]);
-          return true;
-        }
-        return false;
+        return await this.runTabSave(tab, () => this.chooseAndSaveTab(tab))
       } catch (error) {
-        console.error('Failed to save file as', error);
-        return false;
+        console.error('Failed to save file as', error)
+        return false
       }
     },
 
@@ -1081,7 +1110,7 @@ export default {
       }, this.settingsStore.autoSaveInterval * 1000);
     },
 
-    async doAutoSave(tabId) {
+    async performAutoSave(tabId) {
       const currentTab = this.tabs.find(tab => tab.id === tabId);
       if (!currentTab || !currentTab.id || !currentTab.isDirty || !currentTab._hasUnsavedAutoSave) {
         return;
@@ -1091,8 +1120,16 @@ export default {
       if (!api) return;
 
       try {
+        const epoch = currentTab._autoSaveEpoch || 0
+        const contentSnapshot = currentTab.content
+        const titleSnapshot = currentTab.title
+        const pathSnapshot = currentTab.filePath || ''
         const autoSaveDir = await api.getAutoSaveDir();
         if (!autoSaveDir) return;
+
+        if (!this.tabs.includes(currentTab) || currentTab._autoSaveEpoch !== epoch) {
+          return
+        }
 
         // 文件名格式：<tabId>_<timestamp>.autosave
         const timestamp = Date.now();
@@ -1102,28 +1139,64 @@ export default {
         const payload = {
           version: 1,
           tabId: currentTab.id,
-          title: currentTab.title,
-          originalPath: currentTab.filePath || '',
-          content: currentTab.content,
+          title: titleSnapshot,
+          originalPath: pathSnapshot,
+          content: contentSnapshot,
           savedAt: timestamp,
         };
 
         // 始终以 TipTap HTML 格式保存自动保存内容，并附带恢复所需元数据。
         await api.saveInfo(tempPath, JSON.stringify(payload));
 
-        // 清除旧的自动保存文件（同一标签页的旧版本）
-        if (currentTab._autoSavePath) {
-          const oldExists = await api.hasFile(currentTab._autoSavePath);
-          if (oldExists) {
-            await api.delFile(currentTab._autoSavePath);
-          }
+        if (!this.tabs.includes(currentTab) || currentTab._autoSaveEpoch !== epoch) {
+          await this.deleteAutoSaveFile(tempPath)
+          return
         }
 
-        // 更新当前标签页的自动保存路径
-        currentTab._autoSavePath = tempPath;
-        currentTab._hasUnsavedAutoSave = false;
+        const { previousPath } = commitAutoSaveSnapshot(
+          currentTab,
+          contentSnapshot,
+          tempPath,
+          epoch,
+        )
+        if (previousPath && previousPath !== tempPath) {
+          await this.deleteAutoSaveFile(previousPath)
+        }
       } catch (e) {
         console.warn('Auto-save failed:', e);
+      }
+    },
+
+    async doAutoSave(tabId) {
+      if (this.autoSavePromises[tabId]) {
+        return await this.autoSavePromises[tabId]
+      }
+
+      const operation = this.performAutoSave(tabId)
+      this.autoSavePromises[tabId] = operation
+      try {
+        await operation
+      } finally {
+        if (this.autoSavePromises[tabId] === operation) {
+          delete this.autoSavePromises[tabId]
+        }
+        const currentTab = this.tabs.find(tab => tab.id === tabId)
+        if (currentTab?._hasUnsavedAutoSave && !this.autoSaveTimers[tabId]) {
+          this.scheduleAutoSave(currentTab)
+        }
+      }
+    },
+
+    async deleteAutoSaveFile(filePath) {
+      if (!filePath) return
+      const api = this.getLampAPI()
+      if (!api) return
+      try {
+        if (await api.hasFile(filePath)) {
+          await api.delFile(filePath)
+        }
+      } catch (error) {
+        console.warn('Failed to delete auto-save file:', error)
       }
     },
 
@@ -1133,19 +1206,8 @@ export default {
         clearTimeout(this.autoSaveTimers[tab.id]);
         delete this.autoSaveTimers[tab.id];
       }
-      if (!tab._autoSavePath) return;
-      const api = this.getLampAPI();
-      if (!api) return;
-      try {
-        const oldExists = await api.hasFile(tab._autoSavePath);
-        if (oldExists) {
-          await api.delFile(tab._autoSavePath);
-        }
-      } catch (error) {
-        console.warn('Failed to clear tab auto-save file:', error);
-      } finally {
-        tab._autoSavePath = '';
-      }
+      const previousPath = invalidateAutoSave(tab)
+      await this.deleteAutoSaveFile(previousPath)
     },
 
     hasUnsavedTabs() {
@@ -1455,6 +1517,8 @@ export default {
     }
     Object.values(this.autoSaveTimers).forEach((timer) => clearTimeout(timer));
     this.autoSaveTimers = {};
+    this.autoSavePromises = {};
+    this.savePromises = {};
   },
 
   mounted() {
