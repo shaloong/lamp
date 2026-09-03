@@ -150,5 +150,3 @@ export {
   LampEventAPI,
   Editor,
 };
-
-export {};

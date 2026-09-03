@@ -1,6 +1,7 @@
 use notify::event::{CreateKind, ModifyKind, RemoveKind};
 use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
+use std::cmp::Reverse;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -47,7 +48,7 @@ fn default_theme() -> String {
     "system".to_string()
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct EditorSettings {
     #[serde(rename = "focusMode", default)]
     pub focus_mode: bool,
@@ -67,12 +68,6 @@ impl Default for GeneralSettings {
             open_last_workspace: false,
             theme: default_theme(),
         }
-    }
-}
-
-impl Default for EditorSettings {
-    fn default() -> Self {
-        Self { focus_mode: false }
     }
 }
 
@@ -494,10 +489,10 @@ async fn get_folder_content(folder_path: String) -> Result<Vec<FileInfo>, String
     }
 
     fn traverse_folder(path: &PathBuf) -> Result<Vec<FileInfo>, String> {
-        let mut entries = fs::read_dir(path).map_err(|e| e.to_string())?;
+        let entries = fs::read_dir(path).map_err(|e| e.to_string())?;
         let mut result = Vec::new();
 
-        while let Some(entry_result) = entries.next() {
+        for entry_result in entries {
             let entry = entry_result.map_err(|e| e.to_string())?;
             let file_path = entry.path();
             let file_name = entry.file_name().to_string_lossy().to_string();
@@ -700,7 +695,7 @@ async fn list_auto_save_files(app: AppHandle) -> Result<Vec<AutoSaveFileInfo>, S
 
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.is_file() && path.extension().map_or(false, |e| e == "autosave") {
+        if path.is_file() && path.extension().is_some_and(|e| e == "autosave") {
             if let Some(stem) = path.file_stem() {
                 let stem_str = stem.to_string_lossy();
                 // 文件名格式: <tabId>_<timestamp> 或 <encoded_path>_<timestamp>
@@ -745,7 +740,7 @@ async fn list_auto_save_files(app: AppHandle) -> Result<Vec<AutoSaveFileInfo>, S
         }
     }
 
-    result.sort_by(|a, b| b.saved_at.cmp(&a.saved_at));
+    result.sort_by_key(|entry| Reverse(entry.saved_at));
     Ok(result)
 }
 
@@ -925,7 +920,7 @@ async fn search_workspace(
         return Err(format!("Invalid workspace path: {}", normalized));
     }
 
-    let max_results = options.max_results.max(1).min(10000);
+    let max_results = options.max_results.clamp(1, 10000);
     let mut total_matches = 0;
 
     fn search_file(
@@ -1112,7 +1107,7 @@ async fn search_workspace(
     );
 
     // Sort by number of matches descending
-    results.sort_by(|a, b| b.matches.len().cmp(&a.matches.len()));
+    results.sort_by_key(|result| Reverse(result.matches.len()));
 
     Ok(results)
 }

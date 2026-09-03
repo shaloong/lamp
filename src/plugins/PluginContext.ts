@@ -3,7 +3,6 @@ import { requireLampAPI } from '../lib/lampApi';
 import type {
   AISettings,
   AISuggestion,
-  FileInfo,
   LampAIAPI,
   LampCommandsAPI,
   LampEditorAPI,
@@ -17,7 +16,6 @@ import type {
   LampUIAPI,
   LampWorkspaceAPI,
   RegisteredCommand,
-  TipTapExtensionDefinition,
 } from './types';
 
 interface PluginContextHost {
@@ -241,8 +239,8 @@ export class PluginContext implements LampHostAPI {
     };
     const pid = this.id;
     return {
-      get: <T>(key, defaultValue) => svc.get(pid, key, defaultValue),
-      set: <T>(key, value) => svc.set(pid, key, value),
+      get: (key, defaultValue) => svc.get(pid, key, defaultValue),
+      set: (key, value) => svc.set(pid, key, value),
       remove: (key) => svc.remove(pid, key),
       keys: () => svc.keys(pid),
       clear: () => svc.clear(pid),

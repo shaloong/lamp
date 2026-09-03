@@ -14,13 +14,12 @@ import { useMagicKeys } from '@vueuse/core'
 import { pluginHost } from '@/plugins/index'
 
 let keys: Record<string, boolean> | null = null
-let pollInterval: ReturnType<typeof setInterval> | null = null
 const watchers = new Map<string, { keys: string[]; wasActive: boolean }>()
 
 function ensureInit() {
   if (!keys) {
     keys = useMagicKeys({ reactive: true }) as Record<string, boolean>
-    pollInterval = setInterval(() => {
+    setInterval(() => {
       if (!keys) return
       for (const [id, w] of watchers) {
         const allActive = w.keys.every(key => !!keys![key])
