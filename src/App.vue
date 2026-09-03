@@ -144,6 +144,7 @@ import {
   commitSavedSnapshot,
   invalidateAutoSave,
 } from '@/lib/documentDirtyState'
+import { getFileExtension, htmlToPlainText, plainTextToHtml } from '@/lib/documentFormats'
 import { createSearchRegex, replaceEditorSearchMatches, replaceTextOccurrences } from '@/lib/searchReplace'
 const CommandPalette = defineAsyncComponent(() => import('./components/CommandPalette.vue'))
 const SettingsDialog = defineAsyncComponent(() => import('./components/SettingsDialog.vue'))
@@ -969,21 +970,23 @@ export default {
 
     // 检查格式与转换，Markdown 文件需要另存为
     format2html(filePath, content) {
-      if (filePath.split('.').pop() === 'md') {
+      const extension = getFileExtension(filePath)
+      if (extension === 'md') {
         return ['', marked.parse(content)]
-      } else {
-        return [filePath, content]
       }
+      if (extension === 'txt') {
+        return [filePath, plainTextToHtml(content)]
+      }
+      return [filePath, content]
     },
 
     // 根据文件扩展名获取要保存的内容格式
     getContentForSave(filePath, htmlContent) {
-      const ext = filePath.split('.').pop()?.toLowerCase();
+      const ext = getFileExtension(filePath)
       if (ext === 'md') {
         return this.htmlToMarkdown(htmlContent);
       } else if (ext === 'txt') {
-        // 纯文本：去除 HTML 标签
-        return htmlContent.replace(/<[^>]+>/g, '').trim();
+        return htmlToPlainText(htmlContent)
       } else {
         // lmph 和 html：直接保存 HTML
         return htmlContent;
