@@ -142,7 +142,10 @@
     "newLampText": "New Lamp Text",
     "title": "Lamp",
     "subtitle": "Distraction-free editor for writers",
-    "recent": "Recent Files",
+    "newDocument": "New Document",
+    "quickActions": "Quick actions",
+    "recent": "Recent Documents",
+    "continueWriting": "Continue writing",
     "noRecentFiles": "No recent files yet. Start by creating or opening one above"
   },
   "commandPalette": {

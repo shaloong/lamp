@@ -143,7 +143,10 @@
     "newLampText": "新 Lamp 文本",
     "title": "Lamp",
     "subtitle": "为写作者设计的无干扰编辑器",
-    "recent": "最近打开",
+    "newDocument": "新建文稿",
+    "quickActions": "快捷操作",
+    "recent": "最近文稿",
+    "continueWriting": "继续写作",
     "noRecentFiles": "还没有最近文件，从上方选择一个操作开始创作"
   },
   "commandPalette": {
