@@ -13,9 +13,11 @@ data into the main app locale files or components.
 ```text
 my-plugin/
   manifest.json
-  index.ts
-  messages.ts
-  components/
+  src/
+    index.ts
+    messages.ts
+  dist/
+    index.js
   assets/
 ```
 
@@ -39,7 +41,7 @@ export const manifest = {
   id: 'acme.example',
   name: 'plugins.acme-example.name',
   version: '1.0.0',
-  main: 'index.js',
+  main: 'dist/index.js',
 }
 
 export default {
@@ -60,6 +62,14 @@ export default {
   },
 } satisfies LampPlugin
 ```
+
+External plugins are loaded directly by the WebView. Their `manifest.main` must
+point to built ESM JavaScript relative to the plugin directory; TypeScript source
+is not compiled by Lamp at runtime. The entry may use relative ESM imports within
+the same plugin directory. Absolute paths and `..` path traversal are rejected.
+
+Built-in plugins are compiled with Lamp and may point directly to TypeScript
+modules registered by `src/builtins/index.ts`.
 
 ## I18n
 

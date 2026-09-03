@@ -52,6 +52,7 @@ interface LampAPI {
   readTextFile(filePath: string): Promise<string>;
   getAppDataDir(): Promise<string>;
   getUserPluginsDir(): Promise<string>;
+  convertFileSrc(filePath: string): string;
   searchWorkspace(
     workspacePath: string,
     query: string,

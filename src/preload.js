@@ -55,6 +55,7 @@ function createBrowserFallbackAPI() {
     getAppDataDir: async () => '',
     getUserPluginsDir: async () => '',
     searchWorkspace: async () => [],
+    convertFileSrc: filePath => filePath,
   }
 }
 
@@ -71,7 +72,7 @@ function initElectronAPI() {
     return;
   }
 
-  const { invoke } = window.__TAURI__.core;
+  const { convertFileSrc, invoke } = window.__TAURI__.core;
   const { listen } = window.__TAURI__.event;
   const { open, save } = window.__TAURI__.dialog;
 
@@ -275,6 +276,9 @@ function initElectronAPI() {
 
     // 获取用户插件目录
     getUserPluginsDir: () => invoke('get_user_plugins_dir'),
+
+    // Convert a local plugin entry path into a WebView-loadable asset URL.
+    convertFileSrc: (filePath) => convertFileSrc(filePath),
 
     // ==================== 搜索操作 ====================
     searchWorkspace: (workspacePath, query, options) =>

@@ -6,6 +6,7 @@
 
 import type { LampPluginManifest } from './types';
 import { requireLampAPI } from '../lib/lampApi';
+import { resolvePluginEntryPath } from '../lib/pluginPaths';
 
 export class PluginLoader {
   /**
@@ -73,9 +74,10 @@ export class PluginLoader {
    * In development, they are loaded via Vite's dev server or file:// URLs.
    */
   async loadModule(manifest: LampPluginManifest, basePath: string): Promise<unknown> {
-    const entryPath = this._join(basePath, manifest.main);
-    // Dynamic import works for both HTTP (dev) and file:// (prod) URLs
-    return import(/* @vite-ignore */ entryPath);
+    const pluginRoot = manifest.pluginRoot || basePath;
+    const entryPath = resolvePluginEntryPath(pluginRoot, manifest.main);
+    const entryUrl = requireLampAPI('plugin module load').convertFileSrc(entryPath);
+    return import(/* @vite-ignore */ entryUrl);
   }
 
   private _join(...parts: string[]): string {

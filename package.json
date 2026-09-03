@@ -12,6 +12,7 @@
     "test:dirty-state": "node --test scripts/regression/documentDirtyState.test.mjs",
     "test:document-formats": "node --test scripts/regression/documentFormats.test.mjs",
     "test:recent-paths": "node --test scripts/regression/recentPaths.test.mjs",
+    "test:plugin-paths": "node --test scripts/regression/pluginPaths.test.mjs",
     "test:search-replace": "node --test scripts/regression/searchReplace.test.mjs",
     "test:writing-stats": "node --test scripts/regression/writingStatsLogic.test.mjs",
     "tauri": "tauri",
