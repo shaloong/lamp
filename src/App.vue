@@ -145,6 +145,7 @@ import {
   invalidateAutoSave,
 } from '@/lib/documentDirtyState'
 import { getFileExtension, htmlToPlainText, plainTextToHtml } from '@/lib/documentFormats'
+import { forgetRecentPath, readRecentPaths, rememberRecentPath } from '@/lib/recentPaths'
 import { createSearchRegex, replaceEditorSearchMatches, replaceTextOccurrences } from '@/lib/searchReplace'
 const CommandPalette = defineAsyncComponent(() => import('./components/CommandPalette.vue'))
 const SettingsDialog = defineAsyncComponent(() => import('./components/SettingsDialog.vue'))
@@ -295,7 +296,16 @@ export default {
           this.tabs.push(this.createTab({ title, filePath: normalizedPath, content: fileContent }));
           this.activeTab = this.tabs.length - 1;
         }
+        this.recordRecentFile(normalizedPath)
       }
+    },
+
+    loadRecentFiles() {
+      this.recentFiles = readRecentPaths(window.localStorage)
+    },
+
+    recordRecentFile(filePath) {
+      this.recentFiles = rememberRecentPath(window.localStorage, filePath)
     },
 
     async openFileDialog() {
@@ -352,6 +362,7 @@ export default {
         tab.filePath = filePath
         tab.title = filePath.split('/').pop()
       }
+      this.recordRecentFile(filePath)
 
       const { clean } = commitSavedSnapshot(tab, contentSnapshot)
       if (clean) {
@@ -1246,12 +1257,24 @@ export default {
       const api = this.getLampAPI();
       if (!api) return;
 
-      const data = await api.openSpecificFile(normalizedPath);
-      if (data && data[0] === 1) {
-        const title = normalizedPath.split('/').pop();
-        const [, fileContent] = this.format2html(normalizedPath, data[1]);
-        this.tabs.push(this.createTab({ title, filePath: normalizedPath, content: fileContent }));
-        this.activeTab = this.tabs.length - 1;
+      try {
+        const data = await api.openSpecificFile(normalizedPath);
+        if (data && data[0] === 1) {
+          const title = normalizedPath.split('/').pop();
+          const [, fileContent] = this.format2html(normalizedPath, data[1]);
+          this.tabs.push(this.createTab({ title, filePath: normalizedPath, content: fileContent }));
+          this.activeTab = this.tabs.length - 1;
+          this.recordRecentFile(normalizedPath)
+        }
+      } catch (error) {
+        try {
+          if (!await api.hasFile(normalizedPath)) {
+            this.recentFiles = forgetRecentPath(window.localStorage, normalizedPath)
+          }
+        } catch {
+          // Preserve the recent entry when file availability cannot be determined.
+        }
+        console.error('Failed to open file:', error)
       }
     },
 
@@ -1435,11 +1458,15 @@ export default {
     // 等待语言加载完成后再初始化，确保翻译正确
     ; (async () => {
       await this.loadGeneralSettings()
+      if (this.settingsStore.openLastWorkspace) {
+        await this.restoreLastWorkspace()
+      }
       // 不自动创建初始标签页，让用户从空状态开始
     })()
     this.initIpcRenderers()
     this.initFileWatcher()
     this.loadUiPreferences()
+    this.loadRecentFiles()
     this._disposeSidebarPanelOpen = pluginHost.events.on('lamp.sidebar.openPanel', this.openSidebarPluginPanel)
     window.addEventListener('resize', this.handleResize)
 

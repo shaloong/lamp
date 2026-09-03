@@ -1,4 +1,5 @@
 import { getLampAPI } from '@/lib/lampApi'
+import { readLastWorkspace, rememberWorkspace } from '@/lib/recentPaths'
 
 export const workspaceExplorerMethods = {
   getLampAPI() {
@@ -32,22 +33,48 @@ export const workspaceExplorerMethods = {
 
       const result = await api.openWorkspace()
       if (result) {
-        this.workspaceStore.setWorkspace({
-          workspacePath: '',
-          rootPath: result.rootPath,
-          name: result.name,
-          settings: {}
-        })
-
-        if (result.rootPath) {
-          this.showDirection(result.rootPath)
-          await api.startWatching(result.rootPath)
-        }
-
-        this.tempFiles = []
+        await this.activateWorkspace(result.rootPath, result.name)
       }
     } catch (error) {
       console.error('打开工作区失败:', error)
+    }
+  },
+
+  async activateWorkspace(rootPath, name, { persist = true } = {}) {
+    const api = this.getLampAPI?.()
+    const normalizedRoot = String(rootPath || '').replace(/\\/g, '/')
+    if (!api || !normalizedRoot) return false
+
+    const folderContent = await api.getFolderContent(normalizedRoot)
+    await api.startWatching(normalizedRoot)
+
+    const workspaceName = name || normalizedRoot.split('/').filter(Boolean).pop() || normalizedRoot
+    this.workspaceStore.setWorkspace({
+      workspacePath: '',
+      rootPath: normalizedRoot,
+      name: workspaceName,
+      settings: {},
+    })
+    this.folderContent = this.convertToTree(folderContent)
+    this.expandedKeys = [normalizedRoot]
+    this.fileStore.expandedFolders = new Set(this.expandedKeys)
+    this.tempFiles = []
+    await this.pluginHost.setWorkspaceState(true, normalizedRoot, workspaceName)
+
+    if (persist) {
+      rememberWorkspace(window.localStorage, normalizedRoot)
+    }
+    return true
+  },
+
+  async restoreLastWorkspace() {
+    const rootPath = readLastWorkspace(window.localStorage)
+    if (!rootPath) return false
+    try {
+      return await this.activateWorkspace(rootPath, '', { persist: false })
+    } catch (error) {
+      console.warn('[Lamp] Last workspace is unavailable:', error)
+      return false
     }
   },
 
@@ -57,6 +84,7 @@ export const workspaceExplorerMethods = {
     if (api) {
       await api.stopWatching()
     }
+    await this.pluginHost.setWorkspaceState(false, '', '')
     this.workspaceStore.clearWorkspace()
     this.fileStore.clearAll()
     this.folderContent = ''

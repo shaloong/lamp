@@ -138,20 +138,12 @@ export class PluginContext implements LampHostAPI {
       get rootPath() { return host.workspace.rootPath; },
       get name() { return host.workspace.name; },
       open: async () => {
-        const api = requireLampAPI('plugin workspace open');
-        const result = await api.openWorkspace();
-        if (result) {
-          host.workspace.isOpen = true;
-          host.workspace.rootPath = result.rootPath;
-          host.workspace.name = result.name;
-          host.events.emit('lamp.workspace.opened', { rootPath: result.rootPath, name: result.name });
-        }
+        const commands = this.host.commandService as { execute: (id: string) => Promise<void> };
+        await commands.execute('app.openWorkspace');
       },
-      close: () => {
-        host.workspace.isOpen = false;
-        host.workspace.rootPath = '';
-        host.workspace.name = '';
-        host.events.emit('lamp.workspace.closed', {});
+      close: async () => {
+        const commands = this.host.commandService as { execute: (id: string) => Promise<void> };
+        await commands.execute('app.closeWorkspace');
       },
       contains: (filePath) => requireLampAPI('plugin workspace contains').isFileInDirectory(filePath, host.workspace.rootPath),
     };

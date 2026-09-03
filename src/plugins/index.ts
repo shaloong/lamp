@@ -351,6 +351,7 @@ export class PluginHost {
   private _editorInstance: Editor | null = null;
   private _workspace = reactive({ isOpen: false, rootPath: '', name: '' });
   private readonly _loader = new PluginLoader();
+  private _dynamicQueue: Promise<void> = Promise.resolve();
 
   /** AI operation loading/error state — shared across all AI actions */
   readonly aiState = reactive({
@@ -407,28 +408,30 @@ export class PluginHost {
    * Update workspace state (called from workspace store or App.vue).
    * When the workspace changes, workspace plugins are reloaded.
    */
-  setWorkspaceState(isOpen: boolean, rootPath: string, name: string): void {
+  async setWorkspaceState(isOpen: boolean, rootPath: string, name: string): Promise<void> {
     const wasOpen = this._workspace.isOpen;
+    const previousRootPath = this._workspace.rootPath;
+    const workspaceChanged = wasOpen && isOpen && previousRootPath !== rootPath;
+
+    if (wasOpen && (!isOpen || workspaceChanged)) {
+      await this._deactivateScope('workspace');
+      this.events.emit('lamp.workspace.closed', { rootPath: previousRootPath });
+    }
+
     this._workspace.isOpen = isOpen;
     this._workspace.rootPath = rootPath;
     this._workspace.name = name;
-    if (isOpen && !wasOpen) {
+    if (isOpen && (!wasOpen || workspaceChanged)) {
       this.events.emit('lamp.workspace.opened', { rootPath, name });
-      // Reload workspace plugins
-      this._deactivateScope('workspace');
-      this.startDynamic();
-    } else if (!isOpen && wasOpen) {
-      this._deactivateScope('workspace');
-      this.events.emit('lamp.workspace.closed', {});
+      void this.startDynamic();
     }
   }
 
-  private _deactivateScope(scope: PluginScope): void {
-    for (const [id, loaded] of this._loaded.entries()) {
-      if (loaded.scope === scope) {
-        this.deactivate(id);
-      }
-    }
+  private async _deactivateScope(scope: PluginScope): Promise<void> {
+    const pluginIds = Array.from(this._loaded.entries())
+      .filter(([, loaded]) => loaded.scope === scope)
+      .map(([id]) => id);
+    await Promise.all(pluginIds.map(id => this.deactivate(id)));
   }
 
   /**
@@ -458,7 +461,13 @@ export class PluginHost {
    * Load and activate dynamic plugins (workspace + user plugins).
    * Called after the app is mounted and the workspace is known.
    */
-  async startDynamic(): Promise<void> {
+  startDynamic(): Promise<void> {
+    const nextRun = this._dynamicQueue.then(() => this._startDynamic());
+    this._dynamicQueue = nextRun.catch(() => undefined);
+    return nextRun;
+  }
+
+  private async _startDynamic(): Promise<void> {
     try {
       // 1. Workspace plugins: <workspace-root>/.lamp/plugins/
       if (this._workspace.isOpen && this._workspace.rootPath) {
