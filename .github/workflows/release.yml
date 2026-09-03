@@ -2,123 +2,150 @@ name: Release
 
 on:
   push:
-    tags: ["v*"]
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to release (e.g. v1.0.0). Must already exist."
+        description: "Existing version tag to release, for example v1.0.0"
         required: true
+        type: string
 
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
 env:
-  PNPM_VERSION: "10"
+  NODE_VERSION: "24"
+  CARGO_TERM_COLOR: always
 
 jobs:
-  # ── Changelog ─────────────────────────────────────────────
-  changelog:
-    runs-on: ubuntu-latest
+  verify:
+    name: Verify release
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
     outputs:
-      body: ${{ steps.changelog.outputs.body }}
-      tag: ${{ steps.resolve-tag.outputs.tag }}
+      tag: ${{ steps.release.outputs.tag }}
     steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      - id: resolve-tag
+      - name: Resolve release tag
+        id: release
+        shell: bash
         run: |
-          TAG="${{ github.event.inputs.tag || github.ref_name }}"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          tag="${{ inputs.tag || github.ref_name }}"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid release tag: $tag" >&2
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
-      - id: changelog
-        uses: actions/github-script@v8
-        env:
-          TAG: ${{ steps.resolve-tag.outputs.tag }}
+      - name: Checkout release tag
+        uses: actions/checkout@v7
         with:
-          script: |
-            const tag = process.env.TAG;
-            // Find the prior tag as base — walk back to previous semver tag
-            const { data: tags } = await github.rest.repos.listTags({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              per_page: 50,
-            });
-            const idx = tags.findIndex(t => t.name === tag);
-            const base = idx >= 0 && idx + 1 < tags.length
-              ? tags[idx + 1].name
-              : 'main';
+          ref: ${{ steps.release.outputs.tag }}
 
-            const { data: commits } = await github.rest.repos.compareCommits({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              base,
-              head: tag,
-            });
-            return commits.commits
-              .map(c => `- ${c.commit.message.split('\n')[0]} (@${c.author?.login || c.commit.author.name})`)
-              .join('\n');
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
 
-  # ── Build matrix ──────────────────────────────────────────
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check release version
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+        run: pnpm run version:check
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Run regression tests
+        run: pnpm run test
+
+      - name: Build frontend
+        run: pnpm run build
+
   build:
-    needs: changelog
+    name: Build ${{ matrix.name }}
+    needs: verify
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - name: Linux x64
+            os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
-            deps: |
-              sudo apt-get update
-              sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-
-          - os: windows-latest
+            args: --target x86_64-unknown-linux-gnu
+          - name: Windows x64
+            os: windows-latest
             target: x86_64-pc-windows-msvc
-
-          - os: macos-latest
+            args: --target x86_64-pc-windows-msvc
+          - name: macOS Apple Silicon
+            os: macos-latest
             target: aarch64-apple-darwin
-
-          - os: macos-latest
+            args: --target aarch64-apple-darwin
+          - name: macOS Intel
+            os: macos-15-intel
             target: x86_64-apple-darwin
+            args: --target x86_64-apple-darwin
 
-    runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout release tag
+        uses: actions/checkout@v7
         with:
-          ref: ${{ needs.changelog.outputs.tag }}
+          ref: ${{ needs.verify.outputs.tag }}
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
 
-      - uses: actions/setup-node@v4
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
         with:
-          node-version: "24"
+          node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Setup Rust target
+        uses: dtolnay/rust-toolchain@stable
         with:
-          target: ${{ matrix.target }}
+          targets: ${{ matrix.target }}
 
-      - uses: Swatinem/rust-cache@v2
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
+          key: ${{ matrix.target }}
+          cache-on-failure: true
 
-      - name: Install system deps (Linux)
-        if: runner.os == 'Linux'
-        run: ${{ matrix.deps }}
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
-      - run: pnpm install --frozen-lockfile
-
-      - name: Build Tauri app
-        uses: tauri-apps/tauri-action@v0
+      - name: Build and upload bundles
+        uses: tauri-apps/tauri-action@v0.6.2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ needs.changelog.outputs.tag }}
-          releaseName: "Lamp ${{ needs.changelog.outputs.tag }}"
-          releaseBody: ${{ needs.changelog.outputs.body }}
+          tauriScript: pnpm tauri
+          tagName: ${{ needs.verify.outputs.tag }}
+          releaseName: Lamp ${{ needs.verify.outputs.tag }}
+          generateReleaseNotes: true
           releaseDraft: true
-          prerelease: ${{ contains(needs.changelog.outputs.tag, '-') }}
-          args: --target ${{ matrix.target }}
+          prerelease: ${{ contains(needs.verify.outputs.tag, '-') }}
+          releaseAssetNamePattern: "[name]_[version]_[platform]_[arch]_[bundle][setup][ext]"
+          args: ${{ matrix.args }}

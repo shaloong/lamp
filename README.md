@@ -31,7 +31,19 @@ pnpm build           # generate Vite assets in dist/
 pnpm tauri build     # invoke Tauri bundler
 ```
 
-Tauri drops platform-specific artifacts under `src-tauri/target/release/bundle/`. Windows gets NSIS installers, macOS receives a DMG, and Linux exports distributable directories.
+Tauri drops platform-specific artifacts under `src-tauri/target/release/bundle/`. Windows gets NSIS installers, macOS receives a DMG, and Linux exports AppImage and system-package bundles.
+
+Application releases use one SemVer value across `package.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`, and `src-tauri/tauri.conf.json`:
+
+```bash
+pnpm run version:set -- 1.1.0
+pnpm run check
+git commit -am "chore(release): prepare v1.1.0"
+git tag v1.1.0
+git push origin develop v1.1.0
+```
+
+Pushing the tag runs the release workflow, builds Linux, Windows, and both macOS architectures, and creates a draft GitHub Release with generated release notes. `pnpm run version:check` can be used independently to audit version alignment.
 
 ## AI Configuration
 

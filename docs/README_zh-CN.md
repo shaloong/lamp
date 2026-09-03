@@ -31,7 +31,19 @@ pnpm build           # 构建 Vite 静态资源到 dist/
 pnpm tauri build     # 调用 Tauri 打包工具生成安装包
 ```
 
-Tauri 会在 `src-tauri/target/release/bundle/` 下输出对应平台的产物：Windows NSIS 安装包、macOS DMG、Linux 可分发目录。
+Tauri 会在 `src-tauri/target/release/bundle/` 下输出对应平台的产物：Windows NSIS 安装包、macOS DMG、Linux AppImage 与系统软件包。
+
+应用发布统一使用一个 SemVer 版本，并同步写入 `package.json`、`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock` 和 `src-tauri/tauri.conf.json`：
+
+```bash
+pnpm run version:set -- 1.1.0
+pnpm run check
+git commit -am "chore(release): prepare v1.1.0"
+git tag v1.1.0
+git push origin develop v1.1.0
+```
+
+推送 tag 后，Release 工作流会构建 Linux、Windows、macOS Intel 与 Apple Silicon 安装包，并生成带自动发行说明的 GitHub 草稿 Release。也可以单独运行 `pnpm run version:check` 检查版本是否一致。
 
 ## AI 配置
 

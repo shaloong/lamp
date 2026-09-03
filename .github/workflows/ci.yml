@@ -4,58 +4,83 @@ on:
   pull_request:
     branches: [main, develop]
   push:
-    branches: [develop]
+    branches: [main, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 env:
-  PNPM_VERSION: "10"
+  NODE_VERSION: "24"
+  CARGO_TERM_COLOR: always
 
 jobs:
-  # ── Frontend ──────────────────────────────────────────────
   frontend:
-    runs-on: ubuntu-latest
+    name: Frontend quality
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout
+        uses: actions/checkout@v7
 
-      - uses: pnpm/action-setup@v4
-        with:
-          version: ${{ env.PNPM_VERSION }}
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
         with:
-          node-version: "24"
+          node-version: ${{ env.NODE_VERSION }}
           cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
 
-      - run: pnpm install --frozen-lockfile
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check application versions
+        run: pnpm run version:check
 
       - name: Lint
-        run: pnpm dlx oxlint@latest --import-plugin --node-plugin
+        run: pnpm run lint
+
+      - name: Run regression tests
+        run: pnpm run test
 
       - name: Build frontend
-        run: pnpm build
+        run: pnpm run build
 
-  # ── Backend (Rust) ────────────────────────────────────────
-  backend:
-    runs-on: ubuntu-latest
+  rust:
+    name: Rust quality
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v5
+      - name: Checkout
+        uses: actions/checkout@v7
 
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: src-tauri -> target
-
-      - name: Install system deps
+      - name: Install Linux dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      - name: Clippy
-        run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
 
-      - name: Check compilation
-        run: cargo check --manifest-path src-tauri/Cargo.toml
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          cache-on-failure: true
+
+      - name: Check formatting
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+
+      - name: Run Clippy
+        run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+      - name: Run Rust tests
+        run: cargo test --locked --manifest-path src-tauri/Cargo.toml --all-targets
