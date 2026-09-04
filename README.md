@@ -1,56 +1,69 @@
-# Lamp
+<p align="center">
+  <img src="res/app.png" width="72" height="72" alt="Lamp">
+</p>
 
-[English](README.md) | [简体中文](./docs/README_zh-CN.md) | [Official Website](https://www.shaloong.com/lamp/)
+<h1 align="center">Lamp</h1>
 
-Lamp is a modern, cross-platform, distraction-free desktop editor crafted for writers. Born from the Shaloong studio, it combines the elegance of a minimalist WYSIWYG experience with the power of Markdown-inspired tooling, AI assistance, and a Tauri shell that feels native on every desktop OS.
+<p align="center">
+  <strong>A quiet place for your next chapter.</strong><br>
+  A local-first desktop editor for novels, long-form writing, and a steady writing habit.
+</p>
 
-## Highlights
+<p align="center">
+  <a href="https://github.com/shaloong/lamp/releases">Get Lamp</a> |
+  <a href="docs/README_zh-CN.md">简体中文</a> |
+  <a href="https://github.com/shaloong/lamp/issues">Feedback</a>
+</p>
 
-- **Frictionless writing**: Carefully tuned typography and minimal UI chrome keep your focus on ideas, not interface clutter.
-- **Lean but capable**: TipTap-based rich text editor, common Markdown shortcuts, inline formatting, document tree, autosave, version snapshots, and AI polish/expand tools.
-- **True desktop presence**: One codebase ships to Windows, macOS, and Linux using Tauri.
-- **Totally free**: Lamp is open, transparent, and will remain free to download and use.
-- **Community powered**: Built atop generous open-source ecosystems; contributions and forks are welcome.
+## Stay With the Story
 
-## Quick Start
+- **Space to focus.** A clean rich-text editor, paragraph focus mode, and light, dark, or system themes.
+- **Keep chapters together.** Folder workspaces, document tabs, and find and replace within a document or across a workspace.
+- **Pick up your draft.** Automatic recovery copies and startup recovery help you return to unfinished writing.
+- **See your progress.** Word counts, daily goals, writing streaks, and a contribution heatmap. A small celebration when you reach your goal.
+
+## Your Words, Your Files
+
+Open and save Lamp documents (`.lmph`), Markdown (`.md`), plain text (`.txt`), and HTML (`.html`). Documents stay in local files. Core writing works offline and does not require an account.
+
+AI assistance is optional. Connect your own provider in **Settings > AI** to polish, expand, continue, or summarize text, then accept or reject the suggestion. Text used in an AI request is sent to the provider you configure.
+
+## Get Lamp
+
+Browse [Releases](https://github.com/shaloong/lamp/releases) for available builds. You can also run Lamp from source below.
+
+| System | Architecture | Packages |
+| --- | --- | --- |
+| Windows | x64 / arm64 | `-setup.exe`, `.msi` |
+| macOS | x64 (Intel) / arm64 (Apple Silicon) | `.dmg` |
+| Linux | x64 / arm64 | `.AppImage`, `.deb`, `.rpm` |
+
+Download names follow `Lamp-v<version>-<system>-<architecture>[-setup]<extension>`, such as `Lamp-v1.0.0-Windows-x64-setup.exe`.
+
+## Make It Yours
+
+Extend Lamp with commands, panels, editor tools, themes, and AI actions. Built-in and external plugins use the same contribution system, with their own settings and translations.
+
+[Explore the plugin guide](docs/PLUGIN_SYSTEM.md)
+
+<details>
+<summary>Development and releases</summary>
+
+Built with **Tauri, Vue, and TipTap**. Use Node.js 24, the pnpm version pinned in [package.json](package.json), stable Rust, and the [Tauri platform prerequisites](https://v2.tauri.app/start/prerequisites/).
 
 ```bash
 pnpm install
-pnpm tauri dev
+pnpm tauri dev       # Run the desktop app in development
+pnpm run check       # Check versions, lint, test, and build the frontend
+pnpm tauri build     # Build the app and installers for the current platform
 ```
 
-The first command installs dependencies. The second boots both the Vite dev server (port 1086) and the Tauri shell. Prefer to run each piece manually?
+For a release, run `pnpm run version:set -- <version>`, run the checks, and commit the synchronized version changes. Push the matching `v<version>` tag to build all six system/architecture targets and prepare a draft Release. See the [release workflow](.github/workflows/release.yml) for details.
 
-1. `pnpm dev`
-2. `pnpm tauri dev`
+</details>
 
-## Packaging & Release
+## Contribute
 
-```bash
-pnpm build           # generate Vite assets in dist/
-pnpm tauri build     # invoke Tauri bundler
-```
+Found a rough edge or have an idea for a better writing experience? [Open an issue](https://github.com/shaloong/lamp/issues). Code, translations, and thoughtful feedback are welcome.
 
-Tauri drops platform-specific artifacts under `src-tauri/target/release/bundle/`. Windows gets NSIS installers, macOS receives a DMG, and Linux exports AppImage and system-package bundles.
-
-Application releases use one SemVer value across `package.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock`, and `src-tauri/tauri.conf.json`:
-
-```bash
-pnpm run version:set -- 1.1.0
-pnpm run check
-git commit -am "chore(release): prepare v1.1.0"
-git tag v1.1.0
-git push origin develop v1.1.0
-```
-
-Pushing the tag runs the release workflow, builds x64 and ARM64 packages for Linux, Windows, and macOS, and creates a draft GitHub Release with generated release notes. `pnpm run version:check` can be used independently to audit version alignment.
-
-Release downloads use `Lamp-v<version>-<platform>-<architecture>[-setup]<extension>`, for example `Lamp-v1.0.0-Windows-x64-setup.exe` and `Lamp-v1.0.0-macOS-arm64.dmg`. Platform labels are `Windows`, `Linux`, and `macOS`; architecture labels are `x64` (Intel/AMD, including Intel Macs) and `arm64` (including Apple Silicon Macs). Linux ARM64 uses a native runner; Windows ARM64 is cross-compiled with the Visual Studio ARM64 tools. This naming applies to uploaded Release assets; local bundle filenames follow Tauri's defaults. Legacy 32-bit targets and macOS universal bundles are not part of the default matrix.
-
-## AI Configuration
-
-Inside the desktop app open **Settings → AI** and enter your provider's Base URL, Model, and API Key. Lamp persists these values to `config.json` so you only set them once per device.
-
-## Community & Support
-
-Shaloong is currently a passion project rather than a formal company. We publish experiments, tools, and essays at [shaloong.com](https://www.shaloong.com/). Found a bug or want to ship a feature? Open an Issue/PR — every bit of feedback helps Lamp become a better writing companion.
+Free and open source under the [MIT License](LICENSE).

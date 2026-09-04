@@ -1,68 +1,69 @@
-# Lamp
+<p align="center">
+  <img src="../res/app.png" width="72" height="72" alt="Lamp">
+</p>
 
-[English](../README.md) | [简体中文](README_zh-CN.md) | [官网](https://www.shaloong.com/lamp/)
+<h1 align="center">Lamp</h1>
 
-Lamp 是一款现代化的跨平台、零干扰桌面编辑器，专为写作者打造。由 Shaloong 工作室倾力呈现，它将极简主义 WYSIWYG 的优雅体验与 Markdown 风格的排版工具、AI 辅助功能，以及让你在每个桌面操作系统上都倍感原生体验的 Tauri 外壳完美融合。
+<p align="center">
+  <strong>专注写作，让故事继续。</strong><br>
+  为小说、长文与日常创作而做的本地优先桌面编辑器。
+</p>
 
-## 亮点特性
+<p align="center">
+  <a href="https://github.com/shaloong/lamp/releases">获取 Lamp</a> |
+  <a href="../README.md">English</a> |
+  <a href="https://github.com/shaloong/lamp/issues">反馈建议</a>
+</p>
 
-- **零干扰的写作体验**：精心调校的排版与极简界面设计，让注意力始终聚焦于内容本身。
-- **轻量却不将就**：基于 TipTap 的富文本编辑器、常用 Markdown 快捷键、行内格式化、文档树、自动保存、版本快照，以及 AI 润色与扩写工具。
-- **真正的桌面原生感**：一份代码同时覆盖 Windows、macOS 和 Linux，基于 Tauri 构建。
-- **永久免费**：Lamp 坚持开源透明，将长期免费提供下载与使用。
-- **社区驱动**：依托于慷慨的开源生态，同时也欢迎你的 Issue、PR 与二次开发。
+## 把注意力留给故事
 
-## 快速上手
+- **写得专注。** 简洁的富文本编辑器、段落专注模式，以及浅色、深色和跟随系统的主题。
+- **章节井井有条。** 用文件夹管理作品，在标签页间切换文档，支持文档内与整个工作区的查找替换。
+- **接着上次继续。** 自动保存恢复副本，启动时找回未完成的草稿，让中断后的继续更从容。
+- **看见每天的积累。** 字数统计、每日目标、连续写作记录和写作热力图；达成目标时，给自己一个小小的庆祝。
+
+## 你的文字，你的文件
+
+打开和保存 Lamp 文档（`.lmph`）、Markdown（`.md`）、纯文本（`.txt`）与 HTML（`.html`）。文稿保存在本地，基础写作无需联网，也无需注册账号。
+
+AI 辅助完全可选。在 **设置 > AI** 中接入自己的服务商，即可润色、扩写、续写或总结，再自行决定接受或拒绝建议。使用 AI 时，请求涉及的文本会发送给你配置的服务商。
+
+## 获取 Lamp
+
+在 [Releases](https://github.com/shaloong/lamp/releases) 中查看可用版本，也可以按下方说明从源码运行。
+
+| 系统 | 架构 | 安装包 |
+| --- | --- | --- |
+| Windows | x64 / arm64 | `-setup.exe`、`.msi` |
+| macOS | x64（Intel）/ arm64（Apple Silicon） | `.dmg` |
+| Linux | x64 / arm64 | `.AppImage`、`.deb`、`.rpm` |
+
+下载文件统一使用 `Lamp-v<版本>-<系统>-<架构>[-setup]<扩展名>`，例如 `Lamp-v1.0.0-Windows-x64-setup.exe`。
+
+## 按你的习惯扩展
+
+通过插件加入命令、侧栏面板、编辑工具、主题与 AI 操作。内建插件和外部插件使用同一套扩展机制，各自管理设置与翻译。
+
+[了解插件开发](PLUGIN_SYSTEM.md)
+
+<details>
+<summary>开发与发布</summary>
+
+基于 **Tauri、Vue 和 TipTap** 构建。开发前请准备 Node.js 24、[package.json](../package.json) 中指定版本的 pnpm、稳定版 Rust，以及 [Tauri 对应平台的依赖](https://v2.tauri.app/start/prerequisites/)。
 
 ```bash
 pnpm install
-pnpm tauri dev
+pnpm tauri dev       # 启动桌面开发环境
+pnpm run check       # 版本检查、代码检查、测试与前端构建
+pnpm tauri build     # 为当前平台构建应用和安装包
 ```
 
-第一条命令安装依赖，第二条同时启动 Vite 开发服务器（默认 1086 端口）和 Tauri 外壳。如果想分开手动启动：
+发布前运行 `pnpm run version:set -- <版本>`，完成检查并提交同步后的版本变更，再推送对应的 `v<版本>` tag。CI 会构建六个系统与架构组合，并生成草稿 Release。具体流程见 [发布工作流](../.github/workflows/release.yml)。
 
-1. `pnpm dev`
-2. `pnpm tauri dev`
+</details>
 
-## 打包发布
+## 一起完善 Lamp
 
-```bash
-pnpm build           # 构建 Vite 静态资源到 dist/
-pnpm tauri build     # 调用 Tauri 打包工具生成安装包
-```
+遇到问题，或有让写作更顺手的想法？欢迎[提交 Issue](https://github.com/shaloong/lamp/issues)。代码、翻译和认真使用后的反馈，都能让 Lamp 更好。
 
-Tauri 会在 `src-tauri/target/release/bundle/` 下输出对应平台的产物：Windows NSIS 安装包、macOS DMG、Linux AppImage 与系统软件包。
-
-应用发布统一使用一个 SemVer 版本，并同步写入 `package.json`、`src-tauri/Cargo.toml`、`src-tauri/Cargo.lock` 和 `src-tauri/tauri.conf.json`：
-
-```bash
-pnpm run version:set -- 1.1.0
-pnpm run check
-git commit -am "chore(release): prepare v1.1.0"
-git tag v1.1.0
-git push origin develop v1.1.0
-```
-
-推送 tag 后，Release 工作流会分别构建 Linux、Windows、macOS 的 x64 与 ARM64 安装包，并生成带自动发行说明的 GitHub 草稿 Release。也可以单独运行 `pnpm run version:check` 检查版本是否一致。
-
-Release 下载文件统一命名为 `Lamp-v<版本>-<平台>-<架构>[-setup]<扩展名>`，例如 `Lamp-v1.0.0-Windows-x64-setup.exe`、`Lamp-v1.0.0-macOS-arm64.dmg`。平台标识为 `Windows`、`Linux`、`macOS`；架构标识为 `x64`（Intel/AMD，包括 Intel Mac）和 `arm64`（包括 Apple Silicon Mac）。Linux ARM64 使用原生 runner，Windows ARM64 使用 Visual Studio ARM64 工具链交叉编译。此命名作用于上传后的 Release 附件，本地打包文件名仍遵循 Tauri 默认规则。默认矩阵不包含旧式 32 位目标或 macOS 通用包。
-
-## AI 配置
-
-在桌面应用中打开 **设置 → AI**，填写你的服务提供商的 Base URL、Model 和 API Key。配置会持久化到 `config.json`，下次启动自动复用。
-
-## 插件与核心工具栏
-
-- 核心编辑器工具栏由主程序维护，属于不可禁用的内核能力，保证基础写作体验稳定可用。
-- 插件系统仍然开放工具栏扩展能力：内置插件与外部插件都可以通过 `editorToolbar` 贡献点插入或扩展按钮。
-- AI 建议扩展（行内建议/接受/拒绝）由 `lamp.ai-actions` 插件通过 `tipTapExtensions` 贡献，不再由编辑器主程序硬编码导入。
-- `tipTapExtensions` 贡献同时支持 `Extension.create(...)` 返回的扩展实例与扩展构造函数两种形式。
-- 设置面板采用统一 section 元数据驱动渲染：内置设置与插件设置都通过同一导航/激活模型路由，不再按固定 tab id 硬编码分支。
-- 主题贡献链路已接入：主程序会消费 `themes` 贡献并应用 CSS Tokens（`--*`），支持注入绝对路径/URL，也支持相对路径样式表（相对插件根目录解析）。
-- 外部插件支持从工作区和用户插件目录自动发现并加载：
-  - `<workspace>/.lamp/plugins/`
-  - `~/.lamp/plugins/`
-
-## 社区与支持
-
-Shaloong 目前是一个兴趣驱动的小型工作室。我们会在 [shaloong.com](https://www.shaloong.com/) 分享工具与灵感。发现 Bug 或想贡献功能？欢迎提交 Issue/PR，每一份反馈都在帮助 Lamp 成为写作者更得心应手的创作伙伴。
+免费开源，采用 [MIT 许可证](../LICENSE)。
