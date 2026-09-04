@@ -22,7 +22,7 @@
         "decorations": false,
         "resizable": true,
         "center": true,
-        "url": "http://localhost:1086"
+        "url": "index.html"
       }
     ],
     "security": {
