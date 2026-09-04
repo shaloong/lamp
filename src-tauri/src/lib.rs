@@ -10,78 +10,8 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 // ==================== 配置管理 ====================
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AIConfig {
-    pub provider: String,
-    pub base_url: String,
-    pub api_key: String,
-    pub model: String,
-}
-
-impl Default for AIConfig {
-    fn default() -> Self {
-        Self {
-            provider: "deepseek".to_string(),
-            base_url: "https://api.deepseek.com".to_string(),
-            api_key: String::new(),
-            model: "deepseek-chat".to_string(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct GeneralSettings {
-    pub language: String,
-    #[serde(rename = "autoSave", default)]
-    pub auto_save: bool,
-    #[serde(rename = "autoSaveInterval", default = "default_auto_save_interval")]
-    pub auto_save_interval: u32,
-    #[serde(rename = "restoreOnStart", default)]
-    pub restore_on_start: bool,
-    #[serde(rename = "openLastWorkspace", default)]
-    pub open_last_workspace: bool,
-    #[serde(rename = "theme", default = "default_theme")]
-    pub theme: String,
-}
-
-fn default_theme() -> String {
-    "system".to_string()
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct EditorSettings {
-    #[serde(rename = "focusMode", default)]
-    pub focus_mode: bool,
-}
-
-fn default_auto_save_interval() -> u32 {
-    30
-}
-
-impl Default for GeneralSettings {
-    fn default() -> Self {
-        Self {
-            language: "en-US".to_string(),
-            auto_save: true,
-            auto_save_interval: 30,
-            restore_on_start: true,
-            open_last_workspace: false,
-            theme: default_theme(),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct AppConfig {
-    #[serde(default)]
-    pub general: GeneralSettings,
-    #[serde(rename = "ai", default)]
-    pub ai_config: AIConfig,
-    #[serde(rename = "editor", default)]
-    pub editor: EditorSettings,
-}
-
-pub struct ConfigState(pub Mutex<AppConfig>);
+mod config;
+use config::{AIConfig, ConfigState, EditorSettings, GeneralSettings};
 
 pub struct WindowCloseState(pub Mutex<bool>);
 
@@ -237,44 +167,6 @@ async fn stop_watching(state: State<'_, WatcherState>) -> Result<(), String> {
     Ok(())
 }
 
-fn get_config_path() -> PathBuf {
-    let mut path = std::env::current_exe().unwrap_or_default();
-    path.set_file_name("config.json");
-    if !path.exists() {
-        // 尝试在项目根目录
-        path = PathBuf::from("config.json");
-    }
-    path
-}
-
-fn load_config() -> AppConfig {
-    let config_path = get_config_path();
-    if config_path.exists() {
-        if let Ok(content) = fs::read_to_string(&config_path) {
-            if let Ok(config) = serde_json::from_str(&content) {
-                return config;
-            }
-        }
-    }
-    // 默认配置
-    AppConfig {
-        general: GeneralSettings::default(),
-        ai_config: AIConfig {
-            provider: "deepseek".to_string(),
-            base_url: "https://api.deepseek.com".to_string(),
-            api_key: String::new(),
-            model: "deepseek-chat".to_string(),
-        },
-        editor: EditorSettings::default(),
-    }
-}
-
-fn save_config(config: &AppConfig) -> Result<(), String> {
-    let config_path = get_config_path();
-    let content = serde_json::to_string_pretty(config).map_err(|e| e.to_string())?;
-    write_file_atomically(&config_path, content.as_bytes())
-}
-
 // ==================== AI 聊天 ====================
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -307,7 +199,7 @@ async fn ai_chat(
 ) -> Result<String, String> {
     // 先获取锁，克隆需要的数据，然后释放锁
     let (_provider, api_key, base_url, model) = {
-        let config = config_state.0.lock().map_err(|e| e.to_string())?;
+        let config = config_state.config.lock().map_err(|e| e.to_string())?;
 
         if config.ai_config.api_key.is_empty() {
             return Err("OpenAI API key is not configured.".to_string());
@@ -376,7 +268,7 @@ async fn ai_chat(
 
 #[tauri::command]
 fn get_ai_settings(config_state: State<'_, ConfigState>) -> Result<AIConfig, String> {
-    let config = config_state.0.lock().map_err(|e| e.to_string())?;
+    let config = config_state.config.lock().map_err(|e| e.to_string())?;
     Ok(config.ai_config.clone())
 }
 
@@ -388,24 +280,24 @@ fn save_ai_settings(
     api_key: String,
     model: String,
 ) -> Result<bool, String> {
-    let mut config = config_state.0.lock().map_err(|e| e.to_string())?;
-    config.ai_config = AIConfig {
-        provider: provider.trim().to_string(),
-        base_url: base_url.trim().to_string(),
-        api_key: api_key.trim().to_string(),
-        model: if model.trim().is_empty() {
-            "deepseek-chat".to_string()
-        } else {
-            model.trim().to_string()
-        },
-    };
-    save_config(&config)?;
+    config_state.update(|config| {
+        config.ai_config = AIConfig {
+            provider: provider.trim().to_string(),
+            base_url: base_url.trim().to_string(),
+            api_key: api_key.trim().to_string(),
+            model: if model.trim().is_empty() {
+                "deepseek-chat".to_string()
+            } else {
+                model.trim().to_string()
+            },
+        };
+    })?;
     Ok(true)
 }
 
 #[tauri::command]
 fn get_general_settings(config_state: State<'_, ConfigState>) -> Result<GeneralSettings, String> {
-    let config = config_state.0.lock().map_err(|e| e.to_string())?;
+    let config = config_state.config.lock().map_err(|e| e.to_string())?;
     Ok(config.general.clone())
 }
 
@@ -419,22 +311,22 @@ fn save_general_settings(
     open_last_workspace: bool,
     theme: String,
 ) -> Result<bool, String> {
-    let mut config = config_state.0.lock().map_err(|e| e.to_string())?;
-    config.general = GeneralSettings {
-        language: language.trim().to_string(),
-        auto_save,
-        auto_save_interval,
-        restore_on_start,
-        open_last_workspace,
-        theme: theme.trim().to_string(),
-    };
-    save_config(&config)?;
+    config_state.update(|config| {
+        config.general = GeneralSettings {
+            language: language.trim().to_string(),
+            auto_save,
+            auto_save_interval,
+            restore_on_start,
+            open_last_workspace,
+            theme: theme.trim().to_string(),
+        };
+    })?;
     Ok(true)
 }
 
 #[tauri::command]
 fn get_editor_settings(config_state: State<'_, ConfigState>) -> Result<EditorSettings, String> {
-    let config = config_state.0.lock().map_err(|e| e.to_string())?;
+    let config = config_state.config.lock().map_err(|e| e.to_string())?;
     Ok(config.editor.clone())
 }
 
@@ -443,9 +335,9 @@ fn save_editor_settings(
     config_state: State<'_, ConfigState>,
     focus_mode: bool,
 ) -> Result<bool, String> {
-    let mut config = config_state.0.lock().map_err(|e| e.to_string())?;
-    config.editor = EditorSettings { focus_mode };
-    save_config(&config)?;
+    config_state.update(|config| {
+        config.editor = EditorSettings { focus_mode };
+    })?;
     Ok(true)
 }
 
@@ -1118,13 +1010,17 @@ async fn search_workspace(
 pub fn run() {
     env_logger::init();
 
-    let config = load_config();
-
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .manage(ConfigState(Mutex::new(config)))
+        .setup(|app| {
+            let app_data = app.path().app_data_dir()?;
+            let config = ConfigState::load(&app_data, &config::legacy_config_paths())
+                .map_err(std::io::Error::other)?;
+            app.manage(config);
+            Ok(())
+        })
         .manage(WindowCloseState(Mutex::new(false)))
         .manage(WatcherState::default())
         .on_window_event(|window, event| {
