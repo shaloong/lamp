@@ -45,6 +45,8 @@ git push origin develop v1.1.0
 
 Pushing the tag runs the release workflow, builds Linux, Windows, and both macOS architectures, and creates a draft GitHub Release with generated release notes. `pnpm run version:check` can be used independently to audit version alignment.
 
+Release downloads use `Lamp_<version>_<platform>_<architecture>[-setup]<extension>`, for example `Lamp_1.0.0_Windows_x64-setup.exe` and `Lamp_1.0.0_macOS_Apple-Silicon.dmg`. macOS downloads use `Intel` or `Apple-Silicon`; Windows and Linux use `x64`. This naming applies to uploaded Release assets; local bundle filenames follow Tauri's defaults.
+
 ## AI Configuration
 
 Inside the desktop app open **Settings → AI** and enter your provider's Base URL, Model, and API Key. Lamp persists these values to `config.json` so you only set them once per device.

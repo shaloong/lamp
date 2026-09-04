@@ -45,6 +45,8 @@ git push origin develop v1.1.0
 
 推送 tag 后，Release 工作流会构建 Linux、Windows、macOS Intel 与 Apple Silicon 安装包，并生成带自动发行说明的 GitHub 草稿 Release。也可以单独运行 `pnpm run version:check` 检查版本是否一致。
 
+Release 下载文件统一命名为 `Lamp_<版本>_<平台>_<架构>[-setup]<扩展名>`，例如 `Lamp_1.0.0_Windows_x64-setup.exe`、`Lamp_1.0.0_macOS_Apple-Silicon.dmg`。macOS 使用 `Intel` 或 `Apple-Silicon`，Windows 和 Linux 使用 `x64`。此命名作用于上传后的 Release 附件，本地打包文件名仍遵循 Tauri 默认规则。
+
 ## AI 配置
 
 在桌面应用中打开 **设置 → AI**，填写你的服务提供商的 Base URL、Model 和 API Key。配置会持久化到 `config.json`，下次启动自动复用。

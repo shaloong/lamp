@@ -83,18 +83,22 @@ jobs:
       matrix:
         include:
           - name: Linux x64
+            artifactLabel: Linux_x64
             os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             args: --target x86_64-unknown-linux-gnu
           - name: Windows x64
+            artifactLabel: Windows_x64
             os: windows-latest
             target: x86_64-pc-windows-msvc
             args: --target x86_64-pc-windows-msvc
           - name: macOS Apple Silicon
+            artifactLabel: macOS_Apple-Silicon
             os: macos-latest
             target: aarch64-apple-darwin
             args: --target aarch64-apple-darwin
           - name: macOS Intel
+            artifactLabel: macOS_Intel
             os: macos-15-intel
             target: x86_64-apple-darwin
             args: --target x86_64-apple-darwin
@@ -147,5 +151,5 @@ jobs:
           generateReleaseNotes: true
           releaseDraft: true
           prerelease: ${{ contains(needs.verify.outputs.tag, '-') }}
-          releaseAssetNamePattern: "[name]_[version]_[platform]_[arch]_[bundle][setup][ext]"
+          assetNamePattern: "[name]_[version]_${{ matrix.artifactLabel }}[setup][ext]"
           args: ${{ matrix.args }}
