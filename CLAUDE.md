@@ -106,6 +106,8 @@ Application versions are synchronized across `package.json`, `src-tauri/Cargo.to
 
 Uploaded assets follow `Lamp-v<version>-<system>-<architecture>[-setup]<extension>`. This is a release-upload rename, not a change to Tauri's local bundle filenames.
 
+Maintain one `## [<version>]` entry in [CHANGELOG.md](CHANGELOG.md) for each release, using Overview, Highlights, Downloads, Installation, and Known Limitations. `node scripts/release-notes.mjs` previews the current version's release body; the release workflow uses the same content and fails if the entry is missing or ambiguous. Keep releases as drafts until all target builds and signature checks finish and assets have been reviewed.
+
 Use matching major/minor versions for Tauri Rust/JavaScript package pairs. Do not assume their independently released patch versions must be equal.
 
 ## Working Conventions

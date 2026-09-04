@@ -29,6 +29,7 @@ jobs:
     timeout-minutes: 25
     outputs:
       tag: ${{ steps.release.outputs.tag }}
+      notes: ${{ steps.notes.outputs.body }}
     steps:
       - name: Resolve release tag
         id: release
@@ -63,6 +64,10 @@ jobs:
         env:
           RELEASE_TAG: ${{ steps.release.outputs.tag }}
         run: pnpm run version:check
+
+      - name: Read versioned release notes
+        id: notes
+        run: node scripts/release-notes.mjs
 
       - name: Lint
         run: pnpm run lint
@@ -168,15 +173,8 @@ jobs:
           tauriScript: pnpm tauri
           tagName: ${{ needs.verify.outputs.tag }}
           releaseName: Lamp ${{ needs.verify.outputs.tag }}
-          releaseBody: |
-            ### Downloads
-            - Windows / Linux: choose `x64` for Intel or AMD PCs, or `arm64` for ARM-based devices.
-            - macOS: choose `arm64` for Apple Silicon (M-series), or `x64` for Intel Macs.
-            - Windows: `-setup.exe` is the standard installer; `.msi` is also available.
-            - Linux: `.AppImage` is the portable package; `.deb` and `.rpm` are system packages.
-            - macOS: use `.dmg` to install Lamp.
-            - macOS builds use ad-hoc signing and are not notarized by Apple. Gatekeeper may block the first launch. Only if you trust the downloaded build, follow [Apple's instructions](https://support.apple.com/en-us/102445) to open it from System Settings > Privacy & Security. Do not disable Gatekeeper globally.
-          generateReleaseNotes: true
+          releaseBody: ${{ needs.verify.outputs.notes }}
+          generateReleaseNotes: false
           releaseDraft: true
           prerelease: ${{ contains(needs.verify.outputs.tag, '-') }}
           assetNamePattern: "[name]-v[version]-${{ matrix.artifactLabel }}[setup][ext]"
