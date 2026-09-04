@@ -1,69 +1,82 @@
-<p align="center">
-  <img src="res/app.png" width="72" height="72" alt="Lamp">
-</p>
+# Lamp
 
-<h1 align="center">Lamp</h1>
+Lamp is an open-source desktop editor for novels and long-form writing, built with Tauri, Vue, and TipTap. It combines a focused editing experience with local file management and writing progress tracking.
 
-<p align="center">
-  <strong>A quiet place for your next chapter.</strong><br>
-  A local-first desktop editor for novels, long-form writing, and a steady writing habit.
-</p>
+[简体中文](docs/README_zh-CN.md) | [Download](https://github.com/shaloong/lamp/releases) | [Report an issue](https://github.com/shaloong/lamp/issues)
 
-<p align="center">
-  <a href="https://github.com/shaloong/lamp/releases">Get Lamp</a> |
-  <a href="docs/README_zh-CN.md">简体中文</a> |
-  <a href="https://github.com/shaloong/lamp/issues">Feedback</a>
-</p>
+## Features
 
-## Stay With the Story
+- **Focused editing**: rich-text formatting, paragraph focus mode, and light, dark, or system themes.
+- **Document management**: folder workspaces, document tabs, and find and replace within a document or across a workspace.
+- **Draft recovery**: automatic recovery copies and startup recovery for unfinished drafts.
+- **Writing progress**: word counts, daily goals, streaks, a contribution heatmap, and goal completion celebrations.
+- **Local files**: support for Lamp documents (`.lmph`), Markdown (`.md`), plain text (`.txt`), and HTML (`.html`). Core writing works offline without an account.
+- **Optional AI assistance**: polish, expand, continue, or summarize text through a provider you configure, with suggestions you can accept or reject.
+- **Plugins**: extend the editor with commands, panels, tools, themes, and AI actions.
 
-- **Space to focus.** A clean rich-text editor, paragraph focus mode, and light, dark, or system themes.
-- **Keep chapters together.** Folder workspaces, document tabs, and find and replace within a document or across a workspace.
-- **Pick up your draft.** Automatic recovery copies and startup recovery help you return to unfinished writing.
-- **See your progress.** Word counts, daily goals, writing streaks, and a contribution heatmap. A small celebration when you reach your goal.
+## Download and Install
 
-## Your Words, Your Files
-
-Open and save Lamp documents (`.lmph`), Markdown (`.md`), plain text (`.txt`), and HTML (`.html`). Documents stay in local files. Core writing works offline and does not require an account.
-
-AI assistance is optional. Connect your own provider in **Settings > AI** to polish, expand, continue, or summarize text, then accept or reject the suggestion. Text used in an AI request is sent to the provider you configure.
-
-## Get Lamp
-
-Browse [Releases](https://github.com/shaloong/lamp/releases) for available builds. You can also run Lamp from source below.
+Choose a build for your system from [Releases](https://github.com/shaloong/lamp/releases).
 
 | System | Architecture | Packages |
 | --- | --- | --- |
-| Windows | x64 / arm64 | `-setup.exe`, `.msi` |
+| Windows | x64 / arm64 | `.exe` installer, `.msi` |
 | macOS | x64 (Intel) / arm64 (Apple Silicon) | `.dmg` |
 | Linux | x64 / arm64 | `.AppImage`, `.deb`, `.rpm` |
 
-Download names follow `Lamp-v<version>-<system>-<architecture>[-setup]<extension>`, such as `Lamp-v1.0.0-Windows-x64-setup.exe`.
+For Intel or AMD computers, choose `x64`; for ARM devices, including Apple Silicon Macs, choose `arm64`. Available packages are listed with each release.
 
-## Make It Yours
+Files are named by version, system, and architecture, for example `Lamp-v1.0.0-Windows-x64-setup.exe`.
 
-Extend Lamp with commands, panels, editor tools, themes, and AI actions. Built-in and external plugins use the same contribution system, with their own settings and translations.
+## Usage
 
-[Explore the plugin guide](docs/PLUGIN_SYSTEM.md)
+Create or open a document to start writing, or open a folder as a workspace to organize chapters. Use document tabs to switch between drafts and search across your workspace when revising.
 
-<details>
-<summary>Development and releases</summary>
+Documents are stored locally. Automatic recovery copies help recover interrupted work; save your documents normally and keep backups of important writing.
 
-Built with **Tauri, Vue, and TipTap**. Use Node.js 24, the pnpm version pinned in [package.json](package.json), stable Rust, and the [Tauri platform prerequisites](https://v2.tauri.app/start/prerequisites/).
+To enable AI assistance, configure a provider in **Settings > AI**. Text included in an AI request is sent to that provider. AI is not required for editing or saving documents.
+
+## Development
+
+### Requirements
+
+- Node.js 24 and the pnpm version specified in [package.json](package.json).
+- Stable Rust and the [Tauri prerequisites for your platform](https://v2.tauri.app/start/prerequisites/).
+
+### Run and Build
+
+From the repository root:
 
 ```bash
 pnpm install
 pnpm tauri dev       # Run the desktop app in development
 pnpm run check       # Check versions, lint, test, and build the frontend
-pnpm tauri build     # Build the app and installers for the current platform
+pnpm tauri build     # Build the desktop app and installers
 ```
 
-For a release, run `pnpm run version:set -- <version>`, run the checks, and commit the synchronized version changes. Push the matching `v<version>` tag to build all six system/architecture targets and prepare a draft Release. See the [release workflow](.github/workflows/release.yml) for details.
+`pnpm dev` starts only the frontend server on port `1086`. Use `pnpm tauri dev` for desktop features such as local file access. Build output is written to `src-tauri/target/release/`, with installers under `bundle/`.
 
-</details>
+### Project Structure
 
-## Contribute
+- `src/`: Vue frontend, editor, and application state.
+- `src/plugins/`: plugin host and public APIs; `src/builtins/`: built-in plugins.
+- `src-tauri/`: Rust desktop backend and platform configuration.
+- `scripts/`: version tooling and regression tests.
 
-Found a rough edge or have an idea for a better writing experience? [Open an issue](https://github.com/shaloong/lamp/issues). Code, translations, and thoughtful feedback are welcome.
+### Releases
 
-Free and open source under the [MIT License](LICENSE).
+Run `pnpm run version:set -- <version>` to synchronize application versions, run the checks, and commit the changes. Push the matching `v<version>` tag to trigger the [release workflow](.github/workflows/release.yml), which builds the six system/architecture combinations above and prepares a draft release for review.
+
+## Plugin Development
+
+Built-in and external plugins use the same contribution system. Plugins own their settings and translations and access application capabilities through the plugin API.
+
+See the [plugin guide](docs/PLUGIN_SYSTEM.md) for the API, lifecycle, and contribution points.
+
+## Contributing
+
+Bug reports, feature suggestions, code, and translations are welcome. When [opening an issue](https://github.com/shaloong/lamp/issues), include your operating system, Lamp version, and steps to reproduce the problem. For code changes, run `pnpm run check` before submitting a pull request.
+
+## License
+
+[MIT](LICENSE)
