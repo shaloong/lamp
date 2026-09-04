@@ -17,6 +17,23 @@ const temp = await mkdtemp(path.join(tmpdir(), 'lamp-smoke-'))
 const identifier = `com.shaloong.lamp.smoke-${path.basename(temp).slice('lamp-smoke-'.length).toLowerCase()}`
 const installDir = path.join(temp, 'install')
 const artifacts = path.join(root, 'test-results', 'desktop')
+const socket = createServer()
+socket.listen(0, '127.0.0.1')
+await once(socket, 'listening')
+const port = socket.address().port
+await new Promise(resolve => socket.close(resolve))
+const appConfig = JSON.parse(await readFile(path.join(root, 'src-tauri', 'tauri.conf.json'), 'utf8'))
+// Elevated CI hosts ignore WEBVIEW2_* overrides; configure only the isolated test bundle.
+const smokeConfig = {
+  identifier,
+  productName: 'Lamp Smoke',
+  app: {
+    windows: appConfig.app.windows.map(window => ({
+      ...window,
+      additionalBrowserArgs: `--remote-debugging-port=${port} --remote-debugging-address=127.0.0.1`,
+    })),
+  },
+}
 let appData
 let processHandle
 let browser
@@ -30,21 +47,14 @@ async function run(command, args, options = {}) {
 }
 
 async function start(cwd) {
-  const socket = createServer()
-  socket.listen(0, '127.0.0.1')
-  await once(socket, 'listening')
-  const port = socket.address().port
-  await new Promise(resolve => socket.close(resolve))
   const exe = (await readdir(installDir)).find(name => name.endsWith('.exe') && !/uninstall/i.test(name))
   assert.ok(exe, 'Installed application executable is missing')
   processHandle = spawn(path.join(installDir, exe), [], {
-    cwd, windowsHide: true, stdio: 'ignore',
-    env: {
-      ...process.env,
-      WEBVIEW2_USER_DATA_FOLDER: path.join(temp, 'webview'),
-      WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: `--remote-debugging-port=${port} --remote-debugging-address=127.0.0.1`,
-    },
+    cwd, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
   })
+  let startupLog = ''
+  processHandle.stdout.on('data', chunk => { startupLog += chunk })
+  processHandle.stderr.on('data', chunk => { startupLog += chunk })
   processHandle.on('error', error => { console.error(error) })
   const endpoint = `http://127.0.0.1:${port}`
   let connected = false
@@ -56,7 +66,11 @@ async function start(cwd) {
     } catch { /* WebView2 is still starting. */ }
     await delay(500)
   }
-  assert.ok(connected, 'WebView2 debugging endpoint did not become ready')
+  if (!connected) {
+    await mkdir(artifacts, { recursive: true })
+    await writeFile(path.join(artifacts, 'startup.log'), startupLog || 'No application output before the WebView2 connection timeout.\n')
+  }
+  assert.ok(connected, 'WebView2 debugging endpoint did not become ready; see test-results/desktop/startup.log')
   browser = await chromium.connectOverCDP(endpoint)
   const context = browser.contexts()[0]
   page = context.pages()[0] || await context.waitForEvent('page')
@@ -83,7 +97,7 @@ async function stop(crash = false) {
 
 try {
   console.log('Building an isolated Windows NSIS package...')
-  await run(process.execPath, [process.env.npm_execpath, 'tauri', 'build', '--ci', '--bundles', 'nsis', '--config', JSON.stringify({ identifier, productName: 'Lamp Smoke' })])
+  await run(process.execPath, [process.env.npm_execpath, 'tauri', 'build', '--ci', '--bundles', 'nsis', '--config', JSON.stringify(smokeConfig)])
   const bundleDir = path.join(root, 'src-tauri', 'target', 'release', 'bundle', 'nsis')
   const installer = (await readdir(bundleDir)).find(name => name.startsWith('Lamp Smoke_') && name.endsWith('-setup.exe'))
   assert.ok(installer, 'NSIS installer was not produced')
