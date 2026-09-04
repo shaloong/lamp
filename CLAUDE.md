@@ -1,158 +1,116 @@
-# CLAUDE.md
+# Development Guide
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Repository guidance for contributors and coding agents. Product context lives in [docs/PRD.md](docs/PRD.md); plugin contracts and implementation limits live in [docs/PLUGIN_SYSTEM.md](docs/PLUGIN_SYSTEM.md).
 
 ## Project Overview
 
-Lamp is a cross-platform, distraction-free desktop editor for writers. Built with Tauri 2.x (Rust) + Vue 3 + TipTap editor.
+Lamp is a local-first desktop editor for novels and long-form writing, built with Tauri 2, Vue 3, and TipTap 3. AI assistance is optional.
 
-## Build Commands
+The frontend mixes JavaScript, TypeScript, and Vue single-file components. Follow the language and patterns of the module being changed; do not describe the project as JavaScript-only.
+
+## Commands
+
+Use pnpm for all JavaScript dependency and script operations. Use Node.js 24, the pnpm version pinned in [package.json](package.json), stable Rust, and the platform dependencies required by Tauri.
 
 ```bash
-pnpm install          # Install dependencies
-pnpm dev              # Start Vite dev server (port 1086)
-pnpm tauri dev        # Start full Tauri + Vite dev environment
-pnpm build            # Build Vue frontend to dist/
-pnpm tauri build      # Build production Tauri app (output: src-tauri/target/release/bundle/)
+pnpm install --frozen-lockfile
+pnpm dev
+pnpm tauri dev
+pnpm run check
+pnpm tauri build
+cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
+cargo clippy --locked --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+cargo test --locked --manifest-path src-tauri/Cargo.toml --all-targets
 ```
 
-The dev server runs on port 1086 with `strictPort: true` — nothing else can use that port during development.
+- `pnpm dev` starts Vite only. Port `1086` is fixed with `strictPort: true`; desktop IPC requires `pnpm tauri dev`.
+- `pnpm run check` checks application versions, runs Oxlint with warnings denied, runs Node regression tests, and builds the frontend.
+- `pnpm run test` uses Node's built-in test runner for `scripts/regression/*.test.mjs`. Rust tests are separate.
+- There is no dedicated TypeScript type-check step or automated desktop UI suite in the current CI.
+- `pnpm tauri build` builds the current platform. Default output is `src-tauri/target/release/`, with installers under `bundle/`. Explicit Rust targets add a target-triple directory.
+- Vite's production frontend output is `dist/`. The main window loads `index.html`; only development uses `http://localhost:1086`.
 
 ## Architecture
 
-### Stack
+### Frontend
 
-- **Desktop shell**: Tauri 2.x (Rust)
-- **Frontend**: Vue 3 (plain JS, not TypeScript), Vite 7.x, Pinia for state
-- **Editor**: TipTap 3.x (ProseMirror-based)
-- **UI components**: Element Plus 2.x with custom SCSS styling
+- Vue 3 and Pinia manage UI and application state; Vite builds the frontend.
+- Shared components are in `src/components/ui/`, using Reka UI and Tailwind CSS with additional CSS/SCSS. Element Plus is not a current dependency.
+- Lucide supplies icons. Reuse the existing icon maps and controls.
+- Design tokens are in `src/index.css`; prefer existing variables over hardcoded values.
+- Pinia stores in `src/stores/` cover files, workspace, settings, and search. Store state alone does not imply persistence.
 
-### Plugin System (Core Architecture)
+### Files and Editor
 
-The plugin system is central to Lamp's design. All extensibility goes through it. Plugins and the main application are **fully independent** — neither should directly reference the other's internals.
+- [src/App.vue](src/App.vue) orchestrates tabs, dirty state, save/close flows, recovery, and host UI events.
+- [src/components/Editor.vue](src/components/Editor.vue) creates TipTap in `initEditor()`, called from `mounted()`.
+- Core extensions include StarterKit, Typography, Highlight, Focus, TextAlign, and Markdown, followed by plugin-contributed extensions. BubbleMenu is rendered by the Vue menu component.
+- [src/lib/documentDirtyState.js](src/lib/documentDirtyState.js) separates editor normalization, saved baselines, and edits made during an in-flight save.
+- [src/lib/documentFormats.js](src/lib/documentFormats.js) contains text/HTML conversion helpers; Markdown serialization also depends on the editor's Markdown support.
+- [src/lib/searchReplace.js](src/lib/searchReplace.js) contains shared search/replace helpers.
+- [src/composables/workspaceExplorerMethods.js](src/composables/workspaceExplorerMethods.js) manages workspace activation, restoration, watching, and file-tree actions.
 
-**Core principle**: The main application only consumes plugin contributions through the `pluginHost.contributions` registry. Plugins only reference the main app through the `PluginContext` API (`ctx.editor`, `ctx.ai`, etc.). Even built-in plugins live in `src/builtins/` and must not scatter their code or data into main app files.
+`.lmph` and `.html` contain HTML. Markdown is parsed into editor content and serialized on save; `.txt` is escaped on import and converted back to plain text on save. Do not promise arbitrary Markdown/HTML source round-trip fidelity.
 
-```
-PluginHost (src/plugins/index.ts — singleton)
-├── Built-in plugins (loaded synchronously, in src/builtins/)
-│   ├── lamp.core-toolbar   — Editor formatting toolbar
-│   └── lamp.ai-actions      — AI writing assistant
-├── Workspace plugins        — <workspace>/.lamp/plugins/
-└── User plugins             — ~/.lamp/plugins/
-```
+Automatic recovery copies are not normal document saves. Preserve pending edits when a save finishes, do not silently overwrite externally changed files, and do not close tabs after a canceled or failed save. Maintain regression coverage when changing these flows.
 
-**Plugin lifecycle:**
+### Desktop Bridge
 
-1. `onLoad(ctx)` — synchronous registration of contributions
-2. `onActivate(ctx)` — async startup
-3. `onDeactivate()` — cleanup
+The frontend imports [src/preload.js](src/preload.js), which exposes Tauri IPC through the legacy name `window.electronAPI`. This is not an Electron application. [src/lib/lampApi.ts](src/lib/lampApi.ts) provides the bridge access helper.
 
-**Contribution points** (the only bridge between plugin and app):
+Command registration and backend implementations currently live in [src-tauri/src/lib.rs](src-tauri/src/lib.rs). The separate `src-tauri/src/preload.js` file is not the frontend entry imported by `src/main.js`; verify the active bridge before editing IPC.
 
-- `editorToolbar` — toolbar buttons
-- `bubbleMenu` — text selection popup
-- `menuItems` — menu bar items
-- `sidebarPanels` — side panel views
-- `statusBarItems` — status bar items
-- `aiActions` — AI-powered actions
-- `settings` — plugin settings sections and items
+Document saves and configuration writes use the backend's atomic-write helper. Ordinary document saves also compare the expected disk content; direct plugin writes and Save As do not share the same document-conflict flow.
 
-**PluginContext API** (`ctx` — plugin → main app):
+### Plugins
 
-- `ctx.editor` — read/write editor content
-- `ctx.file` — file operations
-- `ctx.workspace` — workspace info
-- `ctx.ai` — AI chat interface
-- `ctx.ui` — dialogs, notifications
-- `ctx.commands` — register commands
-- `ctx.storage` — per-plugin persistent storage
-- `ctx.event` — event bus
-- `ctx.i18n` — plugin's own locale messages (see below)
+Built-ins are registered in [src/builtins/index.ts](src/builtins/index.ts):
 
-**Plugin i18n**: Each plugin owns its own locale messages. Plugins should NOT write keys into `src/locales/`. For built-in plugins, messages are collected in `src/builtins/<plugin>/index.ts` under the `messages` export, then registered via `pluginHost.i18nService.addBuiltinMessages()` in `src/builtins/index.ts`. Dynamic plugins use `ctx.i18n.setLocaleMessages()` at runtime.
+- `lamp.core-toolbar`: formatting toolbar.
+- `lamp.ai-actions`: AI actions, prompts, and suggestion extension.
+- `lamp.writing-stats`: writing counters, goals, history, and feedback.
 
-**Adding a new feature**: Always ask — does this belong in a plugin or the main app? If it's a plugin feature (even for a built-in plugin), it must live entirely in `src/builtins/<plugin>/`. The main app's role is only to declare a contribution point and consume the contributions registry.
+Plugin features belong entirely under their plugin directory, including translations and components. Plugins use `ctx` instead of importing application stores or UI internals. The application consumes contributions and public host state; it must not import a built-in plugin's private feature state.
 
-### State Management (Pinia)
+Keep plugin messages local. The host collects module messages through `registerBuiltin()` or dynamic loading, and [src/main.js](src/main.js) installs the i18n service. Use `ctx.i18n.key()` for deferred labels and `ctx.i18n.t()` for immediate translation. Do not write plugin keys into `src/locales/`.
 
-Two stores in `src/stores/`:
+Workspace plugins are under `<workspace>/.lamp/plugins/`; user plugins are under the Tauri application data directory's `plugins/`. External entries must be built browser-compatible ESM. The loader does not compile TypeScript or Vue source at runtime.
 
-- **`useFileStore`** (`files.js`) — file tree, open files, temp files
-- **`useWorkspaceStore`** (`workspace.js`) — workspace open/closed state, root path, recent workspaces
+Read the [plugin guide](docs/PLUGIN_SYSTEM.md) before relying on lifecycle hooks, contribution fields, permissions, or cleanup. Some declared interfaces are partial; capability declarations are not a security sandbox, and built-in startup currently does not call `onActivate`.
 
-### Tauri IPC
+### UI Integration
 
-Frontend accesses Rust via `window.electronAPI`. All commands live in `src-tauri/src/lib.rs`.
+- [EditorToolbar.vue](src/components/editor/EditorToolbar.vue) and [EditorBubbleMenu.vue](src/components/editor/EditorBubbleMenu.vue) render editor contributions.
+- [EditorAiDialog.vue](src/components/editor/EditorAiDialog.vue) and [useAISuggestToolbar.js](src/composables/useAISuggestToolbar.js) consume shared AI state.
+- [AppMenu.vue](src/components/AppMenu.vue) renders [menu/config.js](src/components/menu/config.js); keep command IDs and labels in the schema.
+- [PluginPanelHost.vue](src/components/layout/PluginPanelHost.vue) renders plugin-provided component objects.
+- [useSettingsDialogState.js](src/composables/useSettingsDialogState.js), [useShortcutSettings.js](src/composables/useShortcutSettings.js), and [useCommandPalette.js](src/composables/useCommandPalette.js) manage their respective UI workflows.
 
-Key IPC areas:
+## Persistence
 
-- **Window**: `minWindow`, `maxWindow`, `closeWindow`, `isMaximized`
-- **File**: `menuFileOpen`, `saveFileAs`, `saveInfo`, `getFolderContent`, `openSpecificFile`, `startWatching`, `stopWatching`
-- **AI**: `ai(prompt, message)`, `getAiSettings`, `saveAiSettings`
+- Documents: user-selected paths.
+- Recovery copies: `<app-data>/autosave/*.autosave`, containing recovery metadata and editor content.
+- General/editor/AI settings: an existing `config.json` beside the executable, otherwise `config.json` relative to the process working directory. This is not currently a standardized app-data config path.
+- API keys: stored in plaintext configuration; a masked input is not encryption. Never commit local configuration or credentials.
+- Plugin settings/history, shortcut overrides, recent files, last workspace, and sidebar preferences: WebView `localStorage`, managed by their respective services.
+- Workspace project metadata, export presets, and AI analysis-cache files are not implemented.
 
-### TipTap Editor
+## Versions and CI
 
-Editor entry is `src/components/Editor.vue`. Extensions are registered in the component's `mounted` hook — add new extensions there. Current extensions: StarterKit, TextAlign, Highlight, Typography, Focus, BubbleMenu.
+Application versions are synchronized across `package.json`, `src-tauri/Cargo.toml`, the root package entry in `src-tauri/Cargo.lock`, and `src-tauri/tauri.conf.json`. Use `pnpm run version:set -- <version>` to update them and `pnpm run version:check` to verify them. Plugin versions and `PluginContext.version` are separate contracts.
 
-Editor UI is split into focused subcomponents under `src/components/editor/`:
+[CI](.github/workflows/ci.yml) runs frontend checks and Rust fmt/Clippy/tests on pushes and PRs targeting `main` or `develop`. It does not build desktop installers or run GUI tests.
 
-- `EditorToolbar.vue` — renders plugin-contributed toolbar actions
-- `EditorBubbleMenu.vue` — renders plugin-contributed selection actions
-- `EditorAiDialog.vue` — AI loading/error dialog bound to `pluginHost.aiState`
-- `icons.js` — shared Lucide icon map for editor UI parts
+[Release](.github/workflows/release.yml) runs for `v*` tags or manual dispatch of an existing tag. It validates the tag against the application version, builds Windows/macOS/Linux for x64 and arm64, and prepares a draft release. The current workflow does not configure signing, notarization, or updater metadata.
 
-The toolbar renders dynamically from `pluginHost.contributions.sortedEditorToolbar`.
+Uploaded assets follow `Lamp-v<version>-<system>-<architecture>[-setup]<extension>`. This is a release-upload rename, not a change to Tauri's local bundle filenames.
 
-### App Menu
+Use matching major/minor versions for Tauri Rust/JavaScript package pairs. Do not assume their independently released patch versions must be equal.
 
-`src/components/AppMenu.vue` uses a config-driven `menuSections` schema to render File/Edit/View menus. Keep command IDs and labels in the schema, and keep the template generic so plugin menu contributions can be inserted consistently via `pluginHost.contributions.getMenuItemsBy(area)`.
+## Working Conventions
 
-Menu schema source: `src/components/menu/config.js`.
-
-### UI Composables
-
-- `src/composables/useSettingsDialogState.js` — SettingsDialog state and side-effect orchestration
-- `src/composables/useShortcutSettings.js` — shortcut recording/filtering/conflict logic
-- `src/composables/useAISuggestToolbar.js` — AI suggestion toolbar positioning and editor/suggestion watchers
-- `src/composables/useCommandPalette.js` — command palette filtering, keyboard navigation, and event subscriptions
-- `src/composables/workspaceExplorerMethods.js` — workspace/file-tree related actions extracted from `App.vue`
-
-### File Formats
-
-- `.lmph` — Lamp native document (HTML content)
-- `.md` — Markdown (converted to HTML on open, serialized to Markdown on save via `@tiptap/markdown`)
-- `.html`, `.txt` — plain text/HTML
-- Auto-save files stored in app data dir `autosave/` as `.autosave` temp files
-
-### Styling
-
-- Design tokens are defined as CSS custom properties in `src/index.css`
-- Shared UI primitives consume these tokens directly via utility classes and CSS variables
-- Use existing CSS variables rather than hardcoding values
-
-## Key Files
-
-| File | Purpose |
-|------|---------|
-| `src/main.js` | Vue app init, plugin system bootstrap |
-| `src/App.vue` | Root component, tab management |
-| `src/preload.js` | Tauri IPC bridge |
-| `src/plugins/index.ts` | PluginHost singleton |
-| `src/builtins/index.ts` | Built-in plugin registry |
-| `src/components/Editor.vue` | TipTap editor shell (orchestration + editor lifecycle) |
-| `src/components/editor/EditorToolbar.vue` | Editor toolbar contribution renderer |
-| `src/components/editor/EditorBubbleMenu.vue` | Editor bubble-menu contribution renderer |
-| `src/components/editor/EditorAiDialog.vue` | Editor AI loading/error dialog |
-| `src/components/AppMenu.vue` | Config-driven app menu and window controls |
-| `src/components/menu/config.js` | App menu section schema |
-| `src/composables/useAISuggestToolbar.js` | AI suggestion toolbar state/effects |
-| `src/composables/useCommandPalette.js` | Command palette state/effects |
-| `src-tauri/src/lib.rs` | Rust Tauri commands |
-
-## Notes
-
-- **No TypeScript** — the frontend uses plain JavaScript
-- **No test framework** — none is currently configured
-- **AI settings** — persisted to `config.json` next to the executable
-- **Oxlint** is available as a dev dependency for linting
+- Read the implementation before updating a behavior claim or API example.
+- Keep changes scoped, preserve unrelated work, and use focused Conventional Commits.
+- Scale tests with risk. A successful build is not evidence that every desktop workflow or platform was tested.
+- Update existing documentation when behavior changes; avoid checked-in temporary QA reports or duplicated status documents.
+- Keep PRD directions separate from implementation status. Do not assign features to versions, dates, or acceptance gates without an explicit product decision.
