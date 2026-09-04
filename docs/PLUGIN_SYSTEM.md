@@ -55,15 +55,13 @@ export const messages = {
   'zh-CN': { name: '示例插件', hello: '来自插件的问候' },
 }
 
-let unregisterCommand
-
 export default {
   onLoad(ctx) {
     const sayHello = async () => {
       await ctx.ui.dialog({ message: ctx.i18n.t('hello') })
     }
 
-    unregisterCommand = ctx.commands.register({
+    ctx.commands.register({
       id: 'acme.example.hello',
       label: ctx.i18n.key('hello'),
       handler: sayHello,
@@ -77,11 +75,6 @@ export default {
         action: sayHello,
       }],
     }
-  },
-
-  onDeactivate() {
-    unregisterCommand?.()
-    unregisterCommand = undefined
   },
 }
 ```
@@ -103,12 +96,13 @@ Use [core-toolbar](../src/builtins/core-toolbar/index.ts), [ai-actions](../src/b
 ## Lifecycle and Cleanup
 
 - `onLoad(ctx)` is synchronous. Register commands/listeners and return contributions here; an async return is not supported.
-- Dynamic plugins have `onActivate(ctx)` called and awaited after `onLoad`.
-- The current built-in startup path calls only `onLoad`. It does not run `onActivate`; do not rely on that hook for built-in initialization.
-- `onDeactivate()` runs before contributions are removed. Dispose timers, event subscriptions, and command registrations yourself; the host does not automatically dispose every resource.
+- Both built-in and dynamic plugins have `onActivate(ctx)` called and awaited after `onLoad`. Built-in contributions register synchronously before Vue mounts.
+- Activation failure rolls back contributions, commands, event subscriptions, and translations. Lifecycle operations are serialized, including workspace switches and reloads.
+- `ctx.signal` is aborted before `onDeactivate()`. Pass it to cancellable asynchronous work. Register timers, observers, and other resources with `ctx.onDispose(cleanup)`; cleanup callbacks may be asynchronous and run in reverse order.
+- Commands and `ctx.event.on/once` subscriptions are tracked automatically. Commands and `on()` return disposers for early cleanup; `off()` can also cancel a `once()` subscription. A throwing `onDeactivate()` does not prevent host cleanup, and removed plugins cannot register new commands/listeners.
 - Built-ins load before an editor exists. `ctx.editor.getRawEditor()` may return `null`; use editor lifecycle events and obtain the current instance when acting.
 
-The plugin settings page lists loaded plugins but has no enable/disable controls. The generic host reload method does not reload external modules through the dynamic loader; restart the application when testing external plugin changes. Dependency version resolution and activation-failure rollback are not complete.
+The plugin settings page lists loaded plugins but has no enable/disable controls. `pluginHost.reload(id)` reloads external manifests and cache-busts the entry module; bundle a single entry for reliable development reloads. Browser-cached relative dependencies and extensions already attached to editors require an application restart. User shortcut overrides survive reload. Dependency version resolution is not implemented. Hooks must settle promptly; cancellation is cooperative, and the host cannot forcibly stop arbitrary plugin code.
 
 ## Contributions
 
@@ -151,9 +145,9 @@ When an entire requested locale is absent, fallback selection is: the applicatio
 | `ctx.workspace` | Current workspace getters, open/close commands, and path containment check |
 | `ctx.ai` | Chat and settings plus shared loading, error, and suggestion state; requests use the user's configured provider |
 | `ctx.ui` | Command palette show/hide. `dialog()` uses `window.confirm` and returns the first button value on confirmation or `null`; `notification()` only writes to the console |
-| `ctx.commands` | Register, execute, list, and unregister. Use globally namespaced command IDs and keep the unregister function |
+| `ctx.commands` | Register, execute, list, and unregister owned commands. Duplicate global IDs are rejected; registrations are automatically disposed |
 | `ctx.storage` | Synchronous get/set/remove/keys/clear, namespaced by plugin ID and backed by WebView `localStorage`; use JSON-serializable values, not credentials |
-| `ctx.event` | Subscribe, emit, unsubscribe. Prefer `on()` and retain its disposer for cleanup |
+| `ctx.event` | Subscribe, emit, unsubscribe. `on()` and `once()` subscriptions are automatically removed on unload |
 | `ctx.i18n` | Namespaced translation, application locale access, and plugin message registration |
 | `ctx.shortcuts` | List shortcuts, set user overrides, reset defaults, and check conflicts |
 
@@ -179,4 +173,4 @@ Events are not replayed. Subscribe and also inspect current state when initializ
 
 Run `pnpm run check` for repository changes and exercise the plugin in the desktop app. Check both application languages, missing-locale fallback, no-editor behavior, document switches, workspace changes, and cleanup. Test external assets in a packaged application as well as development.
 
-Current automated tests cover plugin entry path validation but do not constitute a complete plugin lifecycle, UI, or i18n test suite.
+Automated regressions cover entry paths, built-in activation, failed activation rollback, cleanup, command ownership, shortcut disposal, external reload, workspace changes, and translation cleanup/fallback. They do not constitute complete third-party plugin compatibility or cross-platform UI coverage.

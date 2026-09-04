@@ -42,6 +42,44 @@ interface PluginContextHost {
 export class PluginContext implements LampHostAPI {
   readonly id: string;
   readonly version = '1.0.0';
+  private readonly abortController = new AbortController();
+  private readonly cleanups = new Set<() => void | Promise<void>>();
+  readonly signal = this.abortController.signal;
+
+  abort(): void {
+    this.abortController.abort();
+  }
+
+  onDispose(cleanup: () => void | Promise<void>): () => void | Promise<void> {
+    let active = true;
+    const dispose = () => {
+      if (!active) return;
+      active = false;
+      this.cleanups.delete(dispose);
+      return cleanup();
+    };
+    if (this.signal.aborted) {
+      void Promise.resolve().then(dispose).catch(error => console.error('[PluginContext] Late cleanup failed:', error));
+    } else {
+      this.cleanups.add(dispose);
+    }
+    return dispose;
+  }
+
+  async dispose(): Promise<void> {
+    this.abort();
+    for (const cleanup of [...this.cleanups].reverse()) {
+      try {
+        await cleanup();
+      } catch (error) {
+        console.error('[PluginContext] Resource cleanup failed:', error);
+      }
+    }
+  }
+
+  private ensureActive(): void {
+    if (this.signal.aborted) throw new Error(`Plugin "${this.id}" is no longer active`);
+  }
 
   editor: LampEditorAPI;
   file: LampFileAPI;
@@ -86,7 +124,7 @@ export class PluginContext implements LampHostAPI {
       },
       getContent: () => getEditor()?.getHTML() ?? '',
       getText: () => getEditor()?.getText() ?? '',
-      setContent: (html) => getEditor()?.commands.setContent(html, false),
+      setContent: (html) => getEditor()?.commands.setContent(html),
       focus: () => getEditor()?.chain().focus().run(),
       insertContent: (html) => getEditor()?.chain().focus().insertContent(html).run(),
       insertContentAtCursor: (html) => getEditor()?.chain().focus().insertContentAt(getEditor()!.state.selection.to, html).run(),
@@ -211,8 +249,17 @@ export class PluginContext implements LampHostAPI {
   private buildCommandsAPI(): LampCommandsAPI {
     return {
       register: (cmd) => {
+        this.ensureActive();
         const svc = this.host.commandService as { register: (id: string, cmd: { id: string; label: string; keybinding?: string; icon?: string; handler: () => void | Promise<void> }) => () => void };
-        return svc.register(this.id, cmd);
+        const unregister = svc.register(this.id, {
+          ...cmd,
+          handler: () => {
+            this.ensureActive();
+            return cmd.handler();
+          },
+        });
+        const dispose = this.onDispose(unregister);
+        return () => { void dispose(); };
       },
       execute: async (commandId) => {
         const svc = this.host.commandService as { execute: (id: string) => Promise<void> };
@@ -223,8 +270,8 @@ export class PluginContext implements LampHostAPI {
         return svc.getAll();
       },
       unregister: (commandId) => {
-        const svc = this.host.commandService as { unregister: (id: string) => void };
-        svc.unregister(commandId);
+        const svc = this.host.commandService as { unregisterOwned: (pluginId: string, id: string) => void };
+        svc.unregisterOwned(this.id, commandId);
       },
     };
   }
@@ -248,17 +295,40 @@ export class PluginContext implements LampHostAPI {
   }
 
   private buildEventAPI(): LampEventAPI {
+    type Handler = (data: unknown) => void;
     const eb = this.host.events as {
-      on: <T>(event: string, handler: (data: T) => void) => () => void;
-      once: <T>(event: string, handler: (data: T) => void) => void;
-      off: (event: string, handler: (data: unknown) => void) => void;
-      emit: <T>(event: string, data?: T) => void;
+      on: (event: string, handler: Handler) => () => void;
+      emit: (event: string, data?: unknown) => void;
+    };
+    const subscriptions = new Map<string, Map<Handler, () => void>>();
+    const subscribe = (event: string, handler: Handler, once = false): (() => void) => {
+      this.ensureActive();
+      subscriptions.get(event)?.get(handler)?.();
+      let dispose: () => void = () => {};
+      const off = eb.on(event, data => {
+        if (this.signal.aborted) return;
+        if (once) dispose();
+        handler(data);
+      });
+      const tracked = this.onDispose(() => {
+        off();
+        const handlers = subscriptions.get(event);
+        handlers?.delete(handler);
+        if (handlers?.size === 0) subscriptions.delete(event);
+      });
+      dispose = () => { void tracked(); };
+      if (!subscriptions.has(event)) subscriptions.set(event, new Map());
+      subscriptions.get(event)!.set(handler, dispose);
+      return dispose;
     };
     return {
-      on: <T>(event, handler) => eb.on<T>(event, handler),
-      once: <T>(event, handler) => eb.once<T>(event, handler),
-      off: (event, handler) => eb.off(event, handler),
-      emit: <T>(event, data) => eb.emit<T>(event, data),
+      on: (event, handler) => subscribe(event, handler as Handler),
+      once: (event, handler) => { subscribe(event, handler as Handler, true); },
+      off: (event, handler) => subscriptions.get(event)?.get(handler)?.(),
+      emit: (event, data) => {
+        this.ensureActive();
+        eb.emit(event, data);
+      },
     };
   }
 
@@ -270,9 +340,11 @@ export class PluginContext implements LampHostAPI {
       getLocale: () => this.host.i18nService.getLocale(),
       getFallbackLocale: () => this.host.i18nService.getFallbackLocale(),
       setLocaleMessages: (locale, messages) => {
+        this.ensureActive();
         this.host.i18nService.setLocaleMessages(pid, locale, messages);
       },
       setMessages: (messagesByLocale) => {
+        this.ensureActive();
         this.host.i18nService.setAllLocaleMessages(pid, messagesByLocale);
       },
     };

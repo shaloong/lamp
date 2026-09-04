@@ -73,10 +73,13 @@ export class PluginLoader {
    * For production, plugins are bundled as ESM files on disk.
    * In development, they are loaded via Vite's dev server or file:// URLs.
    */
-  async loadModule(manifest: LampPluginManifest, basePath: string): Promise<unknown> {
+  async loadModule(manifest: LampPluginManifest, basePath: string, options: { reload?: boolean } = {}): Promise<unknown> {
     const pluginRoot = manifest.pluginRoot || basePath;
     const entryPath = resolvePluginEntryPath(pluginRoot, manifest.main);
-    const entryUrl = requireLampAPI('plugin module load').convertFileSrc(entryPath);
+    let entryUrl = requireLampAPI('plugin module load').convertFileSrc(entryPath);
+    if (options.reload) {
+      entryUrl += `${entryUrl.includes('?') ? '&' : '?'}lamp-reload=${crypto.randomUUID()}`;
+    }
     return import(/* @vite-ignore */ entryUrl);
   }
 

@@ -91,6 +91,20 @@ export class PluginI18nService {
     return pluginNamespace(pluginId);
   }
 
+  removePluginMessages(pluginId: string): void {
+    this.messagesByPlugin.delete(pluginId);
+    if (!this.appI18n) return;
+    const global = this.appI18n.global;
+    const namespace = pluginId.replace(/\./g, '-');
+    for (const locale of this.getAppLocales()) {
+      const current = global.getLocaleMessage(locale) as Record<string, unknown>;
+      if (!isPlainObject(current.plugins)) continue;
+      const plugins = { ...current.plugins };
+      delete plugins[namespace];
+      global.setLocaleMessage(locale, { ...current, plugins });
+    }
+  }
+
   key(pluginId: string, localKey: string): string {
     return pluginI18nKey(pluginId, localKey);
   }

@@ -13,6 +13,7 @@ import { PluginLoader } from './PluginLoader';
 import { PluginContext } from './PluginContext';
 import { PluginI18nService } from './PluginI18nService';
 import type {
+  AISuggestion,
   LampPluginManifest,
   LampPlugin,
   LoadedPlugin,
@@ -120,7 +121,8 @@ class ShortcutService {
   private handlers = new Map<string, () => void>();
   private listening = false;
   // External register function from useShortcutCenter composable
-  private extRegister: ((id: string, acc: string) => void) | null = null;
+  private extRegister: ((id: string, acc: string) => (() => void)) | null = null;
+  private registrations = new Map<string, () => void>();
 
   constructor() {
     this._load();
@@ -130,8 +132,22 @@ class ShortcutService {
    * Set the external register function from useShortcutCenter composable.
    * When set, ShortcutService will delegate shortcut watching to the composable.
    */
-  setExternalRegister(fn: (id: string, acc: string) => void): void {
+  setExternalRegister(fn: (id: string, acc: string) => (() => void)): void {
+    for (const dispose of this.registrations.values()) dispose();
+    this.registrations.clear();
     this.extRegister = fn;
+    if (this.listening) {
+      for (const id of this.entries.keys()) this.refreshRegistration(id);
+    }
+  }
+
+  private refreshRegistration(id: string): void {
+    this.registrations.get(id)?.();
+    this.registrations.delete(id);
+    const accelerator = this.getEffectiveAccelerator(id);
+    if (this.listening && this.extRegister && accelerator) {
+      this.registrations.set(id, this.extRegister(id, accelerator));
+    }
   }
 
   /** Register a command with an optional keybinding. Called by CommandService. */
@@ -145,32 +161,30 @@ class ShortcutService {
     this.entries.set(cmd.id, { id: cmd.id, label: cmd.label, icon: cmd.icon, keybinding: cmd.keybinding });
     if (cmd.keybinding) {
       this.handlers.set(cmd.id, cmd.handler);
-      if (this.listening && this.extRegister) {
-        this.extRegister(cmd.id, cmd.keybinding);
-      }
     }
+    this.refreshRegistration(cmd.id);
   }
 
   /** Remove a command's handler when it is unregistered. */
   unregisterCommand(id: string): void {
+    this.registrations.get(id)?.();
+    this.registrations.delete(id);
     this.entries.delete(id);
-    this.overrides.delete(id);
     this.handlers.delete(id);
   }
 
   /** Start listening. Call AFTER setExternalRegister() and after commands are registered. */
   startListening(): void {
     if (this.listening) return;
-    for (const [id, entry] of this.entries) {
-      const acc = this.overrides.get(id) ?? entry.keybinding;
-      if (acc && this.extRegister) this.extRegister(id, acc);
-    }
     this.listening = true;
+    for (const id of this.entries.keys()) this.refreshRegistration(id);
   }
 
   /** Stop listening. */
   stopListening(): void {
     this.listening = false;
+    for (const dispose of this.registrations.values()) dispose();
+    this.registrations.clear();
   }
 
   /** Get the currently active accelerator for a command (override > default). */
@@ -182,27 +196,26 @@ class ShortcutService {
   setOverride(commandId: string, accelerator: string | null): void {
     const entry = this.entries.get(commandId);
     if (!entry) return;
-    const acc = accelerator ?? entry.keybinding;
-    if (this.listening && this.extRegister && acc) {
-      this.extRegister(commandId, acc);
-    }
     if (accelerator === null) {
       this.overrides.delete(commandId);
     } else {
       this.overrides.set(commandId, accelerator);
     }
+    this.refreshRegistration(commandId);
     this._persist();
   }
 
   /** Reset a command to its default accelerator. */
   resetToDefault(commandId: string): void {
     this.overrides.delete(commandId);
+    this.refreshRegistration(commandId);
     this._persist();
   }
 
   /** Reset all overrides. */
   resetAll(): void {
     this.overrides.clear();
+    for (const id of this.entries.keys()) this.refreshRegistration(id);
     this._persist();
   }
 
@@ -296,6 +309,9 @@ class CommandService {
     icon?: string;
     handler: () => void | Promise<void>;
   }): () => void {
+    if (this.commandPlugins.has(cmd.id)) {
+      throw new Error(`Command "${cmd.id}" is already registered`);
+    }
     if (!this.registry.has(pluginId)) {
       this.registry.set(pluginId, new Map());
     }
@@ -303,7 +319,11 @@ class CommandService {
     this.commandPlugins.set(cmd.id, pluginId);
     // Also register with shortcut service
     this.shortcutService.registerCommand(cmd);
-    return () => this.unregister(cmd.id);
+    return () => {
+      if (this.registry.get(pluginId)?.get(cmd.id) === cmd) {
+        this.unregisterOwned(pluginId, cmd.id);
+      }
+    };
   }
 
   execute(id: string): Promise<void> {
@@ -341,6 +361,17 @@ class CommandService {
       }
     }
   }
+
+  unregisterOwned(pluginId: string, id: string): void {
+    if (this.commandPlugins.get(id) === pluginId) this.unregister(id);
+  }
+
+  unregisterPlugin(pluginId: string): void {
+    for (const id of this.registry.get(pluginId)?.keys() ?? []) {
+      this.unregisterOwned(pluginId, id);
+    }
+    this.registry.delete(pluginId);
+  }
 }
 
 // ─── PluginHost ─────────────────────────────────────────────
@@ -350,169 +381,137 @@ export class PluginHost {
   private _status = reactive({ phase: 'idle', error: null as string | null });
   private _editorInstance: Editor | null = null;
   private _workspace = reactive({ isOpen: false, rootPath: '', name: '' });
-  private readonly _loader = new PluginLoader();
-  private _dynamicQueue: Promise<void> = Promise.resolve();
+  private _queue: Promise<void> = Promise.resolve();
+  private _startPromise: Promise<void> | null = null;
+  private _builtinModules = new Map<string, LampPlugin>();
+  private _loadErrors = new Map<string, unknown>();
 
-  /** AI operation loading/error state — shared across all AI actions */
+  constructor(private readonly _loader: Pick<PluginLoader, 'scanPlugins' | 'loadModule' | 'readManifest'> = new PluginLoader()) {}
+
   readonly aiState = reactive({
     isLoading: false,
     actionLabel: '',
-    error: '' as string | null,
+    error: null as string | null,
     suggestion: null as AISuggestion | null,
   });
-
-  /** Event bus — available immediately after construction */
   readonly events = new EventBus();
-
-  /** Contribution registry — available immediately after construction */
   readonly contributions = new ContributionRegistry();
-
-  /** Storage service for plugins */
   readonly storageService = new StorageService();
-
-  /** Command service for plugins */
   readonly shortcutService = new ShortcutService();
   readonly commandService = new CommandService(this.shortcutService, this.events);
-
-  /** I18n service — for built-in messages collected before Vue mounts */
   readonly i18nService = new PluginI18nService();
 
-  /** All loaded plugin descriptors (read-only) */
   get plugins() { return readonly(this._loaded); }
-
-  /** Current loading/status phase */
-  get status()  { return readonly(this._status); }
-
-  /** All loaded plugin manifests */
+  get status() { return readonly(this._status); }
   get loadedManifests(): LampPluginManifest[] {
-    return Array.from(this._loaded.values()).map(p => p.manifest);
+    return Array.from(this._loaded.values()).map(plugin => plugin.manifest);
   }
-
-  /** Total count of loaded plugins */
   get pluginCount(): number { return this._loaded.size; }
 
-  /**
-   * Register the TipTap editor instance so plugins can access it.
-   * Call this from Editor.vue mounted() hook.
-   */
   setEditorInstance(editor: Editor | null): void {
     this._editorInstance = editor;
-    if (editor) {
-      this.events.emit('lamp.editor.ready', {});
-    } else {
-      this.events.emit('lamp.editor.destroy', {});
-    }
+    this.events.emit(editor ? 'lamp.editor.ready' : 'lamp.editor.destroy', {});
   }
 
-  /**
-   * Update workspace state (called from workspace store or App.vue).
-   * When the workspace changes, workspace plugins are reloaded.
-   */
-  async setWorkspaceState(isOpen: boolean, rootPath: string, name: string): Promise<void> {
-    const wasOpen = this._workspace.isOpen;
-    const previousRootPath = this._workspace.rootPath;
-    const workspaceChanged = wasOpen && isOpen && previousRootPath !== rootPath;
-
-    if (wasOpen && (!isOpen || workspaceChanged)) {
-      await this._deactivateScope('workspace');
-      this.events.emit('lamp.workspace.closed', { rootPath: previousRootPath });
-    }
-
-    this._workspace.isOpen = isOpen;
-    this._workspace.rootPath = rootPath;
-    this._workspace.name = name;
-    if (isOpen && (!wasOpen || workspaceChanged)) {
-      this.events.emit('lamp.workspace.opened', { rootPath, name });
-      void this.startDynamic();
-    }
+  // Serialize lifecycle changes so discovery cannot reactivate a closed workspace.
+  private _enqueue(operation: () => Promise<void>): Promise<void> {
+    const next = this._queue.then(operation);
+    this._queue = next.catch(() => undefined);
+    return next;
   }
 
-  private async _deactivateScope(scope: PluginScope): Promise<void> {
-    const pluginIds = Array.from(this._loaded.entries())
-      .filter(([, loaded]) => loaded.scope === scope)
-      .map(([id]) => id);
-    await Promise.all(pluginIds.map(id => this.deactivate(id)));
-  }
-
-  /**
-   * Start the plugin system — activates all built-in plugins synchronously.
-   * Dynamic (user/workspace) plugin loading is deferred to startDynamic().
-   * Call this BEFORE app.mount() so contributions are registered before
-   * components that consume them (e.g. Editor.vue) are mounted.
-   */
-  start(): void {
+  start(): Promise<void> {
+    if (this._startPromise) return this._startPromise;
     this._status.phase = 'discovering';
-    try {
-      // 1. Built-in plugins (all synchronous — static imports)
-      const builtinManifests = this._loadBuiltinManifests();
-      this._activateAllSync(builtinManifests, 'builtin');
-
-      this._status.phase = 'ready';
-      this.events.emit('lamp.plugins.ready', { count: this._loaded.size });
-      console.log(`[PluginHost] Ready. Loaded ${this._loaded.size} built-in plugin(s).`);
-    } catch (err) {
-      this._status.phase = 'error';
-      this._status.error = String(err);
-      console.error('[PluginHost] Failed to start plugins:', err);
-    }
-  }
-
-  /**
-   * Load and activate dynamic plugins (workspace + user plugins).
-   * Called after the app is mounted and the workspace is known.
-   */
-  startDynamic(): Promise<void> {
-    const nextRun = this._dynamicQueue.then(() => this._startDynamic());
-    this._dynamicQueue = nextRun.catch(() => undefined);
-    return nextRun;
-  }
-
-  private async _startDynamic(): Promise<void> {
-    try {
-      // 1. Workspace plugins: <workspace-root>/.lamp/plugins/
-      if (this._workspace.isOpen && this._workspace.rootPath) {
-        const wsDir = this._join(this._workspace.rootPath, '.lamp', 'plugins');
-        const wsManifests = await this._loader.scanPlugins(wsDir);
-        await this._activateAllDynamic(wsManifests, wsDir, 'workspace');
-      }
-
-      // 2. User plugins: ~/.lamp/plugins/
+    const prepared: LoadedPlugin[] = [];
+    for (const [id, plugin] of this._builtinModules) {
+      const manifest = (plugin as LampPlugin & { manifest?: LampPluginManifest }).manifest;
+      if (!manifest || this._loaded.has(id)) continue;
       try {
-        const api = requireLampAPI('user plugin discovery');
-        const userDir = await api.getUserPluginsDir();
-        const userManifests = await this._loader.scanPlugins(userDir);
-        await this._activateAllDynamic(userManifests, userDir, 'user');
-      } catch (err) {
-        console.debug('[PluginHost] Could not load user plugins:', err);
+        prepared.push(this._prepare({ ...manifest, id, builtin: true }, 'builtin', plugin, plugin));
+      } catch (error) {
+        this._recordError(id, error);
       }
-
-      console.log(`[PluginHost] Dynamic loading done. Total plugins: ${this._loaded.size}`);
-    } catch (err) {
-      console.error('[PluginHost] startDynamic failed:', err);
     }
+
+    // onLoad above must finish before Vue mounts; async activation follows once.
+    this._startPromise = this._enqueue(async () => {
+      for (const loaded of prepared) {
+        try {
+          await this._finishActivation(loaded);
+        } catch (error) {
+          this._recordError(loaded.manifest.id, error);
+        }
+      }
+      this._status.phase = this._status.error ? 'error' : 'ready';
+      this.events.emit('lamp.plugins.ready', { count: this._loaded.size });
+    });
+    return this._startPromise;
   }
 
-  private async _activateAllDynamic(
-    manifests: LampPluginManifest[],
-    basePath: string,
-    scope: PluginScope
-  ): Promise<void> {
+  setWorkspaceState(isOpen: boolean, rootPath: string, name: string): Promise<void> {
+    return this._enqueue(async () => {
+      const previous = { ...this._workspace };
+      const changed = previous.isOpen !== isOpen || previous.rootPath !== rootPath;
+      if (changed && previous.isOpen) {
+        for (const loaded of this._loaded.values()) {
+          if (loaded.scope === 'workspace') await this._cleanup(loaded);
+        }
+        this.events.emit('lamp.workspace.closed', { rootPath: previous.rootPath });
+      }
+      Object.assign(this._workspace, { isOpen, rootPath, name });
+      if (changed && isOpen) {
+        this.events.emit('lamp.workspace.opened', { rootPath, name });
+        await this._scanDirectory(this._join(rootPath, '.lamp', 'plugins'), 'workspace');
+      }
+    });
+  }
+
+  startDynamic(): Promise<void> {
+    return this._enqueue(async () => {
+      if (this._workspace.isOpen && this._workspace.rootPath) {
+        await this._scanDirectory(this._join(this._workspace.rootPath, '.lamp', 'plugins'), 'workspace');
+      }
+      const userDir = await requireLampAPI('user plugin discovery').getUserPluginsDir();
+      await this._scanDirectory(userDir, 'user');
+    });
+  }
+
+  private async _scanDirectory(directory: string, scope: PluginScope): Promise<void> {
+    const manifests = await this._loader.scanPlugins(directory);
     for (const manifest of manifests) {
       try {
-        await this._activateDynamic(manifest, basePath, scope);
-      } catch (err) {
-        console.error(`[PluginHost] Failed to activate dynamic plugin "${manifest.id}" (${scope}):`, err);
+        await this._activate(manifest, scope);
+      } catch (error) {
+        this._recordError(manifest.id, error);
       }
     }
   }
 
-  private async _activateDynamic(
-    manifest: LampPluginManifest,
-    basePath: string,
-    scope: PluginScope
-  ): Promise<void> {
-    if (this._loaded.has(manifest.id)) return;
+  activate(manifest: LampPluginManifest, scope: PluginScope): Promise<void> {
+    return this._enqueue(() => this._activate(manifest, scope));
+  }
 
+  private async _activate(manifest: LampPluginManifest, scope: PluginScope, reload = false): Promise<void> {
+    if (this._loaded.has(manifest.id)) return;
+    let module: unknown;
+    if (scope === 'builtin') {
+      module = this._builtinModules.get(manifest.id);
+      if (!module) throw new Error(`Built-in plugin "${manifest.id}" is not registered`);
+    } else {
+      if (!manifest.pluginRoot) throw new Error(`Plugin "${manifest.id}" has no root directory`);
+      module = await this._loader.loadModule(manifest, manifest.pluginRoot, { reload });
+    }
+    const exports = module as { default?: LampPlugin };
+    const plugin = exports?.default ?? module as LampPlugin;
+    if (!plugin || typeof plugin !== 'object') {
+      throw new Error(`Plugin "${manifest.id}" must export a plugin object`);
+    }
+    const loaded = this._prepare(manifest, scope, plugin, module);
+    await this._finishActivation(loaded);
+  }
+
+  private _prepare(manifest: LampPluginManifest, scope: PluginScope, plugin: LampPlugin, module: unknown): LoadedPlugin {
     const getEditorInstance = () => this._editorInstance;
     const ctx = new PluginContext(manifest, {
       events: this.events,
@@ -525,271 +524,100 @@ export class PluginHost {
       aiState: this.aiState,
       i18nService: this.i18nService,
     });
-
-    const module = await this._loader.loadModule(manifest, basePath);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const plugin: LampPlugin = ('default' in module) ? (module as any).default : (module as any);
-    this._registerModuleMessages(manifest.id, module, plugin);
-
-    const { onLoad, onActivate } = plugin;
-
-    if (onLoad) {
-      const contribs = onLoad(ctx);
-      if (contribs) this.contributions.register(manifest.id, contribs);
+    const loaded = { manifest, scope, plugin, ctx };
+    this._loaded.set(manifest.id, loaded);
+    try {
+      this.i18nService.removePluginMessages(manifest.id);
+      this._registerModuleMessages(manifest.id, module, plugin);
+      const contributions = plugin.onLoad?.(ctx);
+      if (contributions && typeof (contributions as unknown as { then?: unknown }).then === 'function') {
+        void Promise.resolve(contributions).catch(() => undefined);
+        throw new Error('onLoad must be synchronous');
+      }
+      if (contributions) this.contributions.register(manifest.id, contributions);
+    } catch (error) {
+      this._loadErrors.set(manifest.id, error);
     }
+    return loaded;
+  }
 
-    if (onActivate) {
-      await onActivate(ctx);
+  private async _finishActivation(loaded: LoadedPlugin): Promise<void> {
+    const id = loaded.manifest.id;
+    try {
+      if (this._loadErrors.has(id)) throw this._loadErrors.get(id);
+      await loaded.plugin.onActivate?.(loaded.ctx);
+      this.events.emit('lamp.plugin.activated', { id, scope: loaded.scope });
+    } catch (error) {
+      await this._cleanup(loaded);
+      throw error;
     }
+  }
 
-    this._loaded.set(manifest.id, { manifest, scope, plugin, ctx });
-    this.events.emit('lamp.plugin.activated', { id: manifest.id, scope });
-    console.log(`[PluginHost] Activated dynamic plugin: ${manifest.id} v${manifest.version} (${scope})`);
+  deactivate(pluginId: string): Promise<void> {
+    return this._enqueue(async () => {
+      const loaded = this._loaded.get(pluginId);
+      if (loaded) await this._cleanup(loaded);
+    });
+  }
+
+  private async _cleanup(loaded: LoadedPlugin): Promise<void> {
+    const id = loaded.manifest.id;
+    const ctx = loaded.ctx as PluginContext;
+    ctx.abort();
+    try {
+      await loaded.plugin.onDeactivate?.();
+    } catch (error) {
+      console.error(`[PluginHost] Cleanup failed for "${id}":`, error);
+    } finally {
+      await ctx.dispose();
+      this.commandService.unregisterPlugin(id);
+      this.contributions.unregister(id);
+      this.i18nService.removePluginMessages(id);
+      this._loadErrors.delete(id);
+      this._loaded.delete(id);
+      this.events.emit('lamp.plugin.deactivated', { id });
+    }
+  }
+
+  reload(pluginId: string): Promise<void> {
+    return this._enqueue(async () => {
+      const loaded = this._loaded.get(pluginId);
+      if (!loaded) return;
+      let manifest = loaded.manifest;
+      if (loaded.scope !== 'builtin') {
+        if (!manifest.pluginRoot) throw new Error('External plugin has no root directory');
+        const refreshed = await this._loader.readManifest(manifest.pluginRoot);
+        if (!refreshed || refreshed.id !== pluginId) throw new Error('Reload requires a valid manifest with the same plugin ID');
+        manifest = refreshed;
+      }
+      await this._cleanup(loaded);
+      await this._activate(manifest, loaded.scope, true);
+    });
+  }
+
+  getContext(pluginId: string) {
+    return this._loaded.get(pluginId)?.ctx ?? null;
+  }
+
+  registerBuiltin(id: string, module: LampPlugin): void {
+    this._builtinModules.set(id, module);
+    this._registerModuleMessages(id, module);
+  }
+
+  private _recordError(id: string, error: unknown): void {
+    this._status.error = `${id}: ${String(error)}`;
+    console.error(`[PluginHost] Failed to activate "${id}":`, error);
   }
 
   private _join(...parts: string[]): string {
     return parts.join('/').replace(/\\/g, '/');
   }
 
-  /**
-   * Activate a single plugin by manifest.
-   */
-  async activate(manifest: LampPluginManifest, scope: PluginScope): Promise<void> {
-    if (this._loaded.has(manifest.id)) {
-      console.warn(`[PluginHost] Plugin "${manifest.id}" is already loaded.`);
-      return;
-    }
-
-    // Capability check
-    if (manifest.capabilities) {
-      const missing = this._checkCapabilities(manifest.capabilities);
-      if (missing.length > 0) {
-        console.warn(`[PluginHost] Plugin "${manifest.id}" missing capabilities: ${missing.join(', ')}. Skipping.`);
-        return;
-      }
-    }
-
-    // Create per-plugin context (the lamp.* API)
-    const getEditorInstance = () => this._editorInstance;
-    const ctx = new PluginContext(manifest, {
-      events: this.events,
-      contributions: this.contributions,
-      get editorInstance() { return getEditorInstance(); },
-      workspace: this._workspace,
-      storageService: this.storageService,
-      commandService: this.commandService,
-      shortcutService: this.shortcutService,
-      aiState: this.aiState,
-      i18nService: this.i18nService,
-    });
-
-    // Activate dependencies first
-    if (manifest.dependencies) {
-      for (const [depId, depVersion] of Object.entries(manifest.dependencies)) {
-        const dep = this._loaded.get(depId);
-        if (!dep) {
-          console.warn(`[PluginHost] Plugin "${manifest.id}" requires "${depId}" (${depVersion}) which is not loaded.`);
-        }
-      }
-    }
-
-    // Load the plugin module
-    let plugin: LampPlugin;
-    if (manifest.builtin) {
-      // Built-ins are loaded via the manifests registry
-      plugin = this._builtinModules.get(manifest.id) as LampPlugin;
-      if (!plugin) {
-        console.error(`[PluginHost] Built-in plugin "${manifest.id}" not found in _builtinModules.`);
-        return;
-      }
-    } else {
-      console.warn(`[PluginHost] Dynamic plugin loading not yet implemented for "${manifest.id}".`);
-      return;
-    }
-
-    // Phase 1: onLoad — register contributions (synchronous)
-    const { onLoad, onActivate } = plugin;
-    if (onLoad) {
-      const contribs = onLoad(ctx);
-      if (contribs) {
-        this.contributions.register(manifest.id, contribs);
-      }
-    }
-
-    // Phase 2: onActivate — async startup
-    if (onActivate) {
-      try {
-        await onActivate(ctx);
-      } catch (err) {
-        console.error(`[PluginHost] onActivate failed for "${manifest.id}":`, err);
-      }
-    }
-
-    // Track
-    this._loaded.set(manifest.id, { manifest, scope, plugin, ctx });
-    this.events.emit('lamp.plugin.activated', { id: manifest.id, scope });
-    console.log(`[PluginHost] Activated plugin: ${manifest.id} v${manifest.version} (${scope})`);
-  }
-
-  /**
-   * Deactivate a plugin by id.
-   */
-  async deactivate(pluginId: string): Promise<void> {
-    const loaded = this._loaded.get(pluginId);
-    if (!loaded) return;
-    const { plugin } = loaded;
-    try {
-      if (plugin.onDeactivate) {
-        await plugin.onDeactivate();
-      }
-    } catch (err) {
-      console.error(`[PluginHost] onDeactivate failed for "${pluginId}":`, err);
-    }
-    this.contributions.unregister(pluginId);
-    this._loaded.delete(pluginId);
-    this.events.emit('lamp.plugin.deactivated', { id: pluginId });
-  }
-
-  /**
-   * Reload a single plugin (useful during development).
-   */
-  async reload(pluginId: string): Promise<void> {
-    const was = this._loaded.get(pluginId);
-    if (!was) return;
-    await this.deactivate(pluginId);
-    await this.activate(was.manifest, was.scope);
-  }
-
-  /**
-   * Get a plugin's context by id.
-   */
-  getContext(pluginId: string) {
-    return this._loaded.get(pluginId)?.ctx ?? null;
-  }
-
-  // ─── Built-in plugin registry ─────────────────────────────
-
-  // Subclass or external module registers built-ins here
-  private _builtinModules = new Map<string, LampPlugin>();
-
-  /**
-   * Register a built-in plugin module. Called by builtins/index.ts.
-   */
-  registerBuiltin(id: string, module: LampPlugin): void {
-    this._builtinModules.set(id, module);
-    this._registerModuleMessages(id, module);
-  }
-
-  private _loadBuiltinManifests(): LampPluginManifest[] {
-    // Import from the auto-generated builtins manifest registry
-    // This will be populated by src/builtins/manifests.ts
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const manifests: LampPluginManifest[] = [];
-    for (const [id, mod] of this._builtinModules) {
-      // Extract manifest from the module's manifest property if available
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const m = (mod as any).manifest as LampPluginManifest | undefined;
-      if (m) manifests.push({ ...m, id, builtin: true });
-    }
-    return manifests;
-  }
-
-  private _activateAllSync(
-    manifests: LampPluginManifest[],
-    scope: PluginScope
-  ): void {
-    for (const manifest of manifests) {
-      try {
-        this._activateSync(manifest, scope);
-      } catch (err) {
-        console.error(`[PluginHost] Failed to activate "${manifest.id}" (${scope}):`, err);
-      }
-    }
-  }
-
-  /**
-   * Synchronous activation for built-in plugins.
-   * Calls onLoad (sync) but NOT onActivate (which may be async).
-   * onActivate is deferred to an async phase.
-   */
-  private _activateSync(manifest: LampPluginManifest, scope: PluginScope): void {
-    if (this._loaded.has(manifest.id)) return;
-
-    if (manifest.capabilities) {
-      const missing = this._checkCapabilities(manifest.capabilities);
-      if (missing.length > 0) {
-        console.warn(`[PluginHost] Plugin "${manifest.id}" missing capabilities: ${missing.join(', ')}. Skipping.`);
-        return;
-      }
-    }
-
-    const getEditorInstance = () => this._editorInstance;
-    const ctx = new PluginContext(manifest, {
-      events: this.events,
-      contributions: this.contributions,
-      get editorInstance() { return getEditorInstance(); },
-      workspace: this._workspace,
-      storageService: this.storageService,
-      commandService: this.commandService,
-      shortcutService: this.shortcutService,
-      aiState: this.aiState,
-      i18nService: this.i18nService,
-    });
-
-    const plugin = this._builtinModules.get(manifest.id) as LampPlugin | undefined;
-    if (!plugin) {
-      console.error(`[PluginHost] Built-in plugin "${manifest.id}" not found in _builtinModules.`);
-      return;
-    }
-
-    const { onLoad } = plugin;
-
-    // Phase 1: onLoad — sync registration
-    if (onLoad) {
-      const contribs = onLoad(ctx);
-      if (contribs) {
-        this.contributions.register(manifest.id, contribs);
-      }
-    }
-
-    // Phase 2: onActivate — deferred (async), not called here
-    // It will be awaited separately
-
-    this._loaded.set(manifest.id, { manifest, scope, plugin, ctx });
-    this.events.emit('lamp.plugin.activated', { id: manifest.id, scope });
-    console.log(`[PluginHost] Activated plugin: ${manifest.id} v${manifest.version} (${scope})`);
-  }
-
-  private async _activateAll(
-    manifests: LampPluginManifest[],
-    scope: PluginScope
-  ): Promise<void> {
-    for (const manifest of manifests) {
-      try {
-        await this.activate(manifest, scope);
-      } catch (err) {
-        console.error(`[PluginHost] Failed to activate "${manifest.id}" (${scope}):`, err);
-      }
-    }
-  }
-
-  private _checkCapabilities(requested: string[]): string[] {
-    // In a full implementation, this would check against available capabilities.
-    // For now, we allow all.
-    void requested;
-    return [];
-  }
-
   private _registerModuleMessages(pluginId: string, module: unknown, plugin?: LampPlugin): void {
-    const moduleWithMessages = module as { messages?: Record<string, Record<string, unknown>>; default?: { messages?: Record<string, Record<string, unknown>> } };
-    const pluginWithMessages = plugin as LampPlugin & { messages?: Record<string, Record<string, unknown>> } | undefined;
-    const messages = pluginWithMessages?.messages ?? moduleWithMessages.messages ?? moduleWithMessages.default?.messages;
-    if (messages) {
-      this.i18nService.setAllLocaleMessages(pluginId, messages);
-    }
+    const exports = module as { messages?: Record<string, Record<string, unknown>>; default?: LampPlugin };
+    const messages = plugin?.messages ?? exports.messages ?? exports.default?.messages;
+    if (messages) this.i18nService.setAllLocaleMessages(pluginId, messages);
   }
 }
-
-// ─── Singleton export ──────────────────────────────────────
 
 export const pluginHost = reactive(new PluginHost()) as ReturnType<typeof reactive> & PluginHost;

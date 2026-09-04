@@ -38,8 +38,7 @@ export interface LampPluginManifest {
   disableable?: boolean;
   /**
    * Capabilities / permissions this plugin requests.
-   * The host will skip activating the plugin if a requested capability
-   * is not available in the current context.
+   * Currently descriptive metadata, not enforced permissions or a sandbox.
    */
   capabilities?: PluginCapability[];
   /**
@@ -307,6 +306,10 @@ export interface TipTapExtensionDefinition {
 export interface LampHostAPI {
   readonly id: string;       // The calling plugin's id (for storage namespacing)
   readonly version: string;   // Host API version for compatibility checks
+  /** Aborted before plugin deactivation or activation rollback. */
+  readonly signal: AbortSignal;
+  /** Register cleanup for plugin-owned timers, observers, or async resources. */
+  onDispose(cleanup: () => void | Promise<void>): () => void | Promise<void>;
   editor: LampEditorAPI;
   file: LampFileAPI;
   workspace: LampWorkspaceAPI;

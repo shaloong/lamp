@@ -49,7 +49,7 @@ export function useShortcutCenter() {
    * @param accelerator Accelerator string e.g. 'Ctrl+O'
    */
   function register(id: string, accelerator: string) {
-    if (!accelerator) return
+    if (!accelerator) return () => {}
     const MOD: Record<string, string> = {
       control: 'ctrl', ctrl: 'ctrl',
       cmd: 'meta', meta: 'meta', command: 'meta',
@@ -58,7 +58,11 @@ export function useShortcutCenter() {
     }
     const parts = accelerator.split('+').map(p => p.trim())
     const partKeys = parts.map(p => (MOD[p.toLowerCase()] ?? p.toLowerCase()))
-    watchers.set(id, { keys: partKeys, wasActive: false })
+    const registration = { keys: partKeys, wasActive: false }
+    watchers.set(id, registration)
+    return () => {
+      if (watchers.get(id) === registration) watchers.delete(id)
+    }
   }
 
   return { register }
