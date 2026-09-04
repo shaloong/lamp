@@ -28,6 +28,10 @@ Intel 或 AMD 电脑选择 `x64`；ARM 设备（包括 Apple Silicon Mac）选�
 
 文件名包含版本、系统和架构，例如 `Lamp-v1.0.0-Windows-x64-setup.exe`。
 
+### macOS 首次启动
+
+macOS 构建使用 ad-hoc 签名，**未经过 Apple 公证**，首次启动可能被 Gatekeeper 拦截。确认下载来源可信后，先尝试打开，再到 **系统设置 > 隐私与安全** 中选择可用的“仍要打开”。具体操作见 [Apple 官方说明](https://support.apple.com/zh-cn/102445)。请勿全局关闭 Gatekeeper。
+
 ## 使用
 
 新建或打开文档即可开始写作，也可以将文件夹作为工作区打开，集中管理章节。通过标签页切换文稿，修改时可在整个工作区内查找内容。

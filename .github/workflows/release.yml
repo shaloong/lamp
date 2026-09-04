@@ -175,8 +175,26 @@ jobs:
             - Windows: `-setup.exe` is the standard installer; `.msi` is also available.
             - Linux: `.AppImage` is the portable package; `.deb` and `.rpm` are system packages.
             - macOS: use `.dmg` to install Lamp.
+            - macOS builds use ad-hoc signing and are not notarized by Apple. Gatekeeper may block the first launch. Only if you trust the downloaded build, follow [Apple's instructions](https://support.apple.com/en-us/102445) to open it from System Settings > Privacy & Security. Do not disable Gatekeeper globally.
           generateReleaseNotes: true
           releaseDraft: true
           prerelease: ${{ contains(needs.verify.outputs.tag, '-') }}
           assetNamePattern: "[name]-v[version]-${{ matrix.artifactLabel }}[setup][ext]"
           args: ${{ matrix.args }}
+
+      - name: Verify macOS ad-hoc signature
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          BUILD_TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          app="src-tauri/target/$BUILD_TARGET/release/bundle/macos/Lamp.app"
+          test -d "$app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          signature="$(codesign --display --verbose=4 "$app" 2>&1)"
+          printf '%s\n' "$signature"
+          if ! grep -q '^Signature=adhoc$' <<< "$signature"; then
+            echo "Expected an ad-hoc signature on the macOS application bundle." >&2
+            exit 1
+          fi

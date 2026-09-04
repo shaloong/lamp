@@ -15,3 +15,8 @@ test('the development server and production assets have separate build settings'
   assert.equal(config.build.frontendDist, '../dist')
   assert.equal(config.build.beforeBuildCommand, 'pnpm run build')
 })
+
+test('macOS bundles use ad-hoc signing without a developer certificate', () => {
+  assert.equal(config.bundle.macOS.signingIdentity, '-')
+  assert.equal(config.bundle.windows.certificateThumbprint, null)
+})

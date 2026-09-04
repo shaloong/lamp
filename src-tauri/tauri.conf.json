@@ -41,6 +41,9 @@
       "../res/app.ico"
     ],
     "resources": [],
+    "macOS": {
+      "signingIdentity": "-"
+    },
     "windows": {
       "certificateThumbprint": null,
       "digestAlgorithm": "sha256",

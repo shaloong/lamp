@@ -28,6 +28,10 @@ For Intel or AMD computers, choose `x64`; for ARM devices, including Apple Silic
 
 Files are named by version, system, and architecture, for example `Lamp-v1.0.0-Windows-x64-setup.exe`.
 
+### macOS First Launch
+
+macOS builds use ad-hoc signing and are **not notarized by Apple**. Gatekeeper may block the first launch. If you trust the downloaded build, try opening it, then use **System Settings > Privacy & Security > Open Anyway**, when available. See [Apple's instructions](https://support.apple.com/en-us/102445). Do not disable Gatekeeper globally.
+
 ## Usage
 
 Create or open a document to start writing, or open a folder as a workspace to organize chapters. Use document tabs to switch between drafts and search across your workspace when revising.

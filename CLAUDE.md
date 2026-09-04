@@ -102,7 +102,7 @@ Application versions are synchronized across `package.json`, `src-tauri/Cargo.to
 
 [CI](.github/workflows/ci.yml) runs frontend checks, production-browser document tests, Rust fmt/Clippy/tests, and a Windows installed-package smoke test on pushes and PRs targeting `main` or `develop`. The smoke build uses an isolated identity and is not a distributable release. macOS/Linux installed-app UI tests are not yet automated.
 
-[Release](.github/workflows/release.yml) runs for `v*` tags or manual dispatch of an existing tag. It validates the tag against the application version, builds Windows/macOS/Linux for x64 and arm64, and prepares a draft release. The current workflow does not configure signing, notarization, or updater metadata.
+[Release](.github/workflows/release.yml) runs for `v*` tags or manual dispatch of an existing tag. It validates the tag against the application version, builds Windows/macOS/Linux for x64 and arm64, and prepares a draft release. macOS uses free ad-hoc signing via `bundle.macOS.signingIdentity: "-"` in the shared Tauri config; both macOS jobs verify the resulting app signature. No Apple account, certificate, or signing secret is needed. This is not Developer ID signing or notarization and does not bypass Gatekeeper. Windows trusted signing, Apple notarization, and updater metadata are not configured.
 
 Uploaded assets follow `Lamp-v<version>-<system>-<architecture>[-setup]<extension>`. This is a release-upload rename, not a change to Tauri's local bundle filenames.
 

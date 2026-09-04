@@ -95,7 +95,7 @@ AI 请求会将相关文本发送到用户配置的服务商。API Key 在设置
 - Node.js 回归测试覆盖文件/状态、统计与插件生命周期；Rust 测试覆盖配置迁移与原子写入。Playwright 使用真实 Vue/TipTap 和模拟桌面桥接验证文档流程；Windows 安装包测试验证真实 IPC、设置跨启动目录持久化与崩溃恢复。
 - [CI](../.github/workflows/ci.yml) 在 `main`、`develop` 的推送与 PR 上执行前端版本检查、lint、测试、构建、浏览器文档回归、Windows 隔离安装包测试，以及 Rust 格式、Clippy 与测试。尚不包含 macOS/Linux 安装后 UI 自动化。
 - [Release 工作流](../.github/workflows/release.yml) 配置了 Windows、macOS、Linux 各 x64/arm64 构建。匹配应用版本的 tag 触发草稿 Release；普通分支推送不构建安装包。
-- 当前工作流没有配置应用签名、公证或自动更新发布。六个平台目标的实际构建结果应查看对应 Actions 记录，不能由矩阵配置推断全部通过。
+- macOS 配置了免费的 ad-hoc 签名，发布工作流会校验 `.app` 签名；不需要 Apple 开发者账号或证书，但不等同于 Developer ID 认证或 Apple 公证，首次运行仍可能被 Gatekeeper 拦截。未配置 Windows 可信签名、Apple 公证或自动更新发布。六个平台目标的实际构建结果应查看对应 Actions 记录，不能由矩阵配置推断全部通过。
 - 应用版本以 [package.json](../package.json)、[Cargo.toml](../src-tauri/Cargo.toml)、[Cargo.lock](../src-tauri/Cargo.lock) 和 [tauri.conf.json](../src-tauri/tauri.conf.json) 为准，由 `pnpm run version:check` 检查一致性；插件 API 和插件自身版本独立维护。
 
 运行与构建命令见[中文 README](README_zh-CN.md)，工程协作约定见[开发指南](../CLAUDE.md)。
