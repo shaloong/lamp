@@ -83,22 +83,32 @@ jobs:
       matrix:
         include:
           - name: Linux x64
-            artifactLabel: Linux_x64
+            artifactLabel: Linux-x64
             os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             args: --target x86_64-unknown-linux-gnu
+          - name: Linux ARM64
+            artifactLabel: Linux-arm64
+            os: ubuntu-22.04-arm
+            target: aarch64-unknown-linux-gnu
+            args: --target aarch64-unknown-linux-gnu
           - name: Windows x64
-            artifactLabel: Windows_x64
+            artifactLabel: Windows-x64
             os: windows-latest
             target: x86_64-pc-windows-msvc
             args: --target x86_64-pc-windows-msvc
+          - name: Windows ARM64
+            artifactLabel: Windows-arm64
+            os: windows-latest
+            target: aarch64-pc-windows-msvc
+            args: --target aarch64-pc-windows-msvc
           - name: macOS Apple Silicon
-            artifactLabel: macOS_Apple-Silicon
+            artifactLabel: macOS-arm64
             os: macos-latest
             target: aarch64-apple-darwin
             args: --target aarch64-apple-darwin
           - name: macOS Intel
-            artifactLabel: macOS_Intel
+            artifactLabel: macOS-x64
             os: macos-15-intel
             target: x86_64-apple-darwin
             args: --target x86_64-apple-darwin
@@ -113,7 +123,17 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
+          sudo apt-get install -y build-essential libssl-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils libfuse2 file
+
+      - name: Check Windows ARM64 build tools
+        if: matrix.target == 'aarch64-pc-windows-msvc'
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $installation = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.ARM64 -property installationPath
+          if (-not $installation) {
+            throw 'The Windows ARM64 target requires the Visual Studio C++ ARM64 build tools.'
+          }
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -148,8 +168,15 @@ jobs:
           tauriScript: pnpm tauri
           tagName: ${{ needs.verify.outputs.tag }}
           releaseName: Lamp ${{ needs.verify.outputs.tag }}
+          releaseBody: |
+            ### Downloads
+            - Windows / Linux: choose `x64` for Intel or AMD PCs, or `arm64` for ARM-based devices.
+            - macOS: choose `arm64` for Apple Silicon (M-series), or `x64` for Intel Macs.
+            - Windows: `-setup.exe` is the standard installer; `.msi` is also available.
+            - Linux: `.AppImage` is the portable package; `.deb` and `.rpm` are system packages.
+            - macOS: use `.dmg` to install Lamp.
           generateReleaseNotes: true
           releaseDraft: true
           prerelease: ${{ contains(needs.verify.outputs.tag, '-') }}
-          assetNamePattern: "[name]_[version]_${{ matrix.artifactLabel }}[setup][ext]"
+          assetNamePattern: "[name]-v[version]-${{ matrix.artifactLabel }}[setup][ext]"
           args: ${{ matrix.args }}

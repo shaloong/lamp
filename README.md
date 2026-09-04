@@ -43,9 +43,9 @@ git tag v1.1.0
 git push origin develop v1.1.0
 ```
 
-Pushing the tag runs the release workflow, builds Linux, Windows, and both macOS architectures, and creates a draft GitHub Release with generated release notes. `pnpm run version:check` can be used independently to audit version alignment.
+Pushing the tag runs the release workflow, builds x64 and ARM64 packages for Linux, Windows, and macOS, and creates a draft GitHub Release with generated release notes. `pnpm run version:check` can be used independently to audit version alignment.
 
-Release downloads use `Lamp_<version>_<platform>_<architecture>[-setup]<extension>`, for example `Lamp_1.0.0_Windows_x64-setup.exe` and `Lamp_1.0.0_macOS_Apple-Silicon.dmg`. macOS downloads use `Intel` or `Apple-Silicon`; Windows and Linux use `x64`. This naming applies to uploaded Release assets; local bundle filenames follow Tauri's defaults.
+Release downloads use `Lamp-v<version>-<platform>-<architecture>[-setup]<extension>`, for example `Lamp-v1.0.0-Windows-x64-setup.exe` and `Lamp-v1.0.0-macOS-arm64.dmg`. Platform labels are `Windows`, `Linux`, and `macOS`; architecture labels are `x64` (Intel/AMD, including Intel Macs) and `arm64` (including Apple Silicon Macs). Linux ARM64 uses a native runner; Windows ARM64 is cross-compiled with the Visual Studio ARM64 tools. This naming applies to uploaded Release assets; local bundle filenames follow Tauri's defaults. Legacy 32-bit targets and macOS universal bundles are not part of the default matrix.
 
 ## AI Configuration
 
