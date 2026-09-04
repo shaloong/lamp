@@ -43,6 +43,10 @@
           @open-file="openFileDialog" @open-workspace="openWorkspace" @open-recent="openSpecificFile" />
       </div>
     </div>
+    <div v-if="saveErrorMessage" role="alert" class="flex items-start gap-2 border-t border-destructive bg-background px-3 py-2 text-sm text-destructive">
+      <span class="min-w-0 flex-1 break-words">{{ saveErrorMessage }}</span>
+      <button class="shrink-0" :aria-label="$t('common.close')" :title="$t('common.close')" @click="saveErrorMessage = ''"><X :size="16" /></button>
+    </div>
     <StatusBar />
     <div class="mask">
       <Dialog v-model:open="dialogConfirmCloseTab" @update:open="(val) => { if (!val) cancelPendingClose(); }">
@@ -51,6 +55,7 @@
             <DialogTitle>{{ $t('app.unsavedTitle') }}</DialogTitle>
           </DialogHeader>
           <p style="padding: 8px 0;">{{ $t('app.unsavedMessage') }}</p>
+          <p v-if="saveErrorMessage" role="alert" class="text-sm text-destructive break-words">{{ saveErrorMessage }}</p>
           <DialogFooter>
             <Button variant="destructive" @click="handleNotSave">
               {{ $t('app.dontSaveAndClose') }}
@@ -190,6 +195,7 @@ export default {
       folderContent: "",
       toolViewHeight: 400,
       dialogConfirmCloseTab: false,
+      saveErrorMessage: '',
       indexCloseTab: -1, // 删除的索引号，-1表示没有传递
       dialogSettings: false,
       dialogCommandPalette: false,
@@ -347,6 +353,7 @@ export default {
       }
 
       const operation = Promise.resolve().then(task)
+      this.saveErrorMessage = ''
       this.savePromises[tab.id] = operation
       try {
         return await operation
@@ -362,7 +369,7 @@ export default {
       if (!api) return false
 
       const contentSnapshot = tab.content
-      const contentToSave = this.getContentForSave(filePath, contentSnapshot)
+      const contentToSave = this.getContentForSave(filePath, contentSnapshot, tab.id)
       const canCheckConflict = !updatePath
         && typeof tab._diskContent === 'string'
         && typeof api.saveInfoIfUnchanged === 'function'
@@ -425,6 +432,7 @@ export default {
         ))
       } catch (error) {
         console.error('Failed to save file', error)
+        this.saveErrorMessage = this.$t('app.saveFailed', { file: tab.title, reason: String(error) })
         return false
       }
     },
@@ -992,6 +1000,7 @@ export default {
         return await this.runTabSave(tab, () => this.chooseAndSaveTab(tab))
       } catch (error) {
         console.error('Failed to save file as', error)
+        this.saveErrorMessage = this.$t('app.saveFailed', { file: tab.title, reason: String(error) })
         return false
       }
     },
@@ -1026,10 +1035,12 @@ export default {
     },
 
     // 根据文件扩展名获取要保存的内容格式
-    getContentForSave(filePath, htmlContent) {
+    getContentForSave(filePath, htmlContent, tabId) {
       const ext = getFileExtension(filePath)
       if (ext === 'md') {
-        return this.htmlToMarkdown(htmlContent);
+        const editor = this.editorRefs[tabId]
+        if (!editor) throw new Error('Document editor is not ready for Markdown serialization')
+        return editor.serializeMarkdown(htmlContent)
       } else if (ext === 'txt') {
         return htmlToPlainText(htmlContent)
       } else {
@@ -1038,63 +1049,6 @@ export default {
       }
     },
 
-    // 将 HTML 转换为 Markdown
-    htmlToMarkdown(htmlContent) {
-      try {
-        return this.simpleHtmlToMarkdown(htmlContent);
-      } catch (e) {
-        console.warn('Markdown serialization failed, falling back to plain text:', e);
-        return htmlContent.replace(/<[^>]+>/g, '').trim();
-      }
-    },
-
-    // 简单的 HTML 转 Markdown（不依赖外部库）
-    simpleHtmlToMarkdown(html) {
-      if (!html) return '';
-      let md = html
-        // 标题
-        .replace(/<h1[^>]*>(.*?)<\/h1>/gi, '# $1\n')
-        .replace(/<h2[^>]*>(.*?)<\/h2>/gi, '## $1\n')
-        .replace(/<h3[^>]*>(.*?)<\/h3>/gi, '### $1\n')
-        .replace(/<h4[^>]*>(.*?)<\/h4>/gi, '#### $1\n')
-        .replace(/<h5[^>]*>(.*?)<\/h5>/gi, '##### $1\n')
-        .replace(/<h6[^>]*>(.*?)<\/h6>/gi, '###### $1\n')
-        // 粗体和斜体
-        .replace(/<(strong|b)[^>]*>(.*?)<\/(strong|b)>/gi, '**$2**')
-        .replace(/<(em|i)[^>]*>(.*?)<\/(em|i)>/gi, '*$2*')
-        .replace(/<code[^>]*>(.*?)<\/code>/gi, '`$1`')
-        // 链接
-        .replace(/<a[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, '[$2]($1)')
-        // 图片
-        .replace(/<img[^>]*src="([^"]*)"[^>]*alt="([^"]*)"[^>]*\/?>/gi, '![$2]($1)')
-        .replace(/<img[^>]*alt="([^"]*)"[^>]*src="([^"]*)"[^>]*\/?>/gi, '![$1]($2)')
-        .replace(/<img[^>]*src="([^"]*)"[^>]*\/?>/gi, '![]($1)')
-        // 换行和段落
-        .replace(/<br\s*\/?>/gi, '\n')
-        .replace(/<\/p>/gi, '\n\n')
-        .replace(/<\/div>/gi, '\n')
-        // 无序列表
-        .replace(/<li[^>]*>(.*?)<\/li>/gi, '- $1\n')
-        .replace(/<\/?ul[^>]*>/gi, '\n')
-        // 有序列表
-        .replace(/<\/?ol[^>]*>/gi, '\n')
-        // 引用
-        .replace(/<blockquote[^>]*>(.*?)<\/blockquote>/gi, '> $1\n')
-        // 水平线
-        .replace(/<hr\s*\/?>/gi, '\n---\n')
-        // 去除剩余标签
-        .replace(/<[^>]+>/g, '')
-        // 解码 HTML 实体
-        .replace(/&nbsp;/g, ' ')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&amp;/g, '&')
-        .replace(/&quot;/g, '"')
-        // 清理多余空白
-        .replace(/\n{3,}/g, '\n\n')
-        .trim();
-      return md;
-    },
 
     // 监听通道，接收主进程发送的内容
     initIpcRenderers() {

@@ -124,6 +124,7 @@
     "plugins": "插件管理"
   },
   "app": {
+    "saveFailed": "无法保存 {file}，未保存的文稿仍保留在编辑器中。{reason}",
     "unsavedTitle": "提示",
     "unsavedMessage": "您正在关闭的文件尚未保存，是否需要保存？",
     "dontSaveAndClose": "不保存并关闭",

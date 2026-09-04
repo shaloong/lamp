@@ -18,7 +18,7 @@ export function plainTextToHtml(content) {
   const normalized = String(content ?? '').replace(/\r\n?/g, '\n')
   return normalized
     .split('\n')
-    .map(line => `<p>${line ? escapeHtml(line) : '<br>'}</p>`)
+    .map(line => `<p>${escapeHtml(line)}</p>`)
     .join('')
 }
 

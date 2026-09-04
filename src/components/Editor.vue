@@ -21,6 +21,8 @@ import Focus from '@tiptap/extension-focus'
 import { Editor, EditorContent } from '@tiptap/vue-3'
 import TextAlign from "@tiptap/extension-text-align"
 import { Markdown } from '@tiptap/markdown'
+import { DOMParser as ProseMirrorDOMParser } from '@tiptap/pm/model'
+import { createSearchRegex } from '@/lib/searchReplace'
 import { pluginHost } from '../plugins/index'
 import { i18n } from '../i18n'
 import { resolveI18nLabel } from '@/lib/resolveI18nLabel'
@@ -47,6 +49,15 @@ export default {
   },
 
   methods: {
+    serializeMarkdown(htmlSnapshot) {
+      if (!this.editor?.markdown) throw new Error('Markdown serializer is unavailable')
+      const container = document.createElement('div')
+      container.innerHTML = htmlSnapshot
+      // Serialize the save snapshot, not content changed while a save is pending.
+      const doc = ProseMirrorDOMParser.fromSchema(this.editor.schema).parse(container, { preserveWhitespace: 'full' })
+      return this.editor.markdown.serialize(doc.toJSON())
+    },
+
     initEditor() {
       if (this.editor) {
         this.editor.destroy();
@@ -97,11 +108,14 @@ export default {
         },
         extensions,
         content: this.modelValue,
+        parseOptions: { preserveWhitespace: 'full' },
         autofocus: true,
         onUpdate: () => {
           this.$emit("update:modelValue", this.editor.getHTML())
         },
       })
+      // Settle appended transactions (such as a trailing paragraph) before the clean baseline.
+      this.editor.view.dispatch(this.editor.state.tr.setMeta('preventUpdate', true).setMeta('addToHistory', false))
       this.$emit("content-normalized", this.editor.getHTML())
       pluginHost.setEditorInstance(this.editor)
     },
@@ -134,37 +148,23 @@ export default {
     },
 
     getDocumentSearchMatches(query, options = {}) {
-      if (!this.editor || !query) return [];
-      const caseSensitive = !!options.caseSensitive;
-      const wholeWord = !!options.wholeWord;
-      const needle = caseSensitive ? query : query.toLowerCase();
-      if (!needle) return [];
-
-      const matches = [];
+      if (!this.editor || !query) return []
+      const matches = []
       this.editor.state.doc.descendants((node, pos) => {
-        if (!node.isText || !node.text) return;
-        const text = node.text;
-        const source = caseSensitive ? text : text.toLowerCase();
-        let start = 0;
-        while (start <= source.length) {
-          const idx = source.indexOf(needle, start);
-          if (idx === -1) break;
-          const end = idx + needle.length;
-          if (wholeWord) {
-            const before = idx > 0 ? source[idx - 1] : '';
-            const after = end < source.length ? source[end] : '';
-            const beforeOk = !before || !/[\p{L}\p{N}_]/u.test(before);
-            const afterOk = !after || !/[\p{L}\p{N}_]/u.test(after);
-            if (!beforeOk || !afterOk) {
-              start = idx + 1;
-              continue;
-            }
-          }
-          matches.push({ from: pos + idx, to: pos + end });
-          start = idx + 1;
+        if (!node.isTextblock) return
+        // Formatting splits text nodes, but does not split a searchable word.
+        // A single placeholder keeps inline leaf nodes aligned with document positions.
+        const text = node.textBetween(0, node.content.size, '', '\uFFFC')
+        const regex = createSearchRegex(query, options)
+        for (const match of text.matchAll(regex)) {
+          const prefix = options.wholeWord ? match[1].length : 0
+          const from = pos + 1 + match.index + prefix
+          const length = options.wholeWord ? match[2].length : match[0].length
+          matches.push({ from, to: from + length })
         }
-      });
-      return matches;
+        return false
+      })
+      return matches
     },
 
     setDocumentSearchSelection(match) {
@@ -174,8 +174,10 @@ export default {
 
     replaceDocumentSearchMatch(match, newText) {
       if (!this.editor || !match) return false;
-      this.editor.chain().focus().insertContentAt({ from: match.from, to: match.to }, newText).run();
-      return true;
+      return this.editor.chain().focus().command(({ tr }) => {
+        tr.insertText(String(newText), match.from, match.to)
+        return true
+      }).run()
     },
   },
 
@@ -199,7 +201,7 @@ export default {
       if (!this.editor) return
       const isSame = this.editor.getHTML() === value
       if (isSame) return
-      this.editor.commands.setContent(value, false)
+      this.editor.commands.setContent(value, { emitUpdate: false, parseOptions: { preserveWhitespace: 'full' } })
     },
     // Bridge: pluginHost.aiState.suggestion → TipTap decoration
     'pluginHost.aiState.suggestion': {

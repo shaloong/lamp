@@ -123,6 +123,7 @@
     "plugins": "Plugins"
   },
   "app": {
+    "saveFailed": "Could not save {file}. Your draft is still open. {reason}",
     "unsavedTitle": "Confirm",
     "unsavedMessage": "The file you are closing has unsaved changes. Do you want to save it?",
     "dontSaveAndClose": "Don't Save & Close",
