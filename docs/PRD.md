@@ -63,7 +63,7 @@ Lamp 是面向小说与长文创作者的本地优先桌面编辑器。首先保
 | --- | --- |
 | 文稿 | 用户选择的本地路径 |
 | 自动保存恢复副本 | Tauri 应用数据目录下的 `autosave/`，文件后缀为 `.autosave` |
-| 通用、编辑器与 AI 设置 | 若可执行文件旁已有 `config.json` 则使用它，否则使用进程当前工作目录的 `config.json` |
+| 通用、编辑器与 AI 设置 | Tauri 应用数据目录下的 `config.json`；首次使用时从可执行文件旁、其次从启动工作目录迁移旧配置，保留原文件；之后不再依赖启动目录 |
 | 最近文件、上次工作区、侧栏偏好 | WebView 的 `localStorage` |
 | 插件设置与统计历史 | 按插件 ID 隔离的 `localStorage`，由宿主存储服务管理 |
 | 快捷键覆盖 | WebView 的 `localStorage` |
@@ -92,8 +92,8 @@ AI 请求会将相关文本发送到用户配置的服务商。API Key 在设置
 ## 工程现状
 
 - 前端使用 Vue 3、Vite、Pinia、TipTap、Reka UI 和 Tailwind CSS，代码包含 JavaScript、TypeScript 与 Vue 单文件组件。
-- 回归测试使用 Node.js 内置测试运行器；Rust 包含单元测试。测试覆盖部分文件、状态和统计逻辑，不等于完整桌面端到端覆盖。
-- [CI](../.github/workflows/ci.yml) 在 `main`、`develop` 的推送与 PR 上执行前端版本检查、lint、测试、构建，以及 Rust 格式、Clippy 与测试。
+- Node.js 回归测试覆盖文件/状态、统计与插件生命周期；Rust 测试覆盖配置迁移与原子写入。Playwright 使用真实 Vue/TipTap 和模拟桌面桥接验证文档流程；Windows 安装包测试验证真实 IPC、设置跨启动目录持久化与崩溃恢复。
+- [CI](../.github/workflows/ci.yml) 在 `main`、`develop` 的推送与 PR 上执行前端版本检查、lint、测试、构建、浏览器文档回归、Windows 隔离安装包测试，以及 Rust 格式、Clippy 与测试。尚不包含 macOS/Linux 安装后 UI 自动化。
 - [Release 工作流](../.github/workflows/release.yml) 配置了 Windows、macOS、Linux 各 x64/arm64 构建。匹配应用版本的 tag 触发草稿 Release；普通分支推送不构建安装包。
 - 当前工作流没有配置应用签名、公证或自动更新发布。六个平台目标的实际构建结果应查看对应 Actions 记录，不能由矩阵配置推断全部通过。
 - 应用版本以 [package.json](../package.json)、[Cargo.toml](../src-tauri/Cargo.toml)、[Cargo.lock](../src-tauri/Cargo.lock) 和 [tauri.conf.json](../src-tauri/tauri.conf.json) 为准，由 `pnpm run version:check` 检查一致性；插件 API 和插件自身版本独立维护。

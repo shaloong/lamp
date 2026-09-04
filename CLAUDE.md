@@ -26,7 +26,8 @@ cargo test --locked --manifest-path src-tauri/Cargo.toml --all-targets
 - `pnpm dev` starts Vite only. Port `1086` is fixed with `strictPort: true`; desktop IPC requires `pnpm tauri dev`.
 - `pnpm run check` checks application versions, runs Oxlint with warnings denied, runs Node regression tests, and builds the frontend.
 - `pnpm run test` uses Node's built-in test runner for `scripts/regression/*.test.mjs`. Rust tests are separate.
-- There is no dedicated TypeScript type-check step or automated desktop UI suite in the current CI.
+- `pnpm run test:e2e` builds the production frontend and tests real Vue/TipTap document flows with a simulated desktop bridge. Install Chromium first with `pnpm exec playwright install chromium`; `LAMP_TEST_BROWSER=msedge` uses an installed Edge locally.
+- `pnpm run test:desktop` (Windows) builds and installs an isolated NSIS package, tests real IPC/configuration/recovery, and uninstalls it. It uses a separate application identifier and temporary files, not normal Lamp user data. Both suites run in CI; there is no dedicated TypeScript type-check step.
 - `pnpm tauri build` builds the current platform. Default output is `src-tauri/target/release/`, with installers under `bundle/`. Explicit Rust targets add a target-triple directory.
 - Vite's production frontend output is `dist/`. The main window loads `index.html`; only development uses `http://localhost:1086`.
 
@@ -56,7 +57,7 @@ Automatic recovery copies are not normal document saves. Preserve pending edits 
 
 ### Desktop Bridge
 
-The frontend imports [src/preload.js](src/preload.js), which exposes Tauri IPC through the legacy name `window.electronAPI`. This is not an Electron application. [src/lib/lampApi.ts](src/lib/lampApi.ts) provides the bridge access helper.
+The frontend imports [src/preload.js](src/preload.js), which exposes Tauri IPC through `window.lampAPI`. This is not an Electron application. [src/lib/lampApi.ts](src/lib/lampApi.ts) provides the bridge access helper.
 
 Command registration and backend implementations currently live in [src-tauri/src/lib.rs](src-tauri/src/lib.rs). The separate `src-tauri/src/preload.js` file is not the frontend entry imported by `src/main.js`; verify the active bridge before editing IPC.
 
@@ -76,7 +77,7 @@ Keep plugin messages local. The host collects module messages through `registerB
 
 Workspace plugins are under `<workspace>/.lamp/plugins/`; user plugins are under the Tauri application data directory's `plugins/`. External entries must be built browser-compatible ESM. The loader does not compile TypeScript or Vue source at runtime.
 
-Read the [plugin guide](docs/PLUGIN_SYSTEM.md) before relying on lifecycle hooks, contribution fields, permissions, or cleanup. Some declared interfaces are partial; capability declarations are not a security sandbox, and built-in startup currently does not call `onActivate`.
+Read the [plugin guide](docs/PLUGIN_SYSTEM.md) before relying on lifecycle hooks, contribution fields, permissions, or cleanup. Both built-ins and external plugins run `onActivate`; commands/listeners are automatically cleaned up, and other resources use `ctx.onDispose` and `ctx.signal`. Some declared interfaces are partial; capability declarations are not a security sandbox.
 
 ### UI Integration
 
@@ -90,7 +91,7 @@ Read the [plugin guide](docs/PLUGIN_SYSTEM.md) before relying on lifecycle hooks
 
 - Documents: user-selected paths.
 - Recovery copies: `<app-data>/autosave/*.autosave`, containing recovery metadata and editor content.
-- General/editor/AI settings: an existing `config.json` beside the executable, otherwise `config.json` relative to the process working directory. This is not currently a standardized app-data config path.
+- General/editor/AI settings: `<app-data>/config.json`, managed by [config.rs](src-tauri/src/config.rs). When absent, migrate an existing executable-adjacent config first, then a working-directory config. Original files are preserved; subsequent launches always use app data. Invalid or unreadable settings are reported without overwriting them. Failed writes do not change live settings.
 - API keys: stored in plaintext configuration; a masked input is not encryption. Never commit local configuration or credentials.
 - Plugin settings/history, shortcut overrides, recent files, last workspace, and sidebar preferences: WebView `localStorage`, managed by their respective services.
 - Workspace project metadata, export presets, and AI analysis-cache files are not implemented.
@@ -99,7 +100,7 @@ Read the [plugin guide](docs/PLUGIN_SYSTEM.md) before relying on lifecycle hooks
 
 Application versions are synchronized across `package.json`, `src-tauri/Cargo.toml`, the root package entry in `src-tauri/Cargo.lock`, and `src-tauri/tauri.conf.json`. Use `pnpm run version:set -- <version>` to update them and `pnpm run version:check` to verify them. Plugin versions and `PluginContext.version` are separate contracts.
 
-[CI](.github/workflows/ci.yml) runs frontend checks and Rust fmt/Clippy/tests on pushes and PRs targeting `main` or `develop`. It does not build desktop installers or run GUI tests.
+[CI](.github/workflows/ci.yml) runs frontend checks, production-browser document tests, Rust fmt/Clippy/tests, and a Windows installed-package smoke test on pushes and PRs targeting `main` or `develop`. The smoke build uses an isolated identity and is not a distributable release. macOS/Linux installed-app UI tests are not yet automated.
 
 [Release](.github/workflows/release.yml) runs for `v*` tags or manual dispatch of an existing tag. It validates the tag against the application version, builds Windows/macOS/Linux for x64 and arm64, and prepares a draft release. The current workflow does not configure signing, notarization, or updater metadata.
 
